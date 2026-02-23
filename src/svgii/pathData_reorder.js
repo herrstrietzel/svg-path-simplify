@@ -38,7 +38,7 @@ export function pathDataToTopLeft(pathData) {
 
     // reorder  to top left most
     //|| a.x - b.x
-    indices = indices.sort((a, b) => +a.y.toFixed(3) - +b.y.toFixed(3) );
+    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x-b.x );
     newIndex = indices[0].index
 
     return  newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;
@@ -233,6 +233,7 @@ export function shiftSvgStartingPoint(pathData, offset) {
  */
 
 export function addClosePathLineto(pathData) {
+
     let pathDataL = pathData.length;
     let closed = pathData[pathDataL - 1].type.toLowerCase() === "z" ? true : false;
 
