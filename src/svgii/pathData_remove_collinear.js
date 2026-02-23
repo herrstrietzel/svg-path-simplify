@@ -30,17 +30,16 @@ export function pathDataRemoveColinear(pathData, {
         p = type !== 'Z' ? { x: valsL[0], y: valsL[1] } : M;
 
 
-        /*
         let area = p1 ? getPolygonArea([p0, p, p1], true) : Infinity
         let distSquare = getSquareDistance(p0, p1)
         let distMax = distSquare ? distSquare / 333 * tolerance : 0
-        */
 
-        //let isFlat = area < distMax;
-        let isFlat = false;
+        let isFlat = area < distMax;
+        //let isFlat = false;
         let isFlatBez = false;
 
 
+        /*
         // flatness by cross product 
         let dx0 = Math.abs(p1.x - p0.x)
         let dy0 = Math.abs(p1.y - p0.y)
@@ -70,6 +69,7 @@ export function pathDataRemoveColinear(pathData, {
                 isFlat = true
             }
         }
+        */
 
 
         if (!flatBezierToLinetos && type === 'C') isFlat = false;

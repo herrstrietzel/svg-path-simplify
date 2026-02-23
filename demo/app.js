@@ -137,6 +137,11 @@ function updateSVG(settings = {}) {
     //shareUrl.textContent = 'Share Link';
     shareUrl.href = url;
 
+    shareUrl.addEventListener('click', (e)=>{
+        navigator.clipboard.writeText(url)
+    })
+
+
 
 
     // normalized d string for pathdata array inputs

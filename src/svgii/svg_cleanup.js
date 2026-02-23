@@ -35,6 +35,9 @@ export function cleanUpSVG(svgMarkup, {
   let removeEls = ['metadata', 'script']
 
   let els = svg.querySelectorAll('*')
+
+  let textEls = svg.querySelectorAll('text')
+  let remove = !textEls.length ? ['font-family', 'font-weight', 'font-style', 'font-size'] : [];
   
   els.forEach(el => {
     let name = el.nodeName;
@@ -47,6 +50,7 @@ export function cleanUpSVG(svgMarkup, {
     } else {
       // remove BS elements
       removeNameSpaceAtts(el)
+      removeAtts(el,remove)
     }
   })
 
@@ -86,6 +90,17 @@ function removeExcludedAttribues(el, allowed = ['viewBox', 'xmlns', 'width', 'he
     }
   });
 }
+
+
+function removeAtts(el, remove=[]) {
+  let atts = [...el.attributes].map((att) => att.name);
+  atts.forEach((att) => {
+    if (remove.includes(att)) {
+      el.removeAttribute(att);
+    }
+  });
+}
+
 
 
 function removeNameSpaceAtts(el) {
