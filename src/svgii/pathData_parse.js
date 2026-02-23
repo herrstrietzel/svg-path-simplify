@@ -306,7 +306,7 @@ export function parsePathDataString(d, debug = true) {
                 let diff = maxParams - valLen;
                 feedback = `${itemCount}. command of type "${lastCommand}": ${diff} values too few - ${maxParams} expected`;
 
-                let prevFeedback = pathDataObj.log[log.length - 1];
+                let prevFeedback = pathDataObj.log[pathDataObj.log.length - 1];
 
                 if (prevFeedback !== feedback) {
                     pathDataObj.log.push(feedback)
@@ -485,7 +485,7 @@ export function parsePathDataString(d, debug = true) {
     //check types relative arcs or quadratics
     let commands = Array.from(foundCommands).join('');
 
-    pathDataObj.hasRelatives = /[lcqamts]/g.test(commands);
+    pathDataObj.hasRelatives = /[lcqamtsvh]/g.test(commands);
     pathDataObj.hasShorthands = /[vhst]/gi.test(commands);
     pathDataObj.hasArcs = /[a]/gi.test(commands);
     pathDataObj.hasQuadratics = /[qt]/gi.test(commands);
