@@ -14,14 +14,19 @@ export function cleanUpSVG(svgMarkup, {
   removeHidden = true,
   removeUnused = true,
 } = {}) {
+
   svgMarkup = cleanSvgPrologue(svgMarkup);
 
   // replace namespaced refs 
   svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
+  //console.log('!!!svgMarkup', svgMarkup);
+
 
   let svg = new DOMParser()
+  //.parseFromString(svgMarkup, "image/svg+xml")
   .parseFromString(svgMarkup, "text/html")
   .querySelector("svg");
+  //console.log(svg);
 
 
   let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
@@ -30,6 +35,7 @@ export function cleanUpSVG(svgMarkup, {
   let removeEls = ['metadata', 'script']
 
   let els = svg.querySelectorAll('*')
+  
   els.forEach(el => {
     let name = el.nodeName;
     // remove hidden elements
@@ -44,10 +50,16 @@ export function cleanUpSVG(svgMarkup, {
     }
   })
 
+  //console.log('svg', svg);
+  //return
+
   if (returnDom) return svg
 
   let markup = stringifySVG(svg)
-  //console.log(markup);
+  //console.log('!!!markup', markup);
+
+  //return
+
 
   return markup;
 }

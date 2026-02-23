@@ -3,6 +3,9 @@ import {abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
     log, max, min, pow, random, round, sin, sqrt, tan, PI} from '/.constants.js';
     */
 
+import { rad2Deg } from "../constants";
+import { renderPoint } from "./visualize";
+
 export const {
     abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
     log, max, min, pow, random, round, sin, sqrt, tan, PI
@@ -168,25 +171,7 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
 
 
 
-/**
- * get distance between 2 points
- * pythagorean theorem
- */
-export function getDistance(p1, p2) {
-    return sqrt(
-        (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y)
-    );
-}
 
-export function getSquareDistance(p1, p2) {
-    return (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2
-}
-
-export function lineLength(p1, p2) {
-    return sqrt(
-        (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y)
-    );
-}
 
 
 /**
@@ -210,7 +195,7 @@ export function interpolate(p1, p2, t, getTangent = false) {
 }
 
 
-export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false) {
+export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, returnArray = false) {
 
     const getPointAtBezierT = (pts, t, getTangent = false) => {
 
@@ -302,6 +287,15 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false) {
 
     }
 
+
+    // normalize if input was array not pt object
+    if (Array.isArray(pts[0])) {
+        pts = pts.map(pt => { return { x: pt[0], y: pt[1] } })
+        // also output array if not explicitely defined
+        returnArray = true
+    }
+
+
     let pt;
     if (pts.length > 2) {
         pt = getPointAtBezierT(pts, t, getTangent);
@@ -314,7 +308,7 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false) {
     // normalize negative angles
     if (getTangent && pt.angle < 0) pt.angle += PI * 2
 
-    return pt
+    return returnArray ? [pt.x, pt.y] : pt
 }
 
 
@@ -638,33 +632,41 @@ export function getTangentAngle(rx, ry, parametricAngle) {
 }
 
 
-export function bezierhasExtreme(p0=null, cpts = [], angleThreshold = 0.05) {
+export function bezierhasExtreme(p0 = null, cpts = []) {
 
-    if(!p0){
+    if (!p0) {
         p0 = cpts[0]
-        cpts = cpts.splice(1, cpts.length)
+        cpts = cpts.slice(1, cpts.length)
     }
 
-    let isCubic = cpts.length === 3 ? true : false;
-    let cp1 = cpts[0] || null
-    let cp2 = isCubic ? cpts[1] : null;
-    let p = isCubic ? cpts[2] : cpts[1];
-    let PIquarter = Math.PI * 0.5;
+    let l = cpts.length;
+    let p = cpts[l - 1];
+    let cp1 = cpts[0]
+    let cp2 = l === 3 ? cpts[1] : cp1
 
-    let extCp1 = false,
-        extCp2 = false;
+    // get bounding box
+    /**
+     * if control points are within 
+     * bounding box of start and end point 
+     * we cant't have extremes
+     */
+    let top = Math.min(p0.y, p.y)
+    let left = Math.min(p0.x, p.x)
+    let right = Math.max(p0.x, p.x)
+    let bottom = Math.max(p0.y, p.y)
 
-    //console.log('ang', cp1);
-    let ang1 = cp1 ? getAngle(p, cp1, true) : null;
-
-    extCp1 = Math.abs((ang1 % PIquarter)) < angleThreshold || Math.abs((ang1 % PIquarter) - PIquarter) < angleThreshold;
-
-    if (isCubic) {
-        let ang2 = cp2 ? getAngle(cp2, p, true) : 0;
-        extCp2 = Math.abs((ang2 % PIquarter)) <= angleThreshold ||
-            Math.abs((ang2 % PIquarter) - PIquarter) <= angleThreshold;
+    // within bbox - can't have extremes
+    if (
+        cp1.y >= top && cp1.y <= bottom &&
+        cp2.y >= top && cp2.y <= bottom &&
+        cp1.x >= left && cp1.x <= right &&
+        cp2.x >= left && cp2.x <= right
+    ) {
+        return false
     }
-    return (extCp1 || extCp2)
+
+    return true
+
 }
 
 
@@ -829,6 +831,149 @@ export function getArcExtemes(p0, values) {
 
 
 
+export function getTatAngles(cpts = [], angles = []) {
+
+    let l = cpts.length;
+    let isCubic = l === 4;
+    //console.log(angles, isCubic);
+
+    if (!angles.length) angles = [0];
+
+    let anglesL = angles.length;
+    let tArr = []
+
+    for (let i = 0; i < anglesL; i++) {
+
+        let ang = angles[i];
+        let cptsN = ang ? [] : cpts.slice(0)
+
+        // rotate cpts
+        if (ang) {
+            for (let j = 0; j < l; j++) {
+                let pt = cpts[j]
+                cptsN.push(rotatePoint(pt, 0, 0, ang))
+            }
+        }
+
+        // get t arr
+        let tVals = isCubic ? getTatCubicExtreme(...cptsN) : getTatQuadraticExtreme(...cptsN)
+        tArr.push(...tVals)
+
+    }
+
+    // deduplicate and sort
+    tArr = [... new Set(tArr)].sort()
+
+    return tArr;
+
+}
+
+
+
+// t at cubic bezier extreme
+export function getTatCubicExtreme(p0, cp1, cp2, p) {
+
+    /**
+     * if control points are within 
+     * bounding box of start and end point 
+     * we cant't have extremes
+     */
+    if (!bezierhasExtreme(p0, [cp1, cp2, p])) {
+        //console.log('no extreme');
+        return []
+    }
+
+    let [x0, y0, x1, y1, x2, y2, x3, y3] = [p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
+    let tArr = [], a, b, c, t, t1, t2, b2ac, sqrt_b2ac;
+    let e = 1e-8
+
+    for (let i = 0; i < 2; ++i) {
+
+        if (i == 0) {
+            b = 6 * x0 - 12 * x1 + 6 * x2;
+            a = -3 * x0 + 9 * x1 - 9 * x2 + 3 * x3;
+            c = 3 * x1 - 3 * x0;
+        } else {
+            b = 6 * y0 - 12 * y1 + 6 * y2;
+            a = -3 * y0 + 9 * y1 - 9 * y2 + 3 * y3;
+            c = 3 * y1 - 3 * y0;
+        }
+        if (Math.abs(a) < e) {
+            if (Math.abs(b) < e) {
+                continue;
+            }
+            t = -c / b;
+            if (t > 0 && t < 1) {
+                tArr.push(t);
+            }
+            continue;
+        }
+        b2ac = b * b - 4 * c * a;
+        if (b2ac < 0) {
+            if (Math.abs(b2ac) < e) {
+                t = -b / (2 * a);
+                if (t > 0 && t < 1) {
+                    tArr.push(t);
+                }
+            }
+            continue;
+        }
+        sqrt_b2ac = Math.sqrt(b2ac);
+        t1 = (-b + sqrt_b2ac) / (2 * a);
+        if (t1 > 0 && t1 < 1) {
+            tArr.push(t1);
+        }
+        t2 = (-b - sqrt_b2ac) / (2 * a);
+        if (t2 > 0 && t2 < 1) {
+            tArr.push(t2);
+        }
+    }
+
+    let j = tArr.length;
+    while (j--) {
+        t = tArr[j];
+    }
+
+    return [...new Set(tArr)].sort();
+}
+
+
+
+
+//For quadratic bezier.
+export function getTatQuadraticExtreme(p0, cp1, p) {
+
+    /**
+     * if control points are within 
+     * bounding box of start and end point 
+     * we cant't have extremes
+     */
+    if (!bezierhasExtreme(p0, [cp1, p])) {
+        //console.log('no extreme');
+        return []
+    }
+
+    let a, b, c, t;
+    let [x0, y0, x1, y1, x2, y2] = [p0.x, p0.y, cp1.x, cp1.y, p.x, p.y];
+    let tArr = [];
+
+    for (let i = 0; i < 2; ++i) {
+        a = i == 0 ? x0 - 2 * x1 + x2 : y0 - 2 * y1 + y2;
+        b = i == 0 ? -2 * x0 + 2 * x1 : -2 * y0 + 2 * y1;
+        c = i == 0 ? x0 : y0;
+        if (Math.abs(a) > 1e-12) {
+            t = -b / (2 * a);
+            if (t > 0 && t < 1) {
+                tArr.push(t);
+            }
+        }
+    }
+
+    return [...new Set(tArr)].sort();
+}
+
+
+
 // cubic bezier.
 export function cubicBezierExtremeT(p0, cp1, cp2, p,
     { addExtremes = true, addSemiExtremes = false } = {}) {
@@ -857,7 +1002,6 @@ export function cubicBezierExtremeT(p0, cp1, cp2, p,
 
 
     let [x0, y0, x1, y1, x2, y2, x3, y3] = [p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
-
 
 
     /**
@@ -1080,22 +1224,32 @@ export function intersectLines(p1, p2, p3, p4) {
 
 
 /**
- * sloppy distance calculation
- * based on "half Manhattan/Cab" distance
+ * get distance between 2 points
+ * pythagorean theorem
  */
+export function getDistance(p1, p2, isArray = false) {
+    //if(Array.isArray(p1)) isArray = true;
+    //console.log(p1, p2);
+    let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
+    let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
-export function getDistAv_(pt1, pt2) {
-    let dx = Math.abs(pt2.x - pt1.x);
-    let dy = Math.abs(pt2.y - pt1.y);
-    return dx+dy;
+    //console.log('dx', dx, dy, p1, p2);
+    return sqrt(dx * dx + dy * dy);
+}
+
+// just an alias
+export function lineLength(p1, p2) {
+    return getDistance(p1, p2)
 }
 
 
-export function getDistAv(pt1, pt2) {
-    let dx = Math.abs(pt2.x - pt1.x);
-    let dy = Math.abs(pt2.y - pt1.y);
-    return (dx + dy) / 2;
+export function getSquareDistance(p1, p2) {
+    let dx = (p2.x - p1.x);
+    let dy = (p2.y - p1.y);
+    return dx * dx + dy * dy
 }
+
+
 
 /**
  * get Manhattan/Cab distance 
@@ -1105,7 +1259,18 @@ export function getDistAv(pt1, pt2) {
 export function getDistManhattan(pt1, pt2) {
     let dx = Math.abs(pt2.x - pt1.x);
     let dy = Math.abs(pt2.y - pt1.y);
-    return dx+dy;
+    return dx + dy;
+}
+
+/**
+ * sloppy distance calculation
+ * based on "half Manhattan/Cab" distance
+ */
+
+export function getDistAv(pt1, pt2) {
+    let dx = Math.abs(pt2.x - pt1.x);
+    let dy = Math.abs(pt2.y - pt1.y);
+    return (dx + dy) * 0.5;
 }
 
 

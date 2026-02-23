@@ -329,9 +329,9 @@ canvas {
         polyline,
         line,
         rect {
-            fill: none;
-            stroke: var(--color-focus);
-            stroke-width: var(--strokeWidthPrev, 0.3%);
+            fill: none!important;
+            stroke: var(--color-focus)!important;
+            stroke-width: var(--strokeWidthPrev, 0.3%)!important;
             stroke-linecap: square;
         }
     }
@@ -357,6 +357,9 @@ canvas {
 .preview path {}
 
 
+.dsp-debug{
+    display:none;
+}
 
 
 .prevImg,

@@ -7,7 +7,7 @@
 export function getViewBox(svg = null, decimals = -1) {
 
     const getUnit=(val)=>{
-        return val && isNaN(val) ? val.match(/[^\d]+/g)[0] : '';
+        return val && isNaN(val) ? val.match(/[^\d|.]+/g)[0] : '';
     }
 
     // browser default

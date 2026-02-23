@@ -253,7 +253,8 @@ export function getBezierArea(pts, absolute=false) {
 
 export function getPolygonArea(points, absolute=false) {
     let area = 0;
-    for (let i = 0, len = points.length; len && i < len; i++) {
+    let l = points.length;
+    for (let i = 0; l && i < l; i++) {
         let addX = points[i].x;
         let addY = points[i === points.length - 1 ? 0 : i + 1].y;
         let subX = points[i === points.length - 1 ? 0 : i + 1].x;

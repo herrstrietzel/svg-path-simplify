@@ -250,11 +250,16 @@ export function renderPath(svg, d = '', stroke = 'green', strokeWidth = '1%', op
 
 
 // debug helper: render lines
-export function renderPoly(svg, pts, strokeWidth = "1%", stroke = "purple", render = true) {
+export function renderPoly(svg, pts, stroke = "purple", strokeWidth = "1%",  fillOpacity="0.5", fill="none", polygon=true , render = true) {
     pts = pts.map(pt => { return [pt.x, pt.y] }).flat().join(' ');
+    
 
-    let poly =
-        `<polyline  stroke-width="${strokeWidth}" points="${pts}" stroke="${stroke}" />`;
+    polygon = pts.length===2 ? false : polygon;
+
+    let poly =polygon ? 
+    `<polygon  stroke-width="${strokeWidth}" points="${pts}" stroke="${stroke}" fill="${fill}" fill-opacity="${fillOpacity}" />`:
+    `<polyline  stroke-width="${strokeWidth}" points="${pts}" stroke="${stroke}" fill="${fill}" fill-opacity="${fillOpacity}" />`;
+
 
     if (render) {
         svg.insertAdjacentHTML("beforeend", poly);

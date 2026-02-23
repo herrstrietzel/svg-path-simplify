@@ -169,10 +169,20 @@
                     <label><input type="checkbox" name="simplifyCorners">simplifyCorners</label>
                     <label><input type="checkbox" name="simplifyRound">simplifyRound</label>
                     <label><input type="checkbox" name="addExtremes">addExtremes</label>
-                    <label><input type="checkbox" name="addSemiExtremes">addSemiExtremes</label>
 
-                    <label><input type="checkbox" name="redraw"
-                            data-info="try to redraw messed up paths based on extremes, semiextermes and corners">redraw</label>
+
+                    <!-- 
+                        <label><input type="checkbox" name="redraw"
+                                data-info="try to redraw messed up paths based on extremes, semiextermes and corners">redraw</label>
+
+                    -->
+
+
+                    <label class="--dsp-debug"><input type="checkbox" name="smoothPoly">smoothPoly</label>
+                    <label class="dsp-debug"><input type="checkbox" name="addSemiExtremes">addSemiExtremes</label>
+                    <label class="dsp-debug"><input type="checkbox" name="harmonizeCpts">harmonizeCpts</label>
+                    <label class="dsp-debug"><input type="checkbox"  name="toPolygon">toPolygon</label>
+
 
                 </p>
 
@@ -280,7 +290,7 @@
             <div id="previewWrp" class="preview --pdd-1em pst-rlt">
 
                 <div class="wrp-zoom"
-                    data-zoom='{"minScale":0.1,"maxScale":10,"zoom":1,"zoomStep":1.001, "toolbar":true}'>
+                    data-zoom='{"minScale":0.1,"maxScale":100,"zoom":1,"zoomStep":1.001, "toolbar":true}'>
 
                     <svg id="svg" class="svgO" viewBox="0 0 100 100">
 

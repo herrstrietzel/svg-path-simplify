@@ -1,13 +1,13 @@
-import { getDistAv, getSquareDistance } from "./geometry.js";
+import { getDeltaAngle, getDistAv, getDistManhattan, getSquareDistance } from "./geometry.js";
 import { getPolygonArea } from "./geometry_area.js";
 import { checkBezierFlatness, commandIsFlat } from "./geometry_flatness.js";
-import { renderPoint } from "./visualize.js";
+import { renderPoint, renderPoly } from "./visualize.js";
 
 export function pathDataRemoveColinear(pathData, {
-    tolerance = 1, 
+    tolerance = 1,
     //toleranceCubics = null,
     flatBezierToLinetos = true
-}={}) {
+} = {}) {
 
     //toleranceCubics = !toleranceCubics ? tolerance : toleranceCubics;
     let pathDataN = [pathData[0]];
@@ -30,18 +30,46 @@ export function pathDataRemoveColinear(pathData, {
         p = type !== 'Z' ? { x: valsL[0], y: valsL[1] } : M;
 
 
+        /*
         let area = p1 ? getPolygonArea([p0, p, p1], true) : Infinity
-
-
-        //let distSquare0 = getSquareDistance(p0, p)
-        //let distSquare1 = getSquareDistance(p, p1)
         let distSquare = getSquareDistance(p0, p1)
-        //distSquare = (distSquare0+distSquare1) * 0.5
-
         let distMax = distSquare ? distSquare / 333 * tolerance : 0
+        */
 
-        let isFlat = area < distMax;
+        //let isFlat = area < distMax;
+        let isFlat = false;
         let isFlatBez = false;
+
+
+        // flatness by cross product 
+        let dx0 = Math.abs(p1.x - p0.x)
+        let dy0 = Math.abs(p1.y - p0.y)
+
+        let dx1 = Math.abs(p.x - p0.x)
+        let dy1 = Math.abs(p.y - p0.y)
+
+        let dx2 = Math.abs(p1.x - p.x)
+        let dy2 = Math.abs(p1.y - p.y)
+
+        // zero length segments are flat
+        let isZeroLength = (!dy1 && !dx1) || (!dy2 && !dx2)
+        if (isZeroLength) isFlat = true;
+
+        // check cross products for colinearity
+        if (!isFlat) {
+
+            let cross0 = Math.abs(dx0 * dy1 - dy0 * dx1);
+            //let cross1 = Math.abs(dx1 * dy2 - dy1 * dx2);
+            //let crossDiff = Math.abs(cross0-cross1)
+            //let cross = Math.max(cross0, cross1)
+            let thresh = (dx0 + dy0) * 0.1
+
+            //!cross0 ||
+            if ( cross0 < thresh) {
+                //renderPoint(markers, p)
+                isFlat = true
+            }
+        }
 
 
         if (!flatBezierToLinetos && type === 'C') isFlat = false;
@@ -50,12 +78,12 @@ export function pathDataRemoveColinear(pathData, {
         if (flatBezierToLinetos && (type === 'C' || type === 'Q')) {
 
             let cpts = type === 'C' ?
-            [{ x: values[0], y: values[1] }, { x: values[2], y: values[3] }] :
-            (type === 'Q' ? [{ x: values[0], y: values[1] }] : []);
+                [{ x: values[0], y: values[1] }, { x: values[2], y: values[3] }] :
+                (type === 'Q' ? [{ x: values[0], y: values[1] }] : []);
 
-            isFlatBez = commandIsFlat([p0, ...cpts, p],{tolerance});
+            isFlatBez = commandIsFlat([p0, ...cpts, p], { tolerance });
 
-            if (isFlatBez  && c < l - 1  ) {
+            if (isFlatBez && c < l - 1) {
                 type = "L"
                 com.type = "L"
                 com.values = valsL
@@ -66,23 +94,7 @@ export function pathDataRemoveColinear(pathData, {
 
         // colinear – exclude arcs (as always =) as semicircles won't have an area
         //&& comN.type==='L'
-        if ( isFlat && c < l - 1  && comN.type!=='A' && (type === 'L' || (flatBezierToLinetos && isFlatBez)) ) {
-            
-            /*
-            console.log(area, distMax );
-            //if(comN.type!=='L' ){}
-
-            if(p0.x === p.x && p0.y === p.y){
-
-            }
-
-            renderPoint(markers, p0, 'blue', '1.5%', '1')
-            renderPoint(markers, p, 'red', '1%', '1')
-            renderPoint(markers, p1, 'cyan', '0.5%', '1')
-            */
-
-            //renderPoint(markers, p, 'blue', '1%', '1')
-
+        if (isFlat && c < l - 1 && comN.type !== 'A' && (type === 'L' || (flatBezierToLinetos && isFlatBez))) {
 
             continue;
         }
@@ -93,11 +105,6 @@ export function pathDataRemoveColinear(pathData, {
 
         if (type === 'M') {
             M = p
-            p0 = M
-        }
-
-        else if (type === 'Z') {
-            p0 = M;
         }
 
         // proceed and add command

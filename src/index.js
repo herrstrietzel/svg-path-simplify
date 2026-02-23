@@ -13,19 +13,35 @@ export {
     log, max, min, pow, random, round, sin, sqrt, tan, PI
 } from './constants';
 
+/*
+import {simplifyPolySchneider} from './svgii/poly_smooth_schneider';
+export {simplifyPolySchneider as simplifyPolySchneider }
+*/
+
+
+/*
+import {parsePathDataFontello} from './svgii/pathData_parse_fontello';
+export {parsePathDataFontello as parsePathDataFontello};
+import {parsePathDataString} from './svgii/pathData_parse';
+export {parsePathDataString as parsePathDataString}
+import { fitCurveN } from './poly-fit-curve-schneider';
+export {fitCurveN as fitCurveN}
+*/
+
 
 /*
 //export {parsePathDataString} from './svgii/pathData_parse';
-import {parsePathDataString} from './svgii/pathData_parse';
 import {parsePathDataString_plus} from './svgii/pathData_parse2';
-export {parsePathDataString as parsePathDataString}
 export {parsePathDataString_plus as parsePathDataString_plus}
 */
+
+
 
 // IIFE 
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
-    //window.parsePathDataString_plus = parsePathDataString_plus;
+    //window.simplifyPolySchneider = simplifyPolySchneider;
+    //window.fitCurveN = fitCurveN;
     //window.parsePathDataString = parsePathDataString;
     //window.svgPathSimplify = svgPathSimplify;
     //window.svgPathSimplify = parsePathDataNormalized;

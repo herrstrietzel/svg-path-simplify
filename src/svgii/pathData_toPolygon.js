@@ -1,6 +1,10 @@
-import { getDistAv, pointAtT } from "./geometry";
+import { deg2rad, rad2Deg } from "../constants";
+import { simplifyRDP } from "../simplify_poly_RDP";
+import { simplifyRD } from "../simplify_poly_radial_distance";
+import { getDistAv, getTatAngles, pointAtT } from "./geometry";
 import { getPolyBBox } from "./geometry_bbox";
 import { addDimensionData, analyzePathData } from "./pathData_analyze";
+import { pathDataFromPoly } from "./pathData_fromPoly";
 import { addExtremePoints } from "./pathData_split";
 import { pathDataToD } from "./pathData_stringify";
 import { analyzePoly } from "./poly_analyze";
@@ -8,6 +12,128 @@ import { getCurvePathData } from "./poly_to_pathdata";
 import { renderPoint } from "./visualize";
 
 
+
+export function pathDataToPolygon(pathData, {
+    angles = [],
+    split = 0,
+    getPathData = true,
+    width=0,
+    height=0
+} = {}) {
+
+
+    let l = pathData.length;
+    let M = { x: pathData[0].values[0], y: pathData[0].values[1] }
+    let p0 = M
+
+    let minT = 1 / split * 0.5;
+    let maxT = 1 - minT
+
+
+    // collect polygon vertices
+    let pathDataPoly = []
+    let pts = [p0]
+
+    let ptsEnd = [0]
+    let ptCount = 1
+
+    // get max length
+    let minLength = 0;
+
+
+    split = !split ? 1 : split;
+
+    if(width && height){
+        minLength = (width+height) * 0.025 / split
+    }else{
+        //let areas = pathData.map(com => com.cptArea || 0).filter(Boolean).sort()
+        let lengths = pathData.map(com => com.dimA || 0).filter(Boolean).sort()
+        minLength = lengths[0]
+        //console.log('areas', areas, 'lengths', lengths);
+    }
+
+    //minLength*=0.5
+
+    for (let i = 1; i < l; i++) {
+        let com = pathData[i];
+        //let comPrev = pathData[i - 1];
+        let comNext = pathData[i + 1] || null;
+        let { type, values } = com;
+        let valuesL = values.length;
+        let p = valuesL ? { x: values[valuesL - 2], y: values[valuesL - 1] } : M;
+
+        if (type === 'C' || type === 'Q') {
+
+            let cp1 = { x: values[0], y: values[1] }
+            let cp2 = type === 'C' ? { x: values[2], y: values[3] } : cp1
+            let cpts = type === 'C' ? [p0, cp1, cp2, p] : [p0, cp1, p];
+
+
+            // calculate split according to length
+            let length = com.dimA
+            let rat = Math.floor(length / (minLength))
+            split = Math.ceil(length / minLength)
+
+            let tArr = []
+            for(let i=1; i<split; i++){
+                tArr.push(1/split*i)
+            }
+
+            tArr.forEach(t => {
+                let pt = pointAtT(cpts, t)
+                pts.push(pt)
+                ptCount++
+            })
+
+        }
+
+        if (type === 'M') {
+            M = p
+        }
+
+
+        p.area = com.cptArea|| 0
+        p.isExtreme = com.extreme|| false
+        p.isCorner = com.corner|| false 
+        p.isDirChange = com.directionChange || false ;
+
+        // segment end point
+        pts.push(p)
+
+        // exclude for polygon simplification
+        if (com.extreme || com.corner || (comNext && comNext.type !== type) || type === 'L') {
+            //console.log('is ext' , com);
+            ptsEnd.push(ptCount)
+            //renderPoint(markers, p, 'magenta', '2%', '0.5')
+        }
+
+        ptCount++
+
+        p0 = p
+
+    }
+
+    // reduce poly vertices
+    //pts = simplifyRD(pts, { quality: 0.5, exclude: ptsEnd, width, height })
+    pts = simplifyRD(pts, {quality:0.5, width, height})
+    //pts = simplifyRDP(pts, { quality: 0.8, width, height })
+    //console.log(ptsEnd);
+
+    /*
+    pts.forEach(pt => {
+        //renderPoint(markers, pt, 'cyan', '1%', '0.5')
+    })
+    //console.log(pts);
+    */
+
+
+    pathDataPoly = pathDataFromPoly(pts)
+    return getPathData ? pathDataPoly : pts;
+}
+
+
+
+// old function
 export function pathDataToPolySingle(pathData, addExtremes = true) {
 
 
@@ -63,7 +189,7 @@ export function pathDataToPolySingle(pathData, addExtremes = true) {
         dimA = getDistAv(p0, p);
 
 
-        if(extreme){
+        if (extreme) {
             //renderPoint(markers, p, 'cyan')
         }
 
@@ -102,7 +228,7 @@ export function pathDataToPolySingle(pathData, addExtremes = true) {
             let idx = p.extreme ? i : i - 1
             //console.log('remove', idx);
             remove.add(idx)
-        } 
+        }
     }
 
 
@@ -115,7 +241,7 @@ export function pathDataToPolySingle(pathData, addExtremes = true) {
         poly.splice(idx, 1)
     }
 
-    poly.splice(poly.length-1, poly.length)
+    poly.splice(poly.length - 1, poly.length)
 
 
     let polyAtt = poly.map(pt => `${pt.x} ${pt.y} `).join(' ')

@@ -2,20 +2,19 @@ import { checkLineIntersection, getAngle, getDistManhattan, getDistance, rotateP
 import { getPathArea, getPolygonArea, getRelativeAreaDiff } from "./svgii/geometry_area";
 //import { cubicCommandToArc } from "./svgii/pathData_convert";
 
-export function pathDataCubicsToArc(pathData, { areaThreshold = 1.5 } = {}) {
+export function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
 
     for (let c = 0, l = pathData.length; c < l; c++) {
         let com = pathData[c]
         let comN = pathData[c + 1] || null
         let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
-        if (type === 'C' && comN.type === 'C') {
-            //console.log(com);
+
+        if (type === 'C' && comN && comN.type === 'C') {
             let comA = cubicCommandToArc(p0, cp1, cp2, p, areaThreshold)
             let comAN = cubicCommandToArc(comN.p0, comN.cp1, comN.cp2, comN.p, areaThreshold)
 
-            //console.log(comA);
 
-            if (comA.isArc && comAN.isArc) {
+            if (comA.isArc  && comAN.isArc) {
 
                 let dist = getDistManhattan(p0, comN.p);
                 let maxDist = dist * 0.01;

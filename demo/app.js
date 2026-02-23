@@ -192,7 +192,7 @@ function updateSVG(settings = {}) {
     dInput = dPreview;
 
     let scale = settings.scale;
-    
+
     if (!mode) {
         svgEl.classList.remove('dsp-non')
 
@@ -204,7 +204,6 @@ function updateSVG(settings = {}) {
 
         adjustViewBox(svgEl);
 
-
         // scale element
         svgEl.style.setProperty('--scalePreview', scale)
 
@@ -214,6 +213,7 @@ function updateSVG(settings = {}) {
     // input is svg doc
     if (mode) {
         svgEl.classList.add('dsp-non')
+
         svgWrap.insertAdjacentHTML('beforeend', svg)
         let svgDocEl = svgWrap.querySelector('svg')
 
@@ -242,6 +242,7 @@ function updateSVG(settings = {}) {
     let svgExport = svg ? svg : null;
     let inIframe = window.self !== window.top;
 
+    //console.log(svgExport);
 
     // create standalone svg
     if (!svgExport) {
@@ -250,13 +251,11 @@ function updateSVG(settings = {}) {
         let [width, height] = [viewBox[2], viewBox[3]];
         svgExport = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox.join(' ')}"><path d="${d}"/></svg>`
 
-        //'image/svg+xml'
-        let blob = new Blob([svgExport], { type: 'image/svg+xml' });
-        let objectUrl = URL.createObjectURL(blob)
-        btnDownload.href = objectUrl;
-
-        //console.log('svgExport', objectUrl);
     }
+
+    let blob = new Blob([svgExport], { type: 'image/svg+xml' });
+    let objectUrl = URL.createObjectURL(blob)
+    btnDownload.href = objectUrl;
 
 
     /**
@@ -314,29 +313,3 @@ function adjustViewBox(svg) {
     svg.setAttribute("viewBox", [x, y, width, height].join(" "));
 }
 
-function getViewBox(svg = null, round = false) {
-
-    // browser default
-    if (!svg) return { x: 0, y: 0, width: 300, height: 150 }
-
-    let style = window.getComputedStyle(svg);
-
-    // the baseVal API method also converts physical units to pixels/user-units
-    let w = svg.hasAttribute('width') ? svg.width.baseVal.value : parseFloat(style.width) || 300;
-    let h = svg.hasAttribute('height') ? svg.height.baseVal.value : parseFloat(style.height) || 150;
-
-    let viewBox = svg.getAttribute('viewBox') ? svg.viewBox.baseVal : { x: 0, y: 0, width: w, height: h };
-
-    // remove SVG constructor
-    let { x, y, width, height } = viewBox;
-    viewBox = { x, y, width, height };
-
-    // round to integers
-    if (round) {
-        for (let prop in viewBox) {
-            viewBox[prop] = Math.ceil(viewBox[prop]);
-        }
-    }
-
-    return viewBox
-}

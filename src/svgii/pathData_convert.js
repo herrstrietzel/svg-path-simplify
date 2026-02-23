@@ -3,8 +3,6 @@
 import { getPathDataVertices, getPointOnEllipse, pointAtT, checkLineIntersection, getDistance, interpolate, getAngle } from './geometry.js';
 
 import { splitSubpaths } from "./convert_segments";
-
-
 import { getPolygonArea, getPathArea, getRelativeAreaDiff } from './geometry_area.js';
 import { splitSubpaths } from './pathData_split.js';
 import { getPolyBBox} from './geometry_bbox.js';
@@ -12,7 +10,7 @@ import { renderPoint, renderPath } from "./visualize";
 */
 
 
-import { checkLineIntersection, getAngle, getDeltaAngle, getDistance, getDistAv, getSquareDistance, interpolate, pointAtT, rotatePoint, toParametricAngle } from './geometry';
+import { checkLineIntersection, getAngle, getDeltaAngle, getDistance, getDistAv, getDistManhattan, getSquareDistance, interpolate, pointAtT, rotatePoint, toParametricAngle } from './geometry';
 import { getPathArea, getPolygonArea, getRelativeAreaDiff } from './geometry_area';
 import { pathDataToD } from './pathData_stringify';
 import { roundPathData } from './rounding';
@@ -61,10 +59,10 @@ export function convertPathData(pathData, {
     quadraticToCubic = false,
 
     // assume we need full normalization
-    hasRelatives = true, 
-    hasShorthands = true, 
-    hasQuadratics = true, 
-    hasArcs = true, 
+    hasRelatives = true,
+    hasShorthands = true,
+    hasQuadratics = true,
+    hasArcs = true,
     testTypes = false
 
 
@@ -88,17 +86,17 @@ export function convertPathData(pathData, {
 
 
     //console.log(toShorthands, toRelative, decimals);
-    if (hasQuadratics&& quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
     if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
 
     //if(decimals>-1 && decimals<2) pathData = roundPathData(pathData, decimals);
     if (toShorthands) pathData = pathDataToShorthands(pathData);
     if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
 
+    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
+
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
-
-    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
     if (toRelative) pathData = pathDataToRelative(pathData);
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
@@ -208,37 +206,36 @@ export function pathDataToAbsoluteOrRelative(pathData, toRelative = false, decim
         pathData[0].values = pathData[0].values.map(val => +val.toFixed(decimals));
     }
 
+    let len = pathData.length;
     let M = pathData[0].values;
     let x = M[0],
         y = M[1],
         mx = x,
         my = y;
 
-    for (let i = 1, len = pathData.length; i < len; i++) {
+    for (let i = 1; i < len; i++) {
         let com = pathData[i];
         let { type, values } = com;
-        let newType = toRelative ? type.toLowerCase() : type.toUpperCase();
+        let vLen = values.length;
+        let typeRel = type.toLowerCase();
+        let typeAbs =type.toUpperCase();
+        let typeNew = toRelative ? typeRel : typeAbs;
 
-        if (type !== newType) {
-            type = newType;
-            com.type = type;
+        if (type !== typeNew) {
+            com.type = typeNew;
 
-            switch (type) {
+            switch (typeRel) {
                 case "a":
-                case "A":
                     values[5] = toRelative ? values[5] - x : values[5] + x;
                     values[6] = toRelative ? values[6] - y : values[6] + y;
                     break;
                 case "v":
-                case "V":
                     values[0] = toRelative ? values[0] - y : values[0] + y;
                     break;
                 case "h":
-                case "H":
                     values[0] = toRelative ? values[0] - x : values[0] + x;
                     break;
                 case "m":
-                case "M":
                     if (toRelative) {
                         values[0] -= x;
                         values[1] -= y;
@@ -260,23 +257,18 @@ export function pathDataToAbsoluteOrRelative(pathData, toRelative = false, decim
             }
         }
 
-        let vLen = values.length;
-        switch (type) {
+        switch (typeRel) {
             case "z":
-            case "Z":
                 x = mx;
                 y = my;
                 break;
             case "h":
-            case "H":
                 x = toRelative ? x + values[0] : values[0];
                 break;
             case "v":
-            case "V":
                 y = toRelative ? y + values[0] : values[0];
                 break;
             case "m":
-            case "M":
                 mx = values[vLen - 2] + (toRelative ? x : 0);
                 my = values[vLen - 1] + (toRelative ? y : 0);
             default:
@@ -434,47 +426,67 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
     let len = pathData.length
     let pathDataShorts = new Array(len);
 
-    let comShort = {
-        type: "M",
-        values: pathData[0].values
-    };
-
+    let comShort = pathData[0]
     pathDataShorts[0] = comShort;
 
     let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
-    let p;
-    let tolerance = 0.015
+    let p = p0;
 
     for (let i = 1; i < len; i++) {
 
         let com = pathData[i];
+        comShort = com;
         let { type, values } = com;
         let valuesLen = values.length;
         let valuesLast = [values[valuesLen - 2], values[valuesLen - 1]];
 
-        // previoius command
+        // previous command
         let comPrev = pathData[i - 1];
-        let typePrev = comPrev.type
 
         //last on-path point
         p = { x: valuesLast[0], y: valuesLast[1] };
 
+        // deltas for h or v
+        let dx = Math.abs(p.x - p0.x)
+        let dy = Math.abs(p.y - p0.y)
+        let maxDist = getDistManhattan(p0, p) * 0.01
+
+
         // first bezier control point for S/T shorthand tests
-        let cp1 = { x: values[0], y: values[1] };
+        let isShort = false, isHorizontal = false, isVertical = false;
 
+        if ((type === 'C' && comPrev.type === 'C') || (type === 'Q' && comPrev.type === 'Q')) {
+            let cpPrev = comPrev.type === 'C' ? { x: comPrev.values[2], y: comPrev.values[3] } : { x: comPrev.values[0], y: comPrev.values[1] };
+            let cpFirst = { x: values[0], y: values[1] };
 
-        //calculate threshold based on command dimensions
-        let w = Math.abs(p.x - p0.x)
-        let h = Math.abs(p.y - p0.y)
-        let thresh = (w + h) / 2 * tolerance
+            let dx1 = (p0.x - cpPrev.x)
+            let dy1 = (p0.y - cpPrev.y)
 
-        let diffX, diffY, diff, cp1_reflected;
+            //adjust maxDist
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.05
+
+            // reflected cp
+            let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 }
+            let distCp = getDistManhattan(cpR, cpFirst)
+
+            isShort = distCp < maxDist;
+
+        }
+
+        else if (type === 'L') {
+            isHorizontal = dy === 0 || dy < maxDist;
+            isVertical = dx === 0 || dx < maxDist;
+            isShort = isVertical || isHorizontal;
+
+            if (isShort) {
+                //renderPoint(markers, p, 'magenta')
+            }
+        }
 
 
         switch (type) {
             case "L":
-
-                if (h === 0 || (h < thresh && w > thresh)) {
+                if (isHorizontal) {
                     //console.log('is H');
                     comShort = {
                         type: "H",
@@ -483,83 +495,34 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
                 }
 
                 // V
-                else if (w === 0 || (h > thresh && w < thresh)) {
+               if (isVertical) {
                     //console.log('is V', w, h);
                     comShort = {
                         type: "V",
                         values: [values[1]]
                     };
-                } else {
-                    //console.log('not', type, h, w, thresh, com);
-                    comShort = com;
-                }
-
+                } 
                 break;
 
             case "Q":
 
-                // skip test
-                if (typePrev !== 'Q') {
-                    //console.log('skip T:', type, typePrev);
-                    p0 = { x: valuesLast[0], y: valuesLast[1] };
-                    //pathDataShorts.push(com);
-                    pathDataShorts[i] = com;
-                    continue;
-                }
-
-                let cp1_prev = { x: comPrev.values[0], y: comPrev.values[1] };
-                // reflected Q control points
-                cp1_reflected = { x: (2 * p0.x - cp1_prev.x), y: (2 * p0.y - cp1_prev.y) };
-
-                //let thresh = (diffX+diffY)/2
-                diffX = Math.abs(cp1.x - cp1_reflected.x)
-                diffY = Math.abs(cp1.y - cp1_reflected.y)
-                diff = (diffX + diffY) / 2
-
-                if (diff < thresh) {
-                    //console.log('is T', diff, thresh);
+                if (isShort) {
+                    //comShort = com;
                     comShort = {
                         type: "T",
                         values: [p.x, p.y]
                     };
-                } else {
-                    comShort = com;
                 }
 
                 break;
             case "C":
-
-                let cp2 = { x: values[2], y: values[3] };
-
-                if (typePrev !== 'C') {
-                    //console.log('skip S', typePrev);
-                    //pathDataShorts.push(com);
-                    pathDataShorts[i] = com;
-
-                    p0 = { x: valuesLast[0], y: valuesLast[1] };
-                    continue;
-                }
-
-                let cp2_prev = { x: comPrev.values[2], y: comPrev.values[3] };
-
-                // reflected C control points
-                cp1_reflected = { x: (2 * p0.x - cp2_prev.x), y: (2 * p0.y - cp2_prev.y) };
-
-                //let thresh = (diffX+diffY)/2
-                diffX = Math.abs(cp1.x - cp1_reflected.x)
-                diffY = Math.abs(cp1.y - cp1_reflected.y)
-                diff = (diffX + diffY) / 2
-
-
-                if (diff < thresh) {
+                if (isShort) {
                     //console.log('is S');
                     comShort = {
                         type: "S",
-                        values: [cp2.x, cp2.y, p.x, p.y]
+                        values: [values[2], values[3], p.x, p.y]
                     };
-                } else {
-                    comShort = com;
-                }
+                } 
                 break;
             default:
                 comShort = {
@@ -568,19 +531,8 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
                 };
         }
 
-        // add decimal info
-        if (com.decimals || com.decimals === 0) {
-            comShort.decimals = com.decimals
-        }
-
-        // round final values
-        if (decimals > -1) {
-            comShort.values = comShort.values.map(val => { return +val.toFixed(decimals) })
-        }
-
-        p0 = { x: valuesLast[0], y: valuesLast[1] };
+        p0 = p;
         pathDataShorts[i] = comShort;
-        //pathDataShorts.push(comShort);
     }
 
     //console.log('pathDataShorts', pathDataShorts);
