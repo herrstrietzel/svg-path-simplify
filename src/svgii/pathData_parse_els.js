@@ -163,6 +163,9 @@ export function getPathDataFromEl(el, stringify = false) {
                 ];
             } else {
 
+                rx=rx? rx : ry;
+                ry=ry ? ry : rx;
+
                 if (rx > width / 2) {
                     rx = width / 2;
                 }
