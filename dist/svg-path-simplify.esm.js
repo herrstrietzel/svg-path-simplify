@@ -2684,22 +2684,22 @@ function getPathDataVerbose(pathData, {
     return pathDataVerbose;
 }
 
-function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}) {
+function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance=1) {
 
     // test if cubic can be simplified to quadratic
     let cp1X = interpolate(p0, cp1, 1.5);
     let cp2X = interpolate(p, cp2, 1.5);
 
-    let dist0 = getDistAv(p0, p);
-    let threshold = dist0 * 0.03;
-    let dist1 = getDistAv(cp1X, cp2X);
+    let dist0 = getDistManhattan(p0, p);
+    let threshold = dist0 * 0.01 * tolerance;
+    let dist1 = getDistManhattan(cp1X, cp2X);
 
     let cp1_Q = null;
     let type = 'C';
     let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
     let comN = { type, values };
 
-    if (dist1 && threshold && dist1 < threshold) {
+    if (dist1 < threshold ) {
         cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false);
         if (cp1_Q) {
 
@@ -3597,8 +3597,10 @@ const sanitizeArc = (val='', valueIndex=0) => {
 
 };
 
-function parsePathDataString(d, debug = true) {
+function parsePathDataString(d, debug = true, limit=0) {
     d = d.trim();
+
+    if(limit) console.log('!!!limit', limit);
 
     let pathDataObj = {
         pathData: [],
@@ -5994,6 +5996,648 @@ function refineAdjacentExtremes(pathData, {
 
 }
 
+/**
+ * parse CSS string to
+ * transform property object
+ */
+
+function parseCSSTransform(transformString, transformOrigin={x:0, y:0}) {
+    let transformOptions = {
+        transforms: [],
+        transformOrigin,
+    };
+
+    let regex = /(\w+)\(([^)]+)\)/g;
+    let match;
+
+    function convertToDegrees(value) {
+        if (typeof value === 'string') {
+            if (value.includes('rad')) {
+                return parseFloat(value) * (180 / Math.PI);
+            } else if (value.includes('turn')) {
+                return parseFloat(value) * 360;
+            }
+        }
+        return parseFloat(value);
+    }
+
+    while ((match = regex.exec(transformString)) !== null) {
+        let name = match[1];
+        let values = match[2].split(/,\s*/).map(v => convertToDegrees(v));
+
+        switch (name) {
+
+            case 'translate':
+                transformOptions.transforms.push({ translate: [values[0] || 0, values[1] || 0] });
+                break;
+            case 'translateX':
+                transformOptions.transforms.push({ translate: [values[0] || 0, 0, 0] });
+                break;
+
+            case 'translateY':
+                transformOptions.transforms.push({ translate: [0, values[0] || 0, 0] });
+                break;
+            case 'scale':
+                transformOptions.transforms.push({ scale: [values[0] || 0, values[1] || 0] });
+                break;
+            case 'skew':
+                transformOptions.transforms.push({ skew: [values[0] || 0, values[1] || 0] });
+                break;
+
+            case 'skewX':
+                transformOptions.transforms.push({ skew: [values[0] || 0, 0] });
+                break;
+
+            case 'skewY':
+                transformOptions.transforms.push({ skew: [0, values[0] || 0] });
+                break;
+            case 'rotate':
+                transformOptions.transforms.push({ rotate: [0, 0, values[0] || 0] });
+                break;
+            case 'matrix':
+                transformOptions.transforms.push({ matrix: values });
+                break;
+        }
+    }
+
+    // Extract transform-origin, perspective-origin, and perspective if included as separate properties
+    let styleProperties = transformString.split(/;\s*/);
+    styleProperties.forEach(prop => {
+        let [key, value] = prop.split(':').map(s => s.trim());
+        if (key === 'transform-origin' || key === 'perspective-origin') {
+            let [x, y] = value.split(/\s+/).map(parseFloat);
+            if (key === 'transform-origin') {
+                transformOptions.transformOrigin = { x: x || 0, y: y || 0 };
+            }
+        }
+    });
+
+    return transformOptions;
+}
+
+/**
+ * wrapper function to switch between
+ * 2D or 3D matrix
+ */
+function getMatrix({
+    transforms = [],
+    transformOrigin = { x: 0, y: 0 },
+} = {}) {
+
+    let matrix = getMatrix2D(transforms, transformOrigin);
+
+    return matrix
+}
+
+function getMatrix2D(transformations = [], origin = { x: 0, y: 0 }) {
+
+    // Helper function to multiply two 2D matrices
+    const multiply = (m1, m2) => ({
+        a: m1.a * m2.a + m1.c * m2.b,
+        b: m1.b * m2.a + m1.d * m2.b,
+        c: m1.a * m2.c + m1.c * m2.d,
+        d: m1.b * m2.c + m1.d * m2.d,
+        e: m1.a * m2.e + m1.c * m2.f + m1.e,
+        f: m1.b * m2.e + m1.d * m2.f + m1.f
+    });
+
+    // Helper function to create a translation matrix
+    const translationMatrix = (x, y) => ({
+        a: 1, b: 0, c: 0, d: 1, e: x, f: y
+    });
+
+    // Helper function to create a scaling matrix
+    const scalingMatrix = (x, y) => ({
+        a: x, b: 0, c: 0, d: y, e: 0, f: 0
+    });
+
+    // get skew or rotation axis matrix
+    const angleMatrix = (angles, type) => {
+        const toRad = (angle) => angle * Math.PI / 180;
+        let [angleX, angleY] = angles.map(ang => { return toRad(ang) });
+        let m = {};
+
+        if (type === 'rot') {
+            let cos = Math.cos(angleX), sin = Math.sin(angleX);
+            m = { a: cos, b: sin, c: -sin, d: cos, e: 0, f: 0 };
+        } else if (type === 'skew') {
+            let tanX = Math.tan(angleX), tanY = Math.tan(angleY);
+            m = {
+                a: 1, b: tanY, c: tanX, d: 1, e: 0, f: 0
+            };
+        }
+        return m
+    };
+
+    // Start with an identity matrix
+    let matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+    // Apply transform origin: translate to origin, apply transformations, translate back
+    if (origin.x !== 0 || origin.y !== 0) {
+        matrix = multiply(matrix, translationMatrix(origin.x, origin.y));
+    }
+
+    // Default values for transformations
+    const defaults = {
+        translate: [0, 0],
+        scale: [1, 1],
+        skew: [0, 0],
+        rotate: [0],
+        matrix: [1, 0, 0, 1, 0, 0]
+    };
+
+    // Process transformations in the provided order (right-to-left)
+    for (const transform of transformations) {
+        const type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
+        const values = transform[type] || defaults[type]; // Use default values if none provided
+
+        // Destructure values with fallbacks
+        let [x, y = defaults[type][1]] = values;
+
+        // Z-rotate as  2d rotation
+        if (type === 'rotate' && values.length === 3) {
+            x = values[2];
+        }
+
+        switch (type) {
+            case "matrix":
+                let keys = ['a', 'b', 'c', 'd', 'e', 'f'];
+                let obj = Object.fromEntries(keys.map((key, i) => [key, values[i]]));
+                matrix = multiply(matrix, obj);
+                break;
+            case "translate":
+                if (x || y) matrix = multiply(matrix, translationMatrix(x, y));
+                break;
+            case "skew":
+                if (x || y) matrix = multiply(matrix, angleMatrix([x, y], 'skew'));
+                break;
+            case "rotate":
+                if (x) matrix = multiply(matrix, angleMatrix([x], 'rot'));
+                break;
+            case "scale":
+                if (x !== 1 || y !== 1) matrix = multiply(matrix, scalingMatrix(x, y));
+                break;
+
+            default:
+                throw new Error(`Unknown transformation type: ${type}`);
+        }
+    }
+
+    // Revert transform origin
+    if (origin.x !== 0 || origin.y !== 0) {
+        matrix = multiply(matrix, translationMatrix(-origin.x, -origin.y));
+    }
+
+    return matrix;
+}
+
+/**
+ * all SVG attributes
+ * mapped to elements
+ * used to remove unnecessary attribution
+ */
+
+const shapeEls = [
+    "polygon",
+    "polyline",
+    "line",
+    "rect",
+    "circle",
+    "ellipse",
+];
+
+const geometryEls = [
+    "path",
+    ...shapeEls
+];
+
+const textEls = [
+    "textPath",
+    "text",
+    "tspan",
+];
+
+const attLookup = {
+
+    atts: {
+
+        // wildcard
+        id:'*',
+        class:'*',
+
+        // svg
+        viewBox: ["symbol", "svg"],
+        preserveAspectRatio: ["symbol", "svg"],
+        width: ["svg", "rect", "use", "image"],
+        height: ["svg", "rect", "use", "image"],
+
+        // geometry
+        d: ["path"],
+        points: ["polygon", "polyline"],
+
+        x: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
+        y: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
+        x1: ["line", "linearGradient"],
+        x2: ["line", "linearGradient"],
+        y1: ["line", "linearGradient"],
+        y2: ["line", "linearGradient"],
+
+        r: ["circle", "radialGradient"],
+        rx: ["rect", "ellipse"],
+        ry: ["rect", "ellipse"],
+
+        cx: ["circle", "ellipse", "radialGradient"],
+        cy: ["circle", "ellipse", "radialGradient"],
+
+        refX: ["symbol", "markers"],
+        refY: ["symbol", "markers"],
+
+        // transforms
+        transform: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "transform-origin": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        fill: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "animate",
+            "animateMotion"
+        ],
+
+        "fill-opacity": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        opacity: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        stroke: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "stroke-width": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-opacity": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-miterlimit": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-linejoin": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-linecap": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-dashoffset": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-dasharray": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "clip-path": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "clip-rule": [
+            "path",
+            "polygon",
+        ],
+
+        clipPathUnits: ["clipPath"],
+
+        mask: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+        maskContentUnits: ["mask"],
+        maskUnits: ["mask"],
+
+        // text els
+        "font-family": ["svg", "g", ...textEls],
+        "font-size": ["svg", "g", ...textEls],
+        "font-style": ["svg", "g", ...textEls],
+        "font-weight": ["svg", "g", ...textEls],
+        "font-stretch": ["svg", "g", ...textEls],
+        "dominant-baseline": [...textEls],
+        lengthAdjust: [...textEls],
+        "text-anchor": ["text"],
+        textLength: ["text", "textPath", "tspan"],
+        dx: ["text", "tspan"],
+        dy: ["text", "tspan"],
+        method: ["textPath"],
+
+        spacing: ["textPath"],
+        startOffset: ["textPath"],
+        rotate: ["text", "tspan", "animateMotion"],
+        side: ["textPath"],
+        "white-space": ["svg", "g", ...textEls],
+
+        // actually nonsense but might be used for currentColor
+        "color": ["svg", "g", ...textEls],
+
+        // animate
+        playbackorder: ["svg"],
+        timelinebegin: ["svg"],
+
+        dur: ["animate", "animateTransform", "animateMotion"],
+        end: ["animate", "animateTransform", "animateMotion"],
+        from: ["animate", "animateTransform", "animateMotion"],
+        to: ["animate", "animateTransform", "animateMotion"],
+        type: ["animateTransform"],
+        values: ["animate", "animateTransform", "animateMotion"],
+        accumulate: ["animate", "animateTransform", "animateMotion"],
+        additive: ["animate", "animateTransform", "animateMotion"],
+        attributeName: ["animate", "animateTransform"],
+        begin: ["animate", "animateTransform", "animateMotion"],
+        by: ["animate", "animateTransform", "animateMotion"],
+        calcMode: ["animate", "animateTransform", "animateMotion"],
+        keyPoints: ["animateMotion"],
+        keySplines: ["animate", "animateTransform", "animateMotion"],
+        keyTimes: ["animate", "animateTransform", "animateMotion"],
+        max: ["animate", "animateTransform", "animateMotion"],
+        min: ["animate", "animateTransform", "animateMotion"],
+        origin: ["animateMotion"],
+        repeatCount: ["animate", "animateTransform", "animateMotion"],
+        repeatDur: ["animate", "animateTransform", "animateMotion"],
+        restart: ["animate", "animateTransform", "animateMotion"],
+
+        // gradients
+        gradientUnits: ["linearGradient", "radialGradient"],
+        gradientTransform: ["linearGradient", "radialGradient"],
+        fr: ["radialGradient"],
+        fx: ["radialGradient"],
+        fy: ["radialGradient"],
+        offset: ["stop"],
+        "stop-color": ["stop"],
+        "stop-opacity": ["stop"],
+        spreadMethod: ["linearGradient", "radialGradient"],
+
+        // object references
+        href: [
+            "pattern",
+            "textPath",
+            "linearGradient",
+            "radialGradient",
+            "use",
+            "animate",
+            "animateTransform",
+            "animateMotion",
+            "image"
+        ],
+
+        pathLength: [
+            ...geometryEls
+        ],
+
+    },
+
+    defaults: {
+
+        transform: ["none", "matrix(1, 0, 0, 1, 0, 0)"],
+        "transform-origin": ["0px, 0px", "0 0"],
+        rx: ["0", "0px"],
+        ry: ["0", "0px"],
+        x: ["0", "0px"],
+        y: ["0", "0px"],
+
+        fill: ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
+        "color": ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
+
+        stroke: ["none"],
+        "stroke-width": ["1", "1px"],
+        opacity: ["1"],
+        "fill-opacity": ["1"],
+        "stroke-opacity": ["1"],
+        "stroke-linecap": ["butt"],
+        "stroke-miterlimit": ["4"],
+        "stroke-linejoin": ["miter"],
+        "stroke-dasharray": ["none"],
+        "stroke-dashoffset": ["0", "0px", "none"],
+        "pathLength": ["none"],
+
+        // text
+        "font-family": ["serif"],
+        "font-weight": ["normal", "400"],
+        "font-stretch": ["normal"],
+        "font-width": ["normal"],
+        "letter-spacing": ["auto", "normal", "0"],
+        "lengthAdjust": ["spacing"],
+        "text-anchor": ["start"],
+        "dominant-baseline": ["auto"],
+        spacing: ["auto"],
+        "white-space": ["normal"],
+
+        // gradients
+        "stop-opacity": ["1"],
+
+        gradientUnits: ["objectBoundingBox"],
+        patternUnits: ["objectBoundingBox"],
+
+        // clips and masks
+        "clip-path": ["none"],
+        "clip-rule": ["nonzero"],
+        "fill-rule": ["nonzero"],
+        clipPathUnits: ["userSpaceOnUse"],
+
+        mask: ["none"],
+        maskUnits: ["objectBoundingBox"],
+
+    }
+};
+
+function svgStylesToAttributes(el, {
+    removeNameSpaced = true,
+    decimals = -1
+} = {}) {
+
+    let nodeName = el.nodeName.toLowerCase();
+    let attProps = getElAttributes(el);
+    let cssProps = getElStyleProps(el);
+
+    // merge properties
+    let props = {
+        ...attProps,
+        ...cssProps
+    };
+
+    // filter out obsolete properties
+    let propsFiltered = {};
+
+    // parse CSS transforms
+    let cssTrans = cssProps['transform'];
+    
+    if (cssTrans) {
+        let transStr = `${cssTrans}`;
+        let transformObj = parseCSSTransform(transStr);
+        let matrix = getMatrix(transformObj);
+
+        // apply as SVG matrix transform
+        props['transform'] = `matrix(${Object.values(matrix).join(',')})`;
+    }
+
+    // can't be replaced with attributes
+    let cssOnlyProps = ['inline-size'];
+    let styleProps = [];
+
+    for (let prop in props) {
+
+        let value = props[prop];
+
+        // CSS variable
+        if (value && prop.startsWith('--') || cssOnlyProps.includes(prop) ||
+            (!removeNameSpaced && prop.startsWith('-'))) {
+            styleProps.push(`${prop}:${value}`);
+            continue
+        }
+
+        // check if property is valid
+        if (value && attLookup.atts[prop] &&
+            (attLookup.atts[prop] === '*' ||
+                attLookup.atts[prop].includes(nodeName) ||
+                !removeNameSpaced && (prop.includes(':'))
+            )
+        ) {
+            propsFiltered[prop] = value;
+        }
+
+        // remove property
+        el.removeAttribute(prop);
+
+    }
+
+    // apply filtered attributes
+    for (let prop in propsFiltered) {
+        let value = propsFiltered[prop];
+        el.setAttribute(prop, value);
+    }
+
+    if (styleProps.length) {
+        el.setAttribute('style', styleProps.join(';'));
+    }
+
+    return propsFiltered;
+
+}
+
+function parseInlineStyle(styleAtt = '') {
+
+    let props = {};
+    if (!styleAtt) return props;
+
+    let styleArr = styleAtt.split(';').filter(Boolean).map(prop => prop.trim());
+    let l = styleArr.length;
+    if (!l) return props;
+
+    for (let i = 0; l && i < l; i++) {
+        let style = styleArr[i];
+        let [prop, value] = style.split(':').filter(Boolean);
+        props[prop] = value;
+
+    }
+
+    return props
+}
+
+function getElStyleProps(el) {
+    let styleAtt = el.getAttribute('style');
+    let props = styleAtt ? parseInlineStyle(styleAtt) : {};
+    return props
+}
+
+function getElAttributes(el) {
+    let props = {};
+    let atts = [...el.attributes].map((att) => att.name);
+    let l = atts.length;
+    if (!l) return props;
+
+    for (let i = 0; i < l; i++) {
+        let att = atts[i];
+        let value = el.getAttribute(att);
+        props[att] = value;
+    }
+
+    return props;
+}
+
 function removeEmptySVGEls(svg) {
   let els = svg.querySelectorAll('g, defs');
   els.forEach(el => {
@@ -6005,48 +6649,165 @@ function cleanUpSVG(svgMarkup, {
   returnDom = false,
   removeHidden = true,
   removeUnused = true,
+  stylesToAttributes = true,
+  removePrologue = true,
+  fixHref = true,
+  mergePaths = false,
+  cleanupSVGAtts = true,
+  removeNameSpaced = true,
+  attributesToGroup = true,
+  decimals = -1,
+  excludedEls = [],
 } = {}) {
 
   svgMarkup = cleanSvgPrologue(svgMarkup);
 
   // replace namespaced refs 
-  svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
+  if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
 
   let svg = new DOMParser()
 
-  .parseFromString(svgMarkup, "text/html")
-  .querySelector("svg");
+    .parseFromString(svgMarkup, "text/html")
+    .querySelector("svg");
 
-  let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
-  removeExcludedAttribues(svg, allowed);
+  if (cleanupSVGAtts) {
+    let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
+    removeExcludedAttribues(svg, allowed);
 
-  let removeEls = ['metadata', 'script'];
+  }
+
+  // always remove scripts
+  let removeEls = ['metadata', 'script', ...excludedEls];
 
   let els = svg.querySelectorAll('*');
+  let elProps = [];
 
-  let textEls = svg.querySelectorAll('text');
-  let remove = !textEls.length ? ['font-family', 'font-weight', 'font-style', 'font-size'] : [];
-  
-  els.forEach(el => {
-    let name = el.nodeName;
+  for (let i = 0; i < els.length; i++) {
+    let el = els[i];
+
+    let name = el.nodeName.toLowerCase();
+
     // remove hidden elements
     let style = el.getAttribute('style') || '';
     let isHiddenByStyle = style ? style.trim().includes('display:none') : false;
     let isHidden = (el.getAttribute('display') && el.getAttribute('display') === 'none') || isHiddenByStyle;
     if (name.includes(':') || removeEls.includes(name) || (removeHidden && isHidden)) {
       el.remove();
-    } else {
-      // remove BS elements
-      removeNameSpaceAtts(el);
-      removeAtts(el,remove);
+      continue;
     }
-  });
+
+    // styles to attributes
+    if (stylesToAttributes || attributesToGroup || mergePaths) {
+      let propsFiltered = svgStylesToAttributes(el, { removeNameSpaced, decimals });
+      if (name === 'path') {
+        elProps.push({ el, name, idx: i, propsFiltered });
+      }
+    }
+  }
+
+  // group styles
+
+  if (attributesToGroup || mergePaths) {
+    moveAttributesToGroup(elProps, mergePaths);
+  }
 
   if (returnDom) return svg
-
   let markup = stringifySVG(svg);
 
   return markup;
+}
+
+function moveAttributesToGroup(elProps = [], mergePaths = true) {
+
+  let combine = [[elProps[0]]];
+  let idx = 0;
+  let lastProps = '';
+  for (let i = 0; i < elProps.length; i++) {
+    let item = elProps[i];
+    let props = item.propsFiltered;
+    let propstr = [];
+
+    for (let prop in props) {
+      if (prop !== 'd' && prop !== 'id') {
+        propstr.push(`${prop}:${props[prop]}`);
+      }
+    }
+    propstr = propstr.join('_');
+    item.propstr = propstr;
+
+    if (propstr === lastProps) {
+      combine[idx].push(item);
+    } else {
+      if (combine[idx].length) {
+        combine.push([]);
+        idx++;
+      }
+    }
+    lastProps = propstr;
+
+  }
+
+  // add att groups
+  for (let i = 0; i < combine.length; i++) {
+    let group = combine[i];
+
+    if (group.length > 1) {
+      // 1st el
+      let el0 = group[0].el;
+      let props = group[0].propsFiltered;
+      let g = el0.parentNode.closest('g') ? el0.parentNode.closest('g') : null;
+
+      // wrap in group if not existent
+      if (!g) {
+        g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        el0.parentNode.insertBefore(g, el0);
+        group.forEach(item => {
+          g.append(item.el);
+        });
+      }
+
+      let children = [...g.children];
+      for (let prop in props) {
+        if (prop !== 'd' && prop !== 'id') {
+          let value = props[prop];
+          // apply to parent group
+          g.setAttribute(prop, value);
+
+          // remove from children
+          children.forEach(el => {
+            if (el.getAttribute(prop) === value) {
+              el.removeAttribute(prop);
+            }
+          });
+        }
+
+        if (mergePaths) {
+          let path0 = group[0].el;
+          let dCombined = group[0].propsFiltered.d;
+
+          for (let i = 1; i < group.length; i++) {
+            let item = group[i];
+            let path = item.el;
+            let d = item.propsFiltered.d;
+            let isAbs = d.startsWith('M');
+
+            let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
+
+            // concat pathdata string
+            dCombined += dAbs;
+
+            // delete path el
+            path.remove();
+          }
+
+          path0.setAttribute('d', dCombined);
+
+        }
+
+      }
+    }
+  }
+
 }
 
 function cleanSvgPrologue(svgString) {
@@ -6067,24 +6828,6 @@ function removeExcludedAttribues(el, allowed = ['viewBox', 'xmlns', 'width', 'he
   let atts = [...el.attributes].map((att) => att.name);
   atts.forEach((att) => {
     if (!allowed.includes(att)) {
-      el.removeAttribute(att);
-    }
-  });
-}
-
-function removeAtts(el, remove=[]) {
-  let atts = [...el.attributes].map((att) => att.name);
-  atts.forEach((att) => {
-    if (remove.includes(att)) {
-      el.removeAttribute(att);
-    }
-  });
-}
-
-function removeNameSpaceAtts(el) {
-  let atts = [...el.attributes].map((att) => att.name);
-  atts.forEach((att) => {
-    if (att.includes(":")) {
       el.removeAttribute(att);
     }
   });
@@ -7618,6 +8361,12 @@ function svgPathSimplify(input = '', {
     reverse = false,
 
     // svg cleanup options
+    cleanupSVGAtts=true,
+    removePrologue = true,
+    stylesToAttributes = true,
+    fixHref = true,
+    removeNameSpaced=true,
+    attributesToGroup=false,
     mergePaths = false,
     removeHidden = true,
     removeUnused = true,
@@ -7686,7 +8435,7 @@ function svgPathSimplify(input = '', {
     else {
 
         let returnDom = true;
-        svg = cleanUpSVG(input, { returnDom, removeHidden, removeUnused }
+        svg = cleanUpSVG(input, { cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, attributesToGroup, stylesToAttributes, removePrologue, fixHref ,mergePaths  }
         );
 
         if (shapesToPaths) {
@@ -7973,6 +8722,7 @@ function svgPathSimplify(input = '', {
         }
 
         // collect for merged svg paths 
+        mergePaths= false;
         if (el && mergePaths) {
             pathData_merged.push(...pathData);
         }

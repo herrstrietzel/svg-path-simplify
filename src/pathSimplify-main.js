@@ -99,6 +99,12 @@ export function svgPathSimplify(input = '', {
     reverse = false,
 
     // svg cleanup options
+    cleanupSVGAtts=true,
+    removePrologue = true,
+    stylesToAttributes = true,
+    fixHref = true,
+    removeNameSpaced=true,
+    attributesToGroup=false,
     mergePaths = false,
     removeHidden = true,
     removeUnused = true,
@@ -173,7 +179,7 @@ export function svgPathSimplify(input = '', {
     else {
         //sanitize
         let returnDom = true
-        svg = cleanUpSVG(input, { returnDom, removeHidden, removeUnused }
+        svg = cleanUpSVG(input, { cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, attributesToGroup, stylesToAttributes, removePrologue, fixHref ,mergePaths  }
         );
 
         if (shapesToPaths) {
@@ -464,7 +470,7 @@ export function svgPathSimplify(input = '', {
 
 
             // simplify to quadratics
-            if (revertToQuadratics) pathData = pathDataRevertCubicToQuadratic(pathData);
+            if (revertToQuadratics) pathData = pathDataRevertCubicToQuadratic(pathData, tolerance);
 
             // optimize close path
             if (optimizeOrder) pathData = optimizeClosePath(pathData, { autoClose })
@@ -512,6 +518,7 @@ export function svgPathSimplify(input = '', {
 
 
         // collect for merged svg paths 
+        mergePaths= false
         if (el && mergePaths) {
             pathData_merged.push(...pathData)
         }

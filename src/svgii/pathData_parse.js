@@ -199,8 +199,10 @@ const sanitizeArc = (val='', valueIndex=0) => {
 
 
 
-export function parsePathDataString(d, debug = true) {
+export function parsePathDataString(d, debug = true, limit=0) {
     d = d.trim();
+
+    if(limit) console.log('!!!limit', limit);
 
     let pathDataObj = {
         pathData: [],
@@ -457,11 +459,14 @@ export function parsePathDataString(d, debug = true) {
 
         i++;
 
+
     }
 
     // final value
     pushVal()
     if (debug) validateCommand()
+
+
 
 
     // return error log

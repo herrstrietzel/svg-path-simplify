@@ -90,7 +90,24 @@
                 <p>
                     <label><input type="checkbox" name="arcToCubic">arcToCubic</label>
                     <label><input type="checkbox" name="quadraticToCubic" checked>quadraticToCubic</label>
+
+                    <!-- 
+
+                        <label><input type="checkbox" name="removePrologue" checked>removePrologue</label>
+                    -->
+
+                    <label><input type="checkbox" name="removeNameSpaced" checked>removeNameSpaced</label>
+                    <label><input type="checkbox" name="cleanupSVGAtts" checked data-info="remove SVG non-essential attributes">cleanupSVGAtts</label>
+
+                    <label><input type="checkbox" name="fixHref" checked data-info="replaces xlibnk:href with href">fixHref</label>
+
+
+                    
                     <label><input type="checkbox" name="removeHidden" checked>removeHidden</label>
+
+
+                    <label><input type="checkbox" name="stylesToAttributes" data-info="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
+
                     <label><input type="checkbox" name="mergePaths">mergePaths</label>
                     <label><input type="checkbox" name="shapesToPaths"
                             data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
@@ -211,9 +228,6 @@
                             data-info="reduces floating point precision: reduces filesize significantly!"></label>
                 </p>
 
-                <p>
-                    <label><input type="checkbox" name="showMarkers" checked>showMarkers</label>
-                </p>
 
                 <p>
                     <label>Output SVG
@@ -246,6 +260,8 @@
                     <p class="pReport txt-rgh" id="pReport"></p>
 
                     <div class="wrp-btns txt-rgh">
+
+                        <label><input type="checkbox" name="showMarkers" checked>showMarkers</label>
 
                         <!-- Share -->
                         <a href="#" class="btn a-non btn-download btn-neg" id="shareUrl" data-icon="link">Share</a>
