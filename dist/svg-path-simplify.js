@@ -7691,14 +7691,14 @@
       }
   }
 
-  function pathDataRevertCubicToQuadratic(pathData) {
+  function pathDataRevertCubicToQuadratic(pathData, tolerance=1) {
 
       for (let c = 1, l = pathData.length; c < l; c++) {
           let com = pathData[c];
           let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
           if (type === 'C') {
 
-              let comQ = revertCubicQuadratic(p0, cp1, cp2, p);
+              let comQ = revertCubicQuadratic(p0, cp1, cp2, p, tolerance);
               if (comQ.type === 'Q') {
                   comQ.extreme = com.extreme;
                   comQ.corner = com.corner;
@@ -8682,12 +8682,12 @@
                   let threshold = (bb.width + bb.height) * 0.1;
                   pathData = refineRoundedCorners(pathData, { threshold, tolerance });
               }
-
+              
               // refine round segment sequences
               if (simplifyRound) pathData = refineRoundSegments(pathData);
 
               // simplify to quadratics
-              if (revertToQuadratics) pathData = pathDataRevertCubicToQuadratic(pathData);
+              if (revertToQuadratics) pathData = pathDataRevertCubicToQuadratic(pathData, tolerance);
 
               // optimize close path
               if (optimizeOrder) pathData = optimizeClosePath(pathData, { autoClose });

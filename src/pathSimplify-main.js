@@ -464,7 +464,7 @@ export function svgPathSimplify(input = '', {
                 let threshold = (bb.width + bb.height) * 0.1
                 pathData = refineRoundedCorners(pathData, { threshold, tolerance })
             }
-
+            
             // refine round segment sequences
             if (simplifyRound) pathData = refineRoundSegments(pathData);
 
