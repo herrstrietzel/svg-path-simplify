@@ -7,6 +7,7 @@ import 'svg-path-simplify/node';
 import { svgPathSimplify } from 'svg-path-simplify';
 
 
+
 let svgMarkup =
 	`<?xml version="1.0" encoding="utf-8"?>
 <!-- Generator: Super Adobe Illustrator 33.0.0 Turbo, SVG Export Plug-In . SVG Version: 123.00 Build 0)  -->
