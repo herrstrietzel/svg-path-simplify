@@ -16,22 +16,22 @@ import { pathDataToD } from './pathData_stringify';
 import { roundPathData } from './rounding';
 import { renderPoint } from './visualize';
 
-export function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}) {
+export function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance=1) {
 
     // test if cubic can be simplified to quadratic
     let cp1X = interpolate(p0, cp1, 1.5)
     let cp2X = interpolate(p, cp2, 1.5)
 
-    let dist0 = getDistAv(p0, p)
-    let threshold = dist0 * 0.03;
-    let dist1 = getDistAv(cp1X, cp2X)
+    let dist0 = getDistManhattan(p0, p)
+    let threshold = dist0 * 0.01 * tolerance;
+    let dist1 = getDistManhattan(cp1X, cp2X)
 
     let cp1_Q = null;
     let type = 'C'
     let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
     let comN = { type, values }
 
-    if (dist1 && threshold && dist1 < threshold) {
+    if (dist1 < threshold ) {
         cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false);
         if (cp1_Q) {
             //renderPoint(markers, cp1_Q )
