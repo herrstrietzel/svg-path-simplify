@@ -32,6 +32,7 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
 * adaptive coordinate rounding: small or large details can be auto-detected to find a suitable floating point accuracy without guessing the decimal value (3 decimals may not be the silver bullet=)
 * split segments at extremes – only useful for manual editing
 * optimize either path data strings or SVG markup code
+* create curves from polylines (curve-fitting)
 
 
 ## TOC
@@ -41,6 +42,7 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
     - [ESM version](#esm-version)
   + [node.js](#nodejs)
     - [Example 2: Apply options](#example-2-apply-options)
+  + [Web worker](#web-worker)
   + [API](#api)
   + [Simplification parameters](#simplification-parameters)
   + [Advanced simplifications](#advanced-simplifications)
@@ -117,7 +119,7 @@ npm install svg-path-simplify
 
 To simplify entire SVG documents in node.js we need to emulate the browsers DOM methods `DOMParser` and `XMLSerializer`. I opted for [linkedom](https://github.com/WebReflection/linkedom). Just make sure to import the `svg-path-simplify/node` module. It will load linkedom's methods `DOMParser` and add a polyfill for `XMLSerializer`
 
-``` 
+```js 
 /**
  * load node polyfills for DOM parsing
  * loads linkedom npm module for DOM parsing and emulation 
@@ -131,10 +133,22 @@ let pathDataString =  `M 57.13 15.5c 13.28 0 24.53 8.67 28.42 20.65c 0.94 2.91 1
 let pathDataOpt = svgPathSimplify(pathDataString);
 ```
 
+### Web worker
+Similar to node.js usage we need [linkedom](https://github.com/WebReflection/linkedom) to polyfill missing DOMParser functionality in a headless environment.
+
+```js
+import './svg-path-simplify.worker.polyfills.js';
+import { svgPathSimplify } from './svg-path-simplify.esm.js';
+```
+
+Import the polyfill module from the dist folder. It imports the worker version of linkedom.
+See [svg-path-simplify.worker.js](./dist/svg-path-simplify.worker.js').  
+
+
 #### Example 2: Apply options  
 The following example would return a detailed object containing the stringified "normalized" pathdata (all absolute and "longhand" command notation). 
 
-``` 
+```js 
 let options = {
  extrapolateDominant: false,
  decimals: 3,
@@ -202,7 +216,7 @@ Z
 
 ### API
 
-``` 
+```js 
 let options = {}
 let output = svgPathSimplify(input, options);
 ```
