@@ -380,6 +380,8 @@ SVGs > 1 MB are most of the time not salvagable. At least if they contain 10K+ o
 
 ## Changelog, Updates and rollback
 ### Changelog
+* 0.3.0 webapp adds support for multi file batch optimizations, web worker support, drawing direction fix option (for fill rules)
+* 0.2.0 added features for polygon curve fitting
 * 0.1.0 fixed node support for complete svg files
 
 ### Rollback
