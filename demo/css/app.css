@@ -590,6 +590,20 @@ canvas {
     margin-bottom: 0.5em;
 }
 
+
+.label-span,
+.pReport {
+font-weight:700;
+text-shadow:
+0px 0px 20px var(--color-bg),
+0px 0px 20px var(--color-bg),
+0px 0px 10px var(--color-bg),
+1px 1px 5px var(--color-bg),
+1px 1px 3px var(--color-bg),
+1px 1px 2px var(--color-bg)
+}
+
+
 /*
 .footer:before {
     content: '';
