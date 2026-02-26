@@ -43,13 +43,14 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
   + [node.js](#nodejs)
     - [Example 2: Apply options](#example-2-apply-options)
   + [Web worker](#web-worker)
-  + [API](#api)
+* [API](#api)
   + [Simplification parameters](#simplification-parameters)
   + [Advanced simplifications](#advanced-simplifications)
   + [Output options](#output-options)
   + [SVG scaling](#svg-scaling)
   + [SVG output optimizations](#svg-output-optimizations)
   + [SVG input normalization](#svg-input-normalization)
+* [Lite version](#lite-version–only-path-data)
 * [Demos](#demos)
   + [Web app](#web-app)
   + [Demo files](#demo-files)
@@ -214,7 +215,7 @@ Z
 
 
 
-### API
+## API
 
 ```js 
 let options = {}
@@ -303,6 +304,36 @@ Scaling only indirectly affects file size analogous to rounding. Use it only for
 | shapesToPaths | converts shapes to paths - usually not recommended as shapes are most often more compact. But useful for path concatenation | Boolean | false |
 | stylesToAttributes | consolidates styles and set them to attributes. Also removes invalid attributes (e.g `font-family` for paths) | Boolean | false |
 
+
+## Lite version – only path data
+Since the library aims at a complete toolset it might be an overkill for your needs. 
+For this use case you can opt for the lighter pathdata only version »svg-path-simplify.pathdata.esm.min«.  Minified filesize is ~41 KB / 17 KB gzipped (compared to the full library with ~72/27 KB)
+
+The API is compatible but simply missing some options such as:  
+* polygon smoothing/curve fitting
+* svg processing - only path data is allowed 
+* no scaling 
+* no path direction fixes
+
+```js
+
+
+import { simplifyPathData } from '../dist/svg-path-simplify.pathdata.esm.js'
+
+let pathDataString =
+`
+M 57.13 15.5
+c 13.28 0 24.53 8.67 28.42 20.65
+c 0.94 2.91 1.45 6.01 1.45 9.23
+`
+// try to simplify
+let pathDataOpt = simplifyPathData(pathDataString);
+
+/*
+ or with options let pathDataOpt = simplifyPathData(pathDataString, options);
+*/
+
+```
 
 
 

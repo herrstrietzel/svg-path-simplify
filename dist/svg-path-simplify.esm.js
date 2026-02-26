@@ -2034,8 +2034,6 @@ function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, debug = f
         return commands;
     }
 
-    if (debug) renderPoint(markers, ptM, 'purple');
-
     result.cp1 = cp1_2;
     result.cp2 = cp2_2;
 
@@ -2098,8 +2096,8 @@ function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, debug = f
         result.error = areaDiff * 5 * tolerance;
 
         if (debug) {
-            let d = pathDataToD(pathDataN);
-            renderPath(markers, d, 'orange');
+            pathDataToD(pathDataN);
+
         }
 
         // success!!!

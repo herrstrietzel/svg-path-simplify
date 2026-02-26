@@ -1,5 +1,6 @@
 import terser from '@rollup/plugin-terser';
 const libName = 'svg-path-simplify';
+const libName2 = 'simplify-pathdata';
 
 
 const stripDevComments = () => ({
@@ -56,6 +57,25 @@ export default [
             },
             {
                 file: `dist/${libName}.esm.min.js`,
+                format: 'es',
+                exports: 'named',
+                plugins: [terser()]
+            },
+        ]
+    },
+
+    // ESM Build only pathdata
+    {
+        input: 'src/index-pathdata.js',
+        output: [
+            {
+                file: `dist/${libName}.pathdata.esm.js`,
+                format: 'es',
+                exports: 'named',
+                plugins: [stripDevComments()]
+            },
+            {
+                file: `dist/${libName}.pathdata.esm.min.js`,
                 format: 'es',
                 exports: 'named',
                 plugins: [terser()]
