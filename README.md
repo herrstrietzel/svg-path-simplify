@@ -142,7 +142,7 @@ import { svgPathSimplify } from './svg-path-simplify.esm.js';
 ```
 
 Import the polyfill module from the dist folder. It imports the worker version of linkedom.
-See [svg-path-simplify.worker.js](./dist/svg-path-simplify.worker.js').  
+See [svg-path-simplify.worker.js](https://github.com/herrstrietzel/svg-path-simplify/blob/main/dist/svg-path-simplify.worker.js).  
 
 
 #### Example 2: Apply options  
