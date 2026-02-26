@@ -50,7 +50,7 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
   + [SVG scaling](#svg-scaling)
   + [SVG output optimizations](#svg-output-optimizations)
   + [SVG input normalization](#svg-input-normalization)
-* [Lite version](#lite-version–only-path-data)
+* [Lite version](#lite-version--only-path-data)
 * [Demos](#demos)
   + [Web app](#web-app)
   + [Demo files](#demo-files)
