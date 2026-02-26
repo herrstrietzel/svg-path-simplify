@@ -4,6 +4,7 @@ import { simplifyRD } from "../simplify_poly_radial_distance";
 import { getDistAv, getTatAngles, pointAtT } from "./geometry";
 import { getPolyBBox } from "./geometry_bbox";
 import { addDimensionData, analyzePathData } from "./pathData_analyze";
+import { arcToBezier } from "./pathData_convert";
 import { pathDataFromPoly } from "./pathData_fromPoly";
 import { addExtremePoints } from "./pathData_split";
 import { pathDataToD } from "./pathData_stringify";
@@ -12,13 +13,61 @@ import { getCurvePathData } from "./poly_to_pathdata";
 import { renderPoint } from "./visualize";
 
 
+export function getPathDataPolyPrecise(pathData = []) {
+
+    let poly = [];
+    for (let i = 0; i < pathData.length; i++) {
+        let com = pathData[i]
+        let prev = i > 0 ? pathData[i - 1] : pathData[i];
+        let { type, values } = com;
+        let p0 = { x: prev.values[prev.values.length - 2], y: prev.values[prev.values.length - 1] };
+        let p = values.length ? { x: values[values.length - 2], y: values[values.length - 1] } : ''
+        let cp1 = values.length ? { x: values[0], y: values[1] } : ''
+
+        switch (type) {
+
+            // convert to cubic to get polygon
+            case 'A':
+                if (typeof arcToBezier !== 'function') {
+                    //console.log('has no arc to cubic conversion');
+                    break;
+                }
+                let cubic = arcToBezier(p0, values)
+                cubic.forEach(com => {
+                    let vals = com.values
+                    let cp1 = { x: vals[0], y: vals[1] }
+                    let cp2 = { x: vals[2], y: vals[3] }
+                    let p = { x: vals[4], y: vals[5] }
+                    poly.push(cp1, cp2, p)
+                })
+                break;
+
+            case 'C':
+                let cp2 = { x: values[2], y: values[3] }
+                poly.push(cp1, cp2)
+                break;
+            case 'Q':
+                poly.push(cp1)
+                break;
+        }
+
+        // M and L commands
+        if (type.toLowerCase() !== 'z') {
+            poly.push(p)
+        }
+    }
+
+    return poly;
+}
+
+
 
 export function pathDataToPolygon(pathData, {
     angles = [],
     split = 0,
     getPathData = true,
-    width=0,
-    height=0
+    width = 0,
+    height = 0
 } = {}) {
 
 
@@ -43,9 +92,9 @@ export function pathDataToPolygon(pathData, {
 
     split = !split ? 1 : split;
 
-    if(width && height){
-        minLength = (width+height) * 0.025 / split
-    }else{
+    if (width && height) {
+        minLength = (width + height) * 0.025 / split
+    } else {
         //let areas = pathData.map(com => com.cptArea || 0).filter(Boolean).sort()
         let lengths = pathData.map(com => com.dimA || 0).filter(Boolean).sort()
         minLength = lengths[0]
@@ -75,8 +124,8 @@ export function pathDataToPolygon(pathData, {
             split = Math.ceil(length / minLength)
 
             let tArr = []
-            for(let i=1; i<split; i++){
-                tArr.push(1/split*i)
+            for (let i = 1; i < split; i++) {
+                tArr.push(1 / split * i)
             }
 
             tArr.forEach(t => {
@@ -92,10 +141,10 @@ export function pathDataToPolygon(pathData, {
         }
 
 
-        p.area = com.cptArea|| 0
-        p.isExtreme = com.extreme|| false
-        p.isCorner = com.corner|| false 
-        p.isDirChange = com.directionChange || false ;
+        p.area = com.cptArea || 0
+        p.isExtreme = com.extreme || false
+        p.isCorner = com.corner || false
+        p.isDirChange = com.directionChange || false;
 
         // segment end point
         pts.push(p)
@@ -115,7 +164,7 @@ export function pathDataToPolygon(pathData, {
 
     // reduce poly vertices
     //pts = simplifyRD(pts, { quality: 0.5, exclude: ptsEnd, width, height })
-    pts = simplifyRD(pts, {quality:0.5, width, height})
+    pts = simplifyRD(pts, { quality: 0.5, width, height })
     //pts = simplifyRDP(pts, { quality: 0.8, width, height })
     //console.log(ptsEnd);
 

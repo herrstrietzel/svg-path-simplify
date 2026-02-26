@@ -1,6 +1,6 @@
 {
   "name": "svg-path-simplify",
-  "version": "0.2.6",
+  "version": "0.2.7",
 
   "type": "module",
 
@@ -33,7 +33,8 @@
     "build": "rollup -c",
     "watch": "rollup -c --watch",
     "test": "node tests/testSVG.js",
-    "test1": "node tests/test.js"
+    "test1": "node tests/test.js",
+    "test2": "node tests/testSVG2.js"
   },
 
   "keywords": [

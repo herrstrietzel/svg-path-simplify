@@ -97,6 +97,8 @@ export const attLookup = {
             ...textEls,
         ],
 
+        "fill-rule": ["svg", "g", "path", "polygon",  "text", "textPath"],
+
         opacity: [
             "svg",
             "g",

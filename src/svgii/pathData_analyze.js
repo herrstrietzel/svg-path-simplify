@@ -1,5 +1,5 @@
 import { splitSubpaths } from './pathData_split.js';
-import { getAngle, bezierhasExtreme, getPathDataVertices, svgArcToCenterParam, getSquareDistance, getDistManhattan, isMultipleOf45, pointAtT, getTatAngles } from "./geometry.js";
+import { getAngle, bezierhasExtreme, getPathDataVertices, svgArcToCenterParam, getSquareDistance, getDistManhattan, isMultipleOf45, pointAtT, getTatAngles, checkLineIntersection } from "./geometry.js";
 import { getPolygonArea, getPathArea } from './geometry_area.js';
 import { getPolyBBox } from './geometry_bbox.js';
 import { renderPoint, renderPath } from "./visualize.js";
@@ -86,6 +86,7 @@ export function analyzePathData(pathData = [], {
         // check flatness of command
         let toleranceFlat = 0.01;
         let thresholdLength = dimA * 0.1
+        let threshold = thresholdLength*0.01
         let areaThresh = squareDist * toleranceFlat;
         let isFlat = Math.abs(cptArea) < areaThresh;
 
@@ -108,10 +109,12 @@ export function analyzePathData(pathData = [], {
             let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x)
             let dy = type === 'C' ? Math.abs(com.cp2.y - com.p.y) : Math.abs(com.cp1.y - com.p.y)
 
-            let horizontal = dy === 0 && dx > 0
-            let vertical = dx === 0 && dy > 0
+            let horizontal = (dy === 0 || dy<threshold ) && dx > 0
+            let vertical = (dx === 0 || dx<threshold ) && dy > 0
 
-            if (horizontal || vertical) hasExtremes = true;
+            if (horizontal || vertical) {
+                hasExtremes = true;
+            }
 
             // is extreme relative to bounding box 
             if ((p.x === left || p.y === top || p.x === right || p.y === bottom)) {
@@ -123,7 +126,7 @@ export function analyzePathData(pathData = [], {
                 let couldHaveExtremes = bezierhasExtreme(null, commandPts)
                 if (couldHaveExtremes) {
                     let tArr = getTatAngles(commandPts)
-                    if (tArr.length && (tArr[0] > 0.15)) {
+                    if (tArr.length && (tArr[0] > 0.2)) {
                         hasExtremes = true;
                     }
                 }
@@ -182,7 +185,6 @@ export function analyzePathData(pathData = [], {
                 if (isCorner) com.corner = true;
             }
         }
-
 
         //debug = true;
         if (debug) {

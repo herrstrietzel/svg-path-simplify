@@ -463,7 +463,7 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
             let dy1 = (p0.y - cpPrev.y)
 
             //adjust maxDist
-            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.05
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025
 
             // reflected cp
             let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 }

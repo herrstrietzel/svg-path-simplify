@@ -33,6 +33,9 @@ export {fitCurveN as fitCurveN}
 //export {parsePathDataString} from './svgii/pathData_parse';
 import {parsePathDataString_plus} from './svgii/pathData_parse2';
 export {parsePathDataString_plus as parsePathDataString_plus}
+
+import {getPathDataFromEl} from './svgii/pathData_parse_els';
+export{getPathDataFromEl as getPathDataFromEl};
 */
 
 
@@ -41,7 +44,7 @@ export {parsePathDataString_plus as parsePathDataString_plus}
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
     //window.simplifyPolySchneider = simplifyPolySchneider;
-    //window.fitCurveN = fitCurveN;
+    //window.getPathDataFromEl = getPathDataFromEl;
     //window.parsePathDataString = parsePathDataString;
     //window.svgPathSimplify = svgPathSimplify;
     //window.svgPathSimplify = parsePathDataNormalized;

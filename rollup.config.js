@@ -62,22 +62,6 @@ export default [
             },
         ]
     },
-    
-    /*
-    // Node.js CJS Build
-    {
-        //input: 'src/index-node.js',
-        input: 'src/index.js',
-        output: [
-            {
-                file: `dist/${libName}.node.cjs`,
-                format: 'cjs',
-                exports: 'named',
-                //plugins: [stripDevComments()]
-            },
-        ]
-    },
-    */
 
     {
         // node DOM polyfills
@@ -91,6 +75,21 @@ export default [
             },
         ]
     }
+
+    /*
+    // ESM Worker
+    {
+        input: 'src/index-worker.js',
+        output: [
+            {
+                file: `dist/${libName}.worker.js`,
+                format: 'es',
+                exports: 'named',
+                //plugins: [terser()]
+            }
+        ]
+    },
+    */
 
 
 ];

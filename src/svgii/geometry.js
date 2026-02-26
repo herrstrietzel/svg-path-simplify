@@ -117,7 +117,7 @@ export function getDeltaAngle(centerPoint, startPoint, endPoint, largeArc = fals
  * http://jsfiddle.net/justin_c_rounds/Gd2S2/light/
  */
 
-export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact = true, debug = false) {
+export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact = true, respectDirection = false, debug = false) {
     // if the lines intersect, the result contains the x and y of the intersection (treating the lines as infinite) and booleans for whether line segment 1 or line segment 2 contain the point
     let denominator, a, b, numerator1, numerator2;
     let intersectionPoint = {}
@@ -129,7 +129,9 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
 
     try {
         denominator = ((p4.y - p3.y) * (p2.x - p1.x)) - ((p4.x - p3.x) * (p2.y - p1.y));
-        if (denominator == 0) {
+
+        // parallel or colinear
+        if (denominator === 0) {
             return false;
         }
     } catch {
@@ -151,7 +153,6 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
         y: p1.y + (a * (p2.y - p1.y))
     }
 
-
     let intersection = false;
     // if line1 is a segment and line2 is infinite, they intersect if:
     if ((a > 0 && a < 1) && (b > 0 && b < 1)) {
@@ -159,8 +160,14 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
         //console.log('line inters');
     }
 
+    // direction
+    if (!exact && respectDirection && ((a > 0 && b < 0) || (a < 0 && b > 0))) {
+        intersection = false;
+        return false
+    }
+
+
     if (exact && !intersection) {
-        //console.log('no line inters');
         return false;
     }
 
@@ -170,6 +177,43 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
 };
 
 
+/** Get relationship between a point and a polygon using ray-casting algorithm
+* based on timepp's answer
+* https://stackoverflow.com/questions/217578/how-can-i-determine-whether-a-2d-point-is-within-a-polygon#63436180
+*/
+export function isPointInPolygon(pt, polygon, bb, skipBB = false) {
+    const between = (p, a, b) => (p >= a && p <= b) || (p <= a && p >= b);
+    let inside = false;
+
+    // not in bbox - quit || no bbox defined
+    if (!skipBB || !bb.bottom) {
+        if (bb.left > pt.x || bb.top > pt.y || bb.bottom < pt.y || bb.right < pt.x) {
+            return false;
+        }
+    }
+
+    let l=polygon.length;
+    for (let i = l - 1, j = 0; j < l; i = j, j++) {
+        const A = polygon[i];
+        const B = polygon[j];
+        // corner cases
+        if ((pt.x == A.x && pt.y == A.y) || (pt.x == B.x && pt.y == B.y))
+            return true;
+        if (A.y == B.y && pt.y == A.y && between(pt.x, A.x, B.x)) return true;
+        if (between(pt.y, A.y, B.y)) {
+            /** 
+             * if pt inside the vertical range filter out "ray pass vertex" problem 
+             * by treating the line a little lower
+             */ 
+            if ((pt.y == A.y && B.y >= A.y) || (pt.y == B.y && A.y >= B.y)) continue;
+            // calc cross product `ptA X ptB`, pt lays on left side of AB if c > 0
+            const c = (A.x - pt.x) * (B.y - pt.y) - (B.x - pt.x) * (A.y - pt.y);
+            if (c == 0) return true;
+            if (A.y < B.y == c > 0) inside = !inside;
+        }
+    }
+    return inside ? true : false;
+}
 
 
 

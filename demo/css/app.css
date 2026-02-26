@@ -1,3 +1,4 @@
+
 .input-wrap-number {
     width: 100%;
 }
@@ -235,6 +236,95 @@ body {
 
 
 
+/* multi file view */
+
+.svgWrapMulti {
+    display: none;
+}
+
+
+.input-file-info {
+    max-height: 5lh;
+    overflow: auto;
+}
+
+
+.p-caption {
+    text-align: center;
+    line-height: 1.2em;
+    margin-top: 0.5rem;
+}
+
+
+.wrp-loading {
+    visibility: hidden;
+    position: absolute;
+    inset: 0;
+    z-index: 2000;
+    opacity: 0;
+    transition: 0.3s;
+    top: -1.5em;
+
+    p {
+        text-align: center;
+    }
+}
+
+
+a.btn-download-multi {
+    display: none;
+}
+
+
+/*
+.processing .btn-download-multi 
+.btn-download-multi {
+    display: none;
+}
+*/
+
+
+.multiFile {
+
+    .errorSimplify {
+        outline: 2px solid red;
+    }
+
+    .svgO,
+    .svgWrap,
+    #shareUrl,
+    #linkEdit,
+    #btnCopy,
+    .btnCodepen,
+    .btn-download-single {
+        display: none
+    }
+
+    .svgWrapMulti {
+        display: grid;
+    }
+
+    a.btn-download-multi {
+        display: inline-flex;
+    }
+
+}
+
+/* hide elements while processing or on init */
+.processing {
+    .wrp-loading {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    a.btn-download-multi {
+        display: none;
+    }
+}
+
+
+
+
 
 canvas {
     max-width: 100%;
@@ -276,17 +366,17 @@ canvas {
     mix-blend-mode: darken;
     justify-content: center;
 
-    svg {
+    .wrp-zoom svg {
         max-height: 90vh;
         overflow: visible;
         padding: 1em;
     }
 
 
-    .svgO .pathO{
+    .svgO .pathO {
         --strokeWidthPrev: calc(0.3% / var(--scalePreview, 1));
         transform: scale(var(--scalePreview, 1));
-         /* vector-effect: non-scaling-stroke; */
+        /* vector-effect: non-scaling-stroke; */
     }
 
     /*     .svgWrap svg, */
@@ -296,7 +386,7 @@ canvas {
         fill: none;
     }
 
-    .svgO{
+    .svgO {
         vector-effect: non-scaling-stroke;
     }
 
@@ -307,6 +397,7 @@ canvas {
 
 
     .pathS {
+        fill:#ccc;
         stroke: var(--color-focus);
         stroke-width: calc(var(--strokeWidthPrev, 0.3%) / var(--zoomScale));
     }
@@ -329,9 +420,9 @@ canvas {
         polyline,
         line,
         rect {
-            fill: none!important;
-            stroke: var(--color-focus)!important;
-            stroke-width: var(--strokeWidthPrev, 0.3%)!important;
+            fill: none !important;
+            stroke: var(--color-focus) !important;
+            stroke-width: var(--strokeWidthPrev, 0.3%) !important;
             stroke-linecap: square;
         }
     }
@@ -345,6 +436,7 @@ canvas {
     .svgWrap line,
     .svgWrap rect,
     .pathS {
+        fill:none;
         marker-start: url(#markerStart);
         marker-mid: url(#markerRound);
         /* marker-end: url(#markerRound); */
@@ -357,8 +449,8 @@ canvas {
 .preview path {}
 
 
-.dsp-debug{
-    display:none;
+.dsp-debug {
+    display: none;
 }
 
 
@@ -385,6 +477,11 @@ canvas {
     width: 100%;
     height: auto;
 }
+
+.img-preview-multi {
+    width: 100%;
+}
+
 
 /*
 .lineCenter {
@@ -425,7 +522,7 @@ canvas {
 }
 
 
-
+/*
 .wrp-loading {
     visibility: hidden;
     position: absolute;
@@ -448,6 +545,7 @@ canvas {
     }
 
 }
+*/
 
 
 .aside-1 {
@@ -487,9 +585,21 @@ canvas {
 
 
 .wrp-btns .btn {
-    margin:0;
-    margin-left:0.3em;
-    margin-bottom:0.5em;
-    }
+    margin: 0;
+    margin-left: 0.3em;
+    margin-bottom: 0.5em;
+}
 
+/*
+.footer:before {
+    content: '';
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    top: -1em;
+    user-select: none;
+    background-image: linear-gradient(180deg, hsla(55, 10%, 96%, 0), hsla(55, 10%, 96%, 1) 30%);
 
+}
+*/

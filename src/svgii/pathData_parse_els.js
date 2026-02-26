@@ -10,13 +10,18 @@ export function shapeElToPath(el) {
     let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ')
     let attributes = [...el.attributes].map(att => att.name);
 
+    //console.log(d);
+    //return []
+
     let pathN = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    //let pathN = document.createElement('path');
     pathN.setAttribute('d', d);
 
-    let exclude = ['x', 'y', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points']
+    let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
 
     attributes.forEach(att => {
         if (!exclude.includes(att)) {
+            //console.log(att, attributes, exclude);
             let val = el.getAttribute(att);
             pathN.setAttribute(att, val)
         }
@@ -32,7 +37,7 @@ export function shapeElToPath(el) {
 export function getPathDataFromEl(el, stringify = false) {
 
     let pathData = [];
-    let type = el.nodeName;
+    let type = el.nodeName.toLowerCase();
     let atts, attNames, d, x, y, width, height, r, rx, ry, cx, cy, x1, x2, y1, y2;
 
     // convert relative or absolute units 

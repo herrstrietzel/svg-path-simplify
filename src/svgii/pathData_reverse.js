@@ -66,7 +66,6 @@ export function reversePathData(pathData, {
     // start compiling new path data
     let pathDataNew = [];
 
-
     let closed =
         pathData[pathData.length - 1].type.toLowerCase() === "z" ? true : false;
     if (closed) {

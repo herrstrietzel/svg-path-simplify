@@ -34,6 +34,8 @@ export function detectAccuracy(pathData) {
     }
 
     let dim_min = dims.sort()
+    //console.log('dim_min', dim_min);
+
     let sliceIdx = Math.ceil(dim_min.length / 8);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;

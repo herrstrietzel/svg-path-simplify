@@ -238,6 +238,21 @@ These params control shich simplifications are applied. The default settings aim
 | simplifyRound | replaces small round segments encloses by linetos – helps to simplify shapes like gears/cogs | Boolean | false |
 
 
+### Path direction
+| parameter | effect | type | default |
+| -- | -- | -- | -- |
+| fixDirections | alternates sub path directions to fulfill non-zero. Makes fill-rule attribute obsolete and render correct in other environments e.g when converting to fonts | Boolean | false |
+| reversePath | simply reverses drawing direction - sometimes needed for line animations | Boolean | false |
+
+
+
+### Polygon options
+| parameter | effect | type | default |
+| -- | -- | -- | -- |
+| smoothPoly | Curve-fitting: Converts polylines to cubic beziers | Boolean | false |
+
+
+
 ### Output options
 
 | parameter | effect | type | default |
@@ -253,6 +268,7 @@ These params control shich simplifications are applied. The default settings aim
 | minifyD | path data microoptimization: removes recurring command type tokens, whitespace and leading zeroes: 0: maximum optimization; 1: "verbose" dont't omit command type tokes; 2: "beautify" separate each command with new lines (e.g for educational purposes) | Number | 0 |
 | toRelative | converts all commands to relative – reduces file size | Boolean | true |
 | toShorthands | converts all commands to shorthand when applicable – reduces file size | Boolean | true |
+
 
 ### SVG scaling
 Scaling only indirectly affects file size analogous to rounding. Use it only for very large or small SVGs. Finding the »sweet spot« where all coordinates can be expressed in integers can reduce file size as no decimal separators are required. 
@@ -270,6 +286,9 @@ Scaling only indirectly affects file size analogous to rounding. Use it only for
 | arcToCubic | converts elliptic arc `A` commands to cubic approximations – not recommended | Boolean | false |
 | removeHidden | removes hidden elements for SVG inputs | Boolean | true |
 | mergePaths | concatenates paths into single one – does not respect individual styles! | Boolean | false |
+| shapesToPaths | converts shapes to paths - usually not recommended as shapes are most often more compact. But useful for path concatenation | Boolean | false |
+| stylesToAttributes | consolidates styles and set them to attributes. Also removes invalid attributes (e.g `font-family` for paths) | Boolean | false |
+
 
 
 
@@ -278,6 +297,15 @@ Scaling only indirectly affects file size analogous to rounding. Use it only for
 You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
 
 ![web app](./demo/img/screenshot.png)    
+
+#### Features
+* test all provided simplification option - export settings as JS object
+* preview different settings 
+* accepts SVG files
+* path data strings
+* supports multi file batch processing
+* open results in codepen or svg-path-editor
+* download self contained SVG
 
 
 ### Demo files
@@ -338,4 +366,6 @@ You can also post in the [discussions](https://github.com/herrstrietzel/svg-path
 * [Vitaly Puzrin](https://github.com/puzrin) for [svgpath library](https://github.com/fontello/svgpath) providing for instance a great and customizable [arc-to-cubic approximation](https://github.com/fontello/svgpath/blob/master/lib/a2c.js) – the base for the more accurate arc-to-cubic approximations
 * [Jarek Foksa](https://github.com/jarek-foksa) for developping the great [getPathData() polyfill](https://github.com/jarek-foksa/path-data-polyfill) – probably the most productive contributor to the ["new" W3C SVGPathData interface draft](https://svgwg.org/specs/paths/#InterfaceSVGPathData)
 * obviously, [Dmitry Baranovskiy](https://github.com/dmitrybaranovskiy) – a lot of these helper functions originate either from Raphaël or snap.svg – or are at least heavily inspired by some helpers from these libraries
+* [Andrea Giammarchi a.k.a WebReflection](https://github.com/WebReflection) for [linkedom](https://github.com/WebReflection/linkedom) which helped to make this lib run also in node or a web worker
+* [Photopea](https://github.com/photopea) for the fast [UZIP](https://github.com/photopea/UZIP.js) which is deployed in the webapp for batch file downloads.
 

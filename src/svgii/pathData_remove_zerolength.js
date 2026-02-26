@@ -41,7 +41,6 @@ export function removeZeroLengthLinetos(pathData) {
             continue
         }
 
-
         // skip minified zero length
         if (!isDot && (type === 'l' || type === 'v' || type === 'h')) {
             let noLength = type === 'l' ? (values.join('') === '00') : values[0] === 0;

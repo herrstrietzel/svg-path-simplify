@@ -1,3 +1,4 @@
+import { checkSVGFilesize, loadSVGFiles, simplifyStack, getSVGPreviews, generateSVGZip, getZipObjectUrl } from './app_helpers.js';
 
 let settings = {}
 let inputDecimals = document.querySelector('[name=decimals]')
@@ -5,19 +6,29 @@ let inputDecimals = document.querySelector('[name=decimals]')
 let svgEl = document.getElementById('svg')
 let lastFileName = 'simplified.svg';
 let sizeKB = 0;
+let fileStack = [];
+let previewGrid = '';
+const WorkerUrl = '../dist/svg-path-simplify.worker.js';
+let useWorker = false;
 
 
 window.addEventListener('DOMContentLoaded', (e) => {
 
     settings = enhanceInputsSettings;
-    //console.log('!!!settings all', settings);
-
+    //console.log('settings', settings);
 
     // check query strings
-    let queryParams = window.location.href.split('?')
-    if (queryParams.length) {
-        //let query = settingsToQueryString(settings)
-        //let baseUrl = window.location.href.split('?')[0]
+    let queryParams = getQueryParams();
+    if (Object.values(queryParams).length) {
+
+        // override svg input by sample
+        if (queryParams.samples) {
+            let sampleInput = document.querySelector('[name=samples]')
+            let value = sampleInput.value;
+            inputSvg.value = value
+            settings.dInput = value
+            saveSettingsToLocalStorage(settings)
+        }
 
         // reset
         let newUrl = window.location.pathname;
@@ -28,54 +39,138 @@ window.addEventListener('DOMContentLoaded', (e) => {
     //update rendering 
     updateSVG(settings);
 
-    document.addEventListener('settingsChange', (e) => {
+    // show current settings
+    updateConfig(settings)
 
+
+    document.addEventListener('settingsChange', (e) => {
         //console.log('settingschange', settings);
 
         //update rendering
         updateSVG(settings);
 
+        // show current settings
+        updateConfig(settings)
+
     })
 
 })
+
+function updateConfig(settings = {}) {
+
+    let {omitDefaults} = settings || false
+
+    let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults']
+    let configs = {}
+
+    let defaults = settings.defaults;
+
+    for (let prop in settings) {
+        if (!excludeProps.includes(prop)) {
+            let value = settings[prop];
+            if(!omitDefaults || value!==defaults[prop]){
+                configs[prop] = settings[prop]
+            }
+        }
+    }
+    let configJson = 'const options='+JSON.stringify(configs, null, ' ').replaceAll('"', '')
+    textConfig.value = configJson
+
+}
 
 
 // delete sample selection
 inputSvg.addEventListener('input', async (e) => {
     inputSamples.value = ''
+
+    // reset file stack
+    fileStack = [];
 });
 
 
 inputFile.addEventListener('input', async (e) => {
-    let file = inputFile.files[0];
-    let { size, name } = file;
-    sizeKB = +(size / 1024).toFixed(1)
+    let files = inputFile.files;
+    let l = files.length;
 
-    lastFileName = name;
-    btnDownload.setAttribute('download', lastFileName);
+    // max size for worker
+    let maxSize = 1000 * 1024;
 
-    if (sizeKB > 500) {
 
-        if (!window.confirm(`This image is quite large ${sizeKB} KB – processing may take a while.\n Wanna proceed?`)) {
-            inputFile.value = '';
-            return
-        }
+    // reset stack
+    fileStack = [];
 
+    // timings
+    let t0 = performance.now();
+
+
+    // check file size
+    fileStack = await checkSVGFilesize(files);
+
+    // check total file size
+    let { totalO = 0 } = fileStack[0]
+    totalO = +(totalO / 1024).toFixed(3)
+
+    /**
+     * use worker for many files
+     */
+    useWorker = totalO > maxSize
+
+    // load file content
+    document.body.classList.add('processing')
+    fileStack = await loadSVGFiles(files, fileStack);
+
+    // process
+    processFileStack(fileStack, settings, useWorker, WorkerUrl)
+
+
+    // multi file
+    if (l > 1) {
+        document.body.classList.add('multiFile')
+        //btnDownloadZip.classList.add('processing')
     }
 
-    let input = await file.text();
-    settings.dInput = input;
-    inputSvg.value = input;
+    else {
 
-    updateSVG(settings);
+        let fileItem = fileStack[0]
+        lastFileName = fileItem.name;
+        btnDownload.setAttribute('download', lastFileName);
 
-}, true)
+        if (fileItem.size > 500) {
+            if (!window.confirm(`This image is quite large ${sizeKB} KB – processing may take a while.\n Wanna proceed?`)) {
+                inputFile.value = '';
+                return
+            }
+        }
+
+        let input = fileItem.svg;
+        settings.dInput = input;
+        inputSvg.value = input;
+
+        updateSVG(settings);
+    }
+
+    // timings
+    let t1 = performance.now() - t0;
+    console.log('timing', t1);
+
+
+}, true);
+
 
 
 
 inputSamples.addEventListener('input', e => {
 
+    // reset file stack
+    fileStack = [];
+    inputFile.value = null
+    //inputFile.dispatchEvent(new Event('input'))
+
+    let fileList = document.querySelector('.input-file-ul')
+    if (fileList) fileList.textContent = '';
+
     let d = e.currentTarget.value;
+
     inputSvg.value = d;
     settings['dInput'] = d;
 
@@ -91,9 +186,75 @@ inputSamples.addEventListener('input', e => {
 })
 
 
-function updateSVG(settings = {}) {
+// batch processing
 
+async function processFileStack(fileStack, settings, useWorker = false, WorkerUrl) {
+
+
+    // check total file size
+    let { totalO = 0 } = fileStack[0]
+    totalO = +(totalO / 1024).toFixed(3)
+
+    // process svgs
+    if (useWorker) {
+        console.log('many use worker', totalO)
+        fileStack = await simplifyStackWorker(fileStack, settings, WorkerUrl);
+    } else {
+        fileStack = simplifyStack(fileStack, settings);
+    }
+
+    //return
+
+    // create zips
+    let urlDownload = await generateSVGZip(fileStack);
+
+    // update download link
+    btnDownloadZip.href = urlDownload;
+    btnDownloadZip.classList.remove('processing')
+
+
+    // update preview images
+    let previews = getSVGPreviews(fileStack)
+    //console.log('fileStack', fileStack);
+
+    // render previews
+    svgWrapMulti.innerHTML = previews;
+
+    // update report
+    let { totalS } = fileStack[0];
+
+    totalS = +(totalS / 1024).toFixed(3)
+    let perc = +(100 / totalO * totalS).toFixed(3)
+    pReport.innerHTML = `${perc}&thinsp;% – ${totalS}&thinsp;KB`
+
+    document.body.classList.remove('processing')
+
+}
+
+
+
+// single file
+function updateSVG(settings = {}, processed = false) {
+
+    // keep multi file mode
+    if (fileStack.length) {
+        processFileStack(fileStack, settings, useWorker, WorkerUrl)
+
+        if (fileStack.length > 1) {
+            //console.log('update previews');
+            // update preview images
+            let previews = getSVGPreviews(fileStack)
+
+            // render previews
+            svgWrapMulti.innerHTML = previews;
+            return
+        }
+    }
+
+    document.body.classList.remove('multiFile')
     markers.innerHTML = '';
+    // remove previews
+    svgWrapMulti.textContent = '';
 
     showMarkersInPreview(previewWrp, settings)
 
@@ -102,8 +263,6 @@ function updateSVG(settings = {}) {
 
     let { dInput, samples, defaults } = settings;
 
-    //let select = document.querySelector('[name=samples]')
-    //console.log(select, dInput, samples);
     // load sample
     if (!dInput && !samples) return
 
@@ -137,11 +296,9 @@ function updateSVG(settings = {}) {
     //shareUrl.textContent = 'Share Link';
     shareUrl.href = url;
 
-    shareUrl.addEventListener('click', (e)=>{
+    shareUrl.addEventListener('click', (e) => {
         navigator.clipboard.writeText(url)
     })
-
-
 
 
     // normalized d string for pathdata array inputs
@@ -149,15 +306,13 @@ function updateSVG(settings = {}) {
 
 
 
+    if (fileStack.length === 1) processed = true;
+
     let t0 = performance.now();
-    let pathDataOpt = svgPathSimplify(dInput, settings)
+    let pathDataOpt = processed ? fileStack[0].simplified : svgPathSimplify(dInput, settings)
     let t1 = performance.now() - t0;
     console.log('pathDataOpt', pathDataOpt, 'timing', t1);
 
-
-
-    //console.log(JSON.stringify(pathDataOpt, null, ' '))
-    //pathDataOpt = svgPathSimplify(pathDataOpt.d, settings)
 
     let { d, svg, report, inputType, mode } = pathDataOpt;
     let { original, decimals = null } = report;
@@ -296,6 +451,34 @@ function updateSVG(settings = {}) {
 
 
 }
+
+
+export function simplifyStackWorker(data = [], settings = {}, workerurl = '') {
+
+    return new Promise((resolve, reject) => {
+        let worker = new Worker(
+            new URL(workerurl, import.meta.url),
+            { type: 'module' }
+        );
+
+        // send request
+        worker.postMessage({ data, settings });
+
+        worker.onmessage = (e) => {
+            let { result, error } = e.data;
+            worker.terminate();
+
+            if (error) reject(new Error(error));
+            else resolve(result);
+        };
+
+        worker.onerror = (err) => {
+            worker.terminate();
+            reject(err);
+        };
+    });
+}
+
 
 
 

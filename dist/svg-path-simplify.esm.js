@@ -159,7 +159,7 @@ function getDeltaAngle(centerPoint, startPoint, endPoint, largeArc = false) {
  * http://jsfiddle.net/justin_c_rounds/Gd2S2/light/
  */
 
-function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact = true, debug = false) {
+function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact = true, respectDirection = false, debug = false) {
     // if the lines intersect, the result contains the x and y of the intersection (treating the lines as infinite) and booleans for whether line segment 1 or line segment 2 contain the point
     let denominator, a, b, numerator1, numerator2;
     let intersectionPoint = {};
@@ -171,7 +171,9 @@ function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact
 
     try {
         denominator = ((p4.y - p3.y) * (p2.x - p1.x)) - ((p4.x - p3.x) * (p2.y - p1.y));
-        if (denominator == 0) {
+
+        // parallel or colinear
+        if (denominator === 0) {
             return false;
         }
     } catch {
@@ -200,14 +202,57 @@ function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact
 
     }
 
-    if (exact && !intersection) {
+    // direction
+    if (!exact && respectDirection && ((a > 0 && b < 0) || (a < 0 && b > 0))) {
+        intersection = false;
+        return false
+    }
 
+    if (exact && !intersection) {
         return false;
     }
 
     // if line1 and line2 are segments, they intersect if both of the above are true
 
     return intersectionPoint;
+}
+
+/** Get relationship between a point and a polygon using ray-casting algorithm
+* based on timepp's answer
+* https://stackoverflow.com/questions/217578/how-can-i-determine-whether-a-2d-point-is-within-a-polygon#63436180
+*/
+function isPointInPolygon(pt, polygon, bb, skipBB = false) {
+    const between = (p, a, b) => (p >= a && p <= b) || (p <= a && p >= b);
+    let inside = false;
+
+    // not in bbox - quit || no bbox defined
+    if (!skipBB || !bb.bottom) {
+        if (bb.left > pt.x || bb.top > pt.y || bb.bottom < pt.y || bb.right < pt.x) {
+            return false;
+        }
+    }
+
+    let l=polygon.length;
+    for (let i = l - 1, j = 0; j < l; i = j, j++) {
+        const A = polygon[i];
+        const B = polygon[j];
+        // corner cases
+        if ((pt.x == A.x && pt.y == A.y) || (pt.x == B.x && pt.y == B.y))
+            return true;
+        if (A.y == B.y && pt.y == A.y && between(pt.x, A.x, B.x)) return true;
+        if (between(pt.y, A.y, B.y)) {
+            /** 
+             * if pt inside the vertical range filter out "ray pass vertex" problem 
+             * by treating the line a little lower
+             */ 
+            if ((pt.y == A.y && B.y >= A.y) || (pt.y == B.y && A.y >= B.y)) continue;
+            // calc cross product `ptA X ptB`, pt lays on left side of AB if c > 0
+            const c = (A.x - pt.x) * (B.y - pt.y) - (B.x - pt.x) * (A.y - pt.y);
+            if (c == 0) return true;
+            if (A.y < B.y == c > 0) inside = !inside;
+        }
+    }
+    return inside ? true : false;
 }
 
 /**
@@ -2369,6 +2414,7 @@ function detectAccuracy(pathData) {
     }
 
     let dim_min = dims.sort();
+
     let sliceIdx = Math.ceil(dim_min.length / 8);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
@@ -2472,6 +2518,7 @@ function analyzePathData(pathData = [], {
             (type === 'C' ? [p0, cp1, cp2, p] : [p0, cp1, p]) :
             ([p0, p]);
         let thresholdLength = dimA * 0.1;
+        let threshold = thresholdLength*0.01;
 
         // bezier types
         let isBezier = type === 'Q' || type === 'C';
@@ -2488,10 +2535,12 @@ function analyzePathData(pathData = [], {
             let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x);
             let dy = type === 'C' ? Math.abs(com.cp2.y - com.p.y) : Math.abs(com.cp1.y - com.p.y);
 
-            let horizontal = dy === 0 && dx > 0;
-            let vertical = dx === 0 && dy > 0;
+            let horizontal = (dy === 0 || dy<threshold ) && dx > 0;
+            let vertical = (dx === 0 || dx<threshold ) && dy > 0;
 
-            if (horizontal || vertical) hasExtremes = true;
+            if (horizontal || vertical) {
+                hasExtremes = true;
+            }
 
             // is extreme relative to bounding box 
             if ((p.x === left || p.y === top || p.x === right || p.y === bottom)) {
@@ -2503,7 +2552,7 @@ function analyzePathData(pathData = [], {
                 let couldHaveExtremes = bezierhasExtreme(null, commandPts);
                 if (couldHaveExtremes) {
                     let tArr = getTatAngles(commandPts);
-                    if (tArr.length && (tArr[0] > 0.15)) {
+                    if (tArr.length && (tArr[0] > 0.2)) {
                         hasExtremes = true;
                     }
                 }
@@ -3107,7 +3156,7 @@ function pathDataToShorthands(pathData, decimals = -1, test = false) {
             let dx1 = (p0.x - cpPrev.x);
             let dy1 = (p0.y - cpPrev.y);
 
-            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.05;
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025;
 
             // reflected cp
             let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 };
@@ -3895,12 +3944,14 @@ function shapeElToPath(el) {
     let attributes = [...el.attributes].map(att => att.name);
 
     let pathN = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
     pathN.setAttribute('d', d);
 
-    let exclude = ['x', 'y', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
+    let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
 
     attributes.forEach(att => {
         if (!exclude.includes(att)) {
+
             let val = el.getAttribute(att);
             pathN.setAttribute(att, val);
         }
@@ -3914,7 +3965,7 @@ function shapeElToPath(el) {
 function getPathDataFromEl(el, stringify = false) {
 
     let pathData = [];
-    let type = el.nodeName;
+    let type = el.nodeName.toLowerCase();
     let atts, attNames, d, x, y, width, height, r, rx, ry, cx, cy, x1, x2, y1, y2;
 
     // convert relative or absolute units 
@@ -4535,6 +4586,125 @@ function addClosePathLineto(pathData) {
     }
 
     return pathData;
+}
+
+/**
+ * reverse pathdata
+ * make sure all command coordinates are absolute and
+ * shorthands are converted to long notation
+ */
+function reversePathData(pathData, {
+    arcToCubic = false,
+    quadraticToCubic = false,
+    toClockwise = false,
+    returnD = false
+} = {}) {
+
+    /**
+     * Add closing lineto:
+     * needed for path reversing or adding points
+     */
+    const addClosePathLineto = (pathData) => {
+        let closed = pathData[pathData.length - 1].type.toLowerCase() === "z";
+        let M = pathData[0];
+        let [x0, y0] = [M.values[0], M.values[1]];
+        let lastCom = closed ? pathData[pathData.length - 2] : pathData[pathData.length - 1];
+        let [xE, yE] = [lastCom.values[lastCom.values.length - 2], lastCom.values[lastCom.values.length - 1]];
+
+        if (closed && (x0 != xE || y0 != yE)) {
+
+            pathData.pop();
+            pathData.push(
+                {
+                    type: "L",
+                    values: [x0, y0]
+                },
+                {
+                    type: "Z",
+                    values: []
+                }
+            );
+        }
+        return pathData;
+    };
+
+    // helper to rearrange control points for all command types
+    const reverseControlPoints = (type, values) => {
+        let controlPoints = [];
+        let endPoints = [];
+        if (type !== "A") {
+            for (let p = 0; p < values.length; p += 2) {
+                controlPoints.push([values[p], values[p + 1]]);
+            }
+            endPoints = controlPoints.pop();
+            controlPoints.reverse();
+        }
+        // is arc
+        else {
+
+            let sweep = values[4] == 0 ? 1 : 0;
+            controlPoints = [values[0], values[1], values[2], values[3], sweep];
+            endPoints = [values[5], values[6]];
+        }
+        return { controlPoints, endPoints };
+    };
+
+    // start compiling new path data
+    let pathDataNew = [];
+
+    let closed =
+        pathData[pathData.length - 1].type.toLowerCase() === "z" ? true : false;
+    if (closed) {
+        // add lineto closing space between Z and M
+        pathData = addClosePathLineto(pathData);
+        // remove Z closepath
+        pathData.pop();
+    }
+
+    // define last point as new M if path isn't closed
+    let valuesLast = pathData[pathData.length - 1].values;
+    let valuesLastL = valuesLast.length;
+    let M = closed
+        ? pathData[0]
+        : {
+            type: "M",
+            values: [valuesLast[valuesLastL - 2], valuesLast[valuesLastL - 1]]
+        };
+    // starting M stays the same – unless the path is not closed
+    pathDataNew.push(M);
+
+    // reverse path data command order for processing
+    pathData.reverse();
+    for (let i = 1; i < pathData.length; i++) {
+        let com = pathData[i];
+        let type = com.type;
+        let values = com.values;
+        let comPrev = pathData[i - 1];
+        let typePrev = comPrev.type;
+        let valuesPrev = comPrev.values;
+
+        // get reversed control points and new end coordinates
+        let controlPointsPrev = reverseControlPoints(typePrev, valuesPrev).controlPoints;
+        let endPoints = reverseControlPoints(type, values).endPoints;
+
+        // create new path data
+        let newValues = [];
+        newValues = [controlPointsPrev, endPoints].flat();
+        pathDataNew.push({
+            type: typePrev,
+            values: newValues.flat()
+        });
+    }
+
+    // add previously removed Z close path
+    if (closed) {
+        pathDataNew.push({
+            type: "z",
+            values: []
+        });
+    }
+
+    return pathDataNew;
 }
 
 function simplifyRDP(pts, {
@@ -6287,6 +6457,8 @@ const attLookup = {
             ...textEls,
         ],
 
+        "fill-rule": ["svg", "g", "path", "polygon",  "text", "textPath"],
+
         opacity: [
             "svg",
             "g",
@@ -6651,26 +6823,30 @@ function cleanUpSVG(svgMarkup, {
   removeUnused = true,
   stylesToAttributes = true,
   removePrologue = true,
+  removeIds = false,
+  removeClassNames = false,
+  removeDimensions = false,
   fixHref = true,
   mergePaths = false,
   cleanupSVGAtts = true,
   removeNameSpaced = true,
   attributesToGroup = true,
+  shapesToPaths = false,
   decimals = -1,
   excludedEls = [],
 } = {}) {
 
-  svgMarkup = cleanSvgPrologue(svgMarkup);
+  attributesToGroup = cleanupSVGAtts ? true : false;
 
   // replace namespaced refs 
   if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
 
   let svg = new DOMParser()
-
     .parseFromString(svgMarkup, "text/html")
     .querySelector("svg");
 
   if (cleanupSVGAtts) {
+
     let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
     removeExcludedAttribues(svg, allowed);
 
@@ -6682,10 +6858,21 @@ function cleanUpSVG(svgMarkup, {
   let els = svg.querySelectorAll('*');
   let elProps = [];
 
+  let geometryElements = ['polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse'];
+
   for (let i = 0; i < els.length; i++) {
     let el = els[i];
 
     let name = el.nodeName.toLowerCase();
+
+    // convert shapes
+    if (shapesToPaths && name !== 'path' && geometryElements.includes(name)) {
+      let path = shapeElToPath(el);
+      el.replaceWith(path);
+      name = 'path';
+      el = path;
+
+    }
 
     // remove hidden elements
     let style = el.getAttribute('style') || '';
@@ -6706,9 +6893,23 @@ function cleanUpSVG(svgMarkup, {
   }
 
   // group styles
-
   if (attributesToGroup || mergePaths) {
     moveAttributesToGroup(elProps, mergePaths);
+  }
+
+  if (removeDimensions) {
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+  }
+
+  if (removeClassNames || removeIds) {
+    let att = removeClassNames ? 'class' : 'id';
+    let selector = `[${att}]`;
+    let els = svg.querySelectorAll(selector);
+    svg.removeAttribute(att);
+    els.forEach(el => {
+      el.removeAttribute(att);
+    });
   }
 
   if (returnDom) return svg
@@ -6722,11 +6923,39 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
   let combine = [[elProps[0]]];
   let idx = 0;
   let lastProps = '';
-  for (let i = 0; i < elProps.length; i++) {
+  let l = elProps.length;
+  let itemsWithProps = elProps.filter(item => item.propstr);
+  let path0;
+
+  // merge paths without properties
+  if (!itemsWithProps.length && mergePaths) {
+    let item0 = elProps[0];
+    path0 = item0.el;
+    let dCombined = item0.propsFiltered.d;
+
+    for (let i = 1; i < l; i++) {
+      let item = elProps[i];
+      let path = item.el;
+
+      let d = item.propsFiltered.d;
+      let isAbs = d.startsWith('M');
+      let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
+
+      dCombined += dAbs;
+
+      // delete path el
+      path.remove();
+    }
+
+    path0.setAttribute('d', dCombined);
+    return
+  }
+
+  // add to combine chunks
+  for (let i = 0; i < l; i++) {
     let item = elProps[i];
     let props = item.propsFiltered;
     let propstr = [];
-
     for (let prop in props) {
       if (prop !== 'd' && prop !== 'id') {
         propstr.push(`${prop}:${props[prop]}`);
@@ -6735,16 +6964,15 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
     propstr = propstr.join('_');
     item.propstr = propstr;
 
-    if (propstr === lastProps) {
+    if (l > 1 && propstr === lastProps) {
       combine[idx].push(item);
     } else {
-      if (combine[idx].length) {
+      if (l > 1 && combine[idx].length) {
         combine.push([]);
         idx++;
       }
     }
     lastProps = propstr;
-
   }
 
   // add att groups
@@ -6782,10 +7010,15 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
         }
 
         if (mergePaths) {
-          let path0 = group[0].el;
+          group = group.filter(Boolean);
+          let l = group.length;
+          // nothing to merge
+          if (l === 1) return group[0].el;
+
+          path0 = group[0].el;
           let dCombined = group[0].propsFiltered.d;
 
-          for (let i = 1; i < group.length; i++) {
+          for (let i = 1; i < l; i++) {
             let item = group[i];
             let path = item.el;
             let d = item.propsFiltered.d;
@@ -6810,20 +7043,6 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
 
 }
 
-function cleanSvgPrologue(svgString) {
-  return (
-    svgString
-      // Remove XML prologues like <?xml ... ?>
-      .replace(/<\?xml[\s\S]*?\?>/gi, "")
-      // Remove DOCTYPE declarations
-      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
-      // Remove comments <!-- ... -->
-      .replace(/<!--[\s\S]*?-->/g, "")
-      // Trim extra whitespace
-      .trim()
-  );
-}
-
 function removeExcludedAttribues(el, allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class']) {
   let atts = [...el.attributes].map((att) => att.name);
   atts.forEach((att) => {
@@ -6833,13 +7052,22 @@ function removeExcludedAttribues(el, allowed = ['viewBox', 'xmlns', 'width', 'he
   });
 }
 
-function stringifySVG(svg) {
+function stringifySVG(svg, omitNamespace = false) {
   let markup = new XMLSerializer().serializeToString(svg);
+
+  if (omitNamespace) {
+    markup = markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '');
+  }
+
   markup = markup
     .replace(/\t/g, "")
     .replace(/[\n\r|]/g, "\n")
     .replace(/\n\s*\n/g, '\n')
-    .replace(/ +/g, ' ');
+    .replace(/ +/g, ' ')
+
+    .replace(/> </g, '><')
+    .trim();
+    
 
   return markup
 }
@@ -7406,288 +7634,6 @@ function getViewBox(svg = null, decimals = -1) {
     return viewBox
 }
 
-function redrawPathData(pathData, {
-    tolerance = 1
-
-} = {}) {
-    let chunks = [];
-    let chunk = [];
-
-    let l = pathData.length;
-
-    for (let i = 1; i < l; i++) {
-        let com = pathData[i];
-        let { type, values, p0, cp1 = null, cp2 = null, p, extreme = null, semiExtreme = null, corner = null, directionChange } = com;
-
-        let comN = pathData[i + 1] || null;
-
-        /*
-        if (extreme || corner || semiExtreme || directionChange) {
-
-            if (extreme) renderPoint(markers, com.p, 'cyan', '1%', '0.5')
-
-            if (semiExtreme) renderPoint(markers, com.p, 'orange', '1%', '0.5')
-            if (corner) renderPoint(markers, com.p, 'magenta', '1.75%', '0.5')
-        }
-        */
-
-        if (extreme || corner || (comN && comN.type !== type)) {
-            chunk.push(com);
-            chunks.push(chunk);
-            chunk = [];
-            continue
-        }
-
-        chunk.push(com);
-
-    }
-
-    console.log('!!!chunks', chunks);
-
-    renderChunks(chunks);
-
-    // cleanup chunks
-
-    let chunksLen = chunks.length;
-
-    
-
-    for (let c = 0; c < chunksLen; c++) {
-        let chunk = chunks[c];
-        let chunkN = chunks[c + 1] || null;
-
-        let chunkLen = chunk.length;
-
-        if (chunkLen === 1 && chunkN && chunkN[0].type === 'C') ;
-
-    }
-
-    chunks = chunks.filter(Boolean);
-
-    // test render
-
-    let pathDataC = [pathData[0]];
-
-    /**
-     * combine chunk based
-     */
-    for (let c = 0; c < chunks.length; c++) {
-        let chunk = chunks[c];
-        let chunkLen = chunk.length;
-        let comChunk0 = chunk[0];
-        let comChunk1 = chunk[chunkLen - 1];
-        let thresh = getDistManhattan(comChunk0.p0, comChunk1.p) * 0.05;
-
-        // commands in chunk
-        for (let i = 0, l = chunkLen; i < l; i++) {
-            let com = chunk[i];
-            chunk[i + 1];
-            chunk[l - 1];
-
-            let isBezier = comChunk0.type === 'C' && comChunk1.type === 'C';
-
-            let { type, values, p0, cp1 = null, cp2 = null, p = null, extreme, semiExtreme = null, corner = null } = com;
-
-            let pI1 = null, pI2 = null;
-            let cp1_S = null, cp2_S = null;
-            let cp2_M = null;
-            let cp1_M = null;
-            let pathDataS = [];
-            let tSplit = 0.666;
-            let comMid = null;
-
-            // 0. adjust Extreme cpts
-            if (isBezier) {
-                let dx1 = Math.abs(comChunk0.p0.x - comChunk0.cp1.x);
-                let dy1 = Math.abs(comChunk0.p0.y - comChunk0.cp1.y);
-                let dx2 = Math.abs(comChunk1.p.x - comChunk1.cp2.x);
-                let dy2 = Math.abs(comChunk1.p.y - comChunk1.cp2.y);
-
-                let vertical1 = dx1 < thresh && dx1 < dy1;
-                let horizontal1 = dy1 < thresh && dx1 > dy1;
-
-                let vertical2 = dx2 < thresh && dx2 < dy2;
-                let horizontal2 = dy2 < thresh && dx2 > dy2;
-
-                if (horizontal1) comChunk0.cp1.y = comChunk0.p0.y;
-                if (horizontal2) comChunk1.cp2.y = comChunk1.p.y;
-                if (vertical1) comChunk0.cp1.x = comChunk0.p0.x;
-                if (vertical2) comChunk1.cp2.x = comChunk1.p.x;
-            }
-
-            // test render - original pathdata
-            let pathDataChunk = [
-                { type: 'M', values: [com.p0.x, com.p0.y] },
-                { type, values },
-            ];
-
-            pathDataToD(pathDataChunk);
-            // renderPath(markers, d, stroke, '1%', '0.5')
-            //  continue
-            /*
-
-            */
-
-            // 1. only one command in chunk - nothing to simplify
-            if (chunkLen === 1 || type !== 'C') {
-                pathDataC.push(com);
-            }
-
-            // 2. could be simplified
-            else {
-                // 2.1 has semi extreme - extrapolate
-                // 2.2 has sdirection change
-                let semiExtremes = chunk.filter(ch => ch.semiExtreme);
-                let comsDirectionChange = chunk.filter(ch => ch.directionChange);
-
-                if (semiExtremes.length || comsDirectionChange.length) {
-
-                    // semiExtreme command
-                    comMid = semiExtremes.length ? semiExtremes[0] : comsDirectionChange[0];
-
-                    // zero length cpt vectors
-                    if (comChunk0.p0.x === comChunk0.cp1.x && comChunk0.p0.y === comChunk0.cp1.y) {
-                        comChunk0.cp1 = pointAtT([comChunk0.p0, comChunk0.cp1, comChunk0.cp2, comChunk0.p], 0.5);
-                    }
-                    else if (comChunk1.p.x === comChunk1.cp2.x && comChunk1.p.y === comChunk1.cp2.y) {
-                        comChunk1.cp2 = pointAtT([comChunk1.p0, comChunk1.cp1, comChunk1.cp2, comChunk1.p], 0.5);
-                    }
-
-                    pI1 = checkLineIntersection(comMid.p, comMid.cp2, comChunk0.p0, comChunk0.cp1, false);
-                    pI2 = checkLineIntersection(comMid.p, comMid.cp2, comChunk1.p, comChunk1.cp2, false);
-
-                    // intersections try to extrapolate cpts
-                    if (pI1 && pI2) {
-
-                        cp1_S = pointAtT([comChunk0.p0, pI1], tSplit);
-                        cp2_S = pointAtT([comChunk1.p, pI2], tSplit);
-
-                        cp2_M = pointAtT([comMid.p, pI1], tSplit);
-                        cp1_M = pointAtT([comMid.p, pI2], tSplit);
-
-                        /*
-                        renderPoint(markers, cp1_S, 'magenta', '1%', '1' )
-                        */
-
-                        pathDataS = [
-                            { type: 'M', values: [comChunk0.p0.x, comChunk0.p0.y] },
-                            {
-                                type: 'C', values: [
-                                    cp1_S.x, cp1_S.y,
-                                    cp2_M.x, cp2_M.y,
-                                    comMid.p.x,
-                                    comMid.p.y
-                                ]
-                            },
-                            {
-                                type: 'C', values: [
-                                    cp1_M.x, cp1_M.y,
-                                    cp2_S.x, cp2_S.y,
-                                    comChunk1.p.x,
-                                    comChunk1.p.y,
-                                ]
-                            },
-                        ];
-                        pathDataToD(pathDataS);
-
-                        pathDataC.push(
-                            {
-                                type: 'C', values: [
-                                    cp1_S.x, cp1_S.y,
-                                    cp2_M.x, cp2_M.y,
-                                    comMid.p.x,
-                                    comMid.p.y
-                                ],
-                                p0: comChunk0.p0,
-                                cp1: cp1_S,
-                                cp2: cp2_M,
-                                p: comMid.p,
-                                dimA: getDistManhattan(comChunk0.p0, comMid.p)
-                            },
-
-                            {
-                                type: 'C', values: [
-                                    cp1_M.x, cp1_M.y,
-                                    cp2_S.x, cp2_S.y,
-                                    comChunk1.p.x,
-                                    comChunk1.p.y,
-                                ],
-                                p0: comMid.p,
-                                cp1: cp1_M,
-                                cp2: cp2_S,
-                                p: comChunk1.p,
-                                extreme: true,
-                                dimA: getDistManhattan(comMid.p, comChunk1.p)
-
-                            }
-                        );
-                        break
-
-                    }
-                } else {
-                    pathDataC.push(com);
-                }
-
-            }
-
-        }
-
-    }
-
-    /*
-    // render
-    let d = pathDataToD(pathDataC)
-    console.log(d);
-    renderPath(markers, d, 'red', '1%', '0.5')
-    */
-
-    return pathDataC
-
-}
-
-function renderChunks(chunks) {
-
-    console.log('chunks', chunks);
-
-    let stroke = 'green';
-
-    /**
-     * combine chunk based
-     */
-    for (let c = 0; c < chunks.length; c++) {
-        let chunk = chunks[c];
-        let chunkLen = chunk.length;
-
-        stroke = c % 2 === 0 ? 'orange' : 'green';
-        let comChunk0 = chunk[0];
-        let comChunk1 = chunk[chunkLen - 1];
-
-        let pathDataChunk = [
-            { type: 'M', values: [comChunk0.p0.x, comChunk0.p0.y] }
-        ];
-
-        // commands in chunk
-        for (let i = 0, l = chunkLen; i < l; i++) {
-            let com = chunk[i];
-            chunk[i + 1];
-            chunk[l - 1];
-            comChunk0.type === 'C' && comChunk1.type === 'C';
-
-            let { type, values, p0, cp1 = null, cp2 = null, p = null, extreme, semiExtreme = null, corner = null } = com;
-
-            // test render - original pathdata
-            pathDataChunk.push(
-                { type, values },
-            );
-
-        }
-
-        let d = pathDataToD(pathDataChunk);
-        renderPath(markers, d, stroke, '1%', '0.5');
-
-    }
-}
-
 function pathDataRevertCubicToQuadratic(pathData, tolerance=1) {
 
     for (let c = 1, l = pathData.length; c < l; c++) {
@@ -8210,12 +8156,59 @@ export function combineCubicsToArcs(pathData = [], {
 }
 */
 
+function getPathDataPolyPrecise(pathData = []) {
+
+    let poly = [];
+    for (let i = 0; i < pathData.length; i++) {
+        let com = pathData[i];
+        let prev = i > 0 ? pathData[i - 1] : pathData[i];
+        let { type, values } = com;
+        let p0 = { x: prev.values[prev.values.length - 2], y: prev.values[prev.values.length - 1] };
+        let p = values.length ? { x: values[values.length - 2], y: values[values.length - 1] } : '';
+        let cp1 = values.length ? { x: values[0], y: values[1] } : '';
+
+        switch (type) {
+
+            // convert to cubic to get polygon
+            case 'A':
+                if (typeof arcToBezier$1 !== 'function') {
+
+                    break;
+                }
+                let cubic = arcToBezier$1(p0, values);
+                cubic.forEach(com => {
+                    let vals = com.values;
+                    let cp1 = { x: vals[0], y: vals[1] };
+                    let cp2 = { x: vals[2], y: vals[3] };
+                    let p = { x: vals[4], y: vals[5] };
+                    poly.push(cp1, cp2, p);
+                });
+                break;
+
+            case 'C':
+                let cp2 = { x: values[2], y: values[3] };
+                poly.push(cp1, cp2);
+                break;
+            case 'Q':
+                poly.push(cp1);
+                break;
+        }
+
+        // M and L commands
+        if (type.toLowerCase() !== 'z') {
+            poly.push(p);
+        }
+    }
+
+    return poly;
+}
+
 function pathDataToPolygon(pathData, {
     angles = [],
     split = 0,
     getPathData = true,
-    width=0,
-    height=0
+    width = 0,
+    height = 0
 } = {}) {
 
     let l = pathData.length;
@@ -8231,9 +8224,9 @@ function pathDataToPolygon(pathData, {
 
     split = !split ? 1 : split;
 
-    if(width && height){
-        minLength = (width+height) * 0.025 / split;
-    }else {
+    if (width && height) {
+        minLength = (width + height) * 0.025 / split;
+    } else {
 
         let lengths = pathData.map(com => com.dimA || 0).filter(Boolean).sort();
         minLength = lengths[0];
@@ -8259,8 +8252,8 @@ function pathDataToPolygon(pathData, {
             split = Math.ceil(length / minLength);
 
             let tArr = [];
-            for(let i=1; i<split; i++){
-                tArr.push(1/split*i);
+            for (let i = 1; i < split; i++) {
+                tArr.push(1 / split * i);
             }
 
             tArr.forEach(t => {
@@ -8274,10 +8267,10 @@ function pathDataToPolygon(pathData, {
             M = p;
         }
 
-        p.area = com.cptArea|| 0;
-        p.isExtreme = com.extreme|| false;
-        p.isCorner = com.corner|| false; 
-        p.isDirChange = com.directionChange || false ;
+        p.area = com.cptArea || 0;
+        p.isExtreme = com.extreme || false;
+        p.isCorner = com.corner || false;
+        p.isDirChange = com.directionChange || false;
 
         // segment end point
         pts.push(p);
@@ -8291,7 +8284,7 @@ function pathDataToPolygon(pathData, {
 
     // reduce poly vertices
 
-    pts = simplifyRD(pts, {quality:0.5, width, height});
+    pts = simplifyRD(pts, { quality: 0.5, width, height });
 
     /*
     pts.forEach(pt => {
@@ -8302,6 +8295,103 @@ function pathDataToPolygon(pathData, {
 
     pathDataPoly = pathDataFromPoly(pts);
     return getPathData ? pathDataPoly : pts;
+}
+
+function pathDataLineToCubic(pathData) {
+
+    for (let c = 1, l = pathData.length; c < l; c++) {
+        let com = pathData[c];
+        let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
+        if (type === 'L') {
+
+            let cp1 = interpolate(p0, p, 0.333);
+            let cp2 = interpolate(p, p0, 0.333);
+
+            pathData[c].type = 'C';
+            pathData[c].values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
+            pathData[c].cp1 = cp1;
+            pathData[c].cp2 = cp2;
+
+        }
+    }
+    return pathData
+}
+
+/**
+ * fix sub path directions
+ * pathdata must be be normalized to
+ * absolute and longhand commands
+ * toClockwise = force default direction
+ */
+
+function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
+
+    let polys = [];
+
+    pathDataArr.forEach((sub, i) => {
+        let pathData = sub.pathData;
+
+        let vertices = getPathDataPolyPrecise(pathData);
+        let area = getPolygonArea(vertices);
+        let isClockwise = area >= 0;
+        polys.push({ pts: vertices, bb: getPolyBBox(vertices), cw: isClockwise, index: i, inter: 0, includes: [], includedIn: [] });
+    });
+
+    // check poly intersections
+    let l = polys.length;
+    for (let i = 0; i < l; i++) {
+        let prev = polys[i];
+        let bb0 = prev.bb;
+
+        for (let j = 0; j < l; j++) {
+
+            let poly = polys[j];
+            let bb = poly.bb;
+
+            // skip if the same poly or parent
+            if (i === j || poly.includes.includes(i)) continue
+
+            // if mid point is in previous polygon
+            let ptMid = { x: bb.left + bb.width / 2, y: bb.top + bb.height / 2 };
+            let inPoly = isPointInPolygon(ptMid, prev.pts, bb0);
+
+            if (inPoly) {
+                polys[j].inter += 1;
+                poly.includedIn.push(i);
+                prev.includes.push(j);
+            }
+        }
+    }
+
+    // reverse paths
+    for (let i = 0; i < l; i++) {
+
+        let poly = polys[i];
+        let { cw, includedIn, includes } = poly;
+
+        // outer path direction to counter clockwise
+        if (!includedIn.length && cw && !toClockwise
+            || !includedIn.length && !cw && toClockwise
+        ) {
+            pathDataArr[i].pathData = reversePathData(pathDataArr[i].pathData);
+            polys[i].cw = polys[i].cw ? false : true;
+            cw = polys[i].cw;
+        }
+
+        // reverse inner sub paths
+        for (let j = 0; j < includes.length; j++) {
+            let ind = includes[j];
+            let child = polys[ind];
+
+            if (child.cw === cw) {
+                pathDataArr[ind].pathData = reversePathData(pathDataArr[ind].pathData);
+                polys[ind].cw = polys[ind].cw ? false : true;
+            }
+        }
+    }
+
+    return pathDataArr
+
 }
 
 function svgPathSimplify(input = '', {
@@ -8331,6 +8421,12 @@ function svgPathSimplify(input = '', {
 
     refineExtremes = true,
     simplifyCorners = false,
+    removeDimensions = false,
+    removeIds = false,
+    removeClassNames = false,
+    omitNamespace = false,
+
+    fixDirections = false,
 
     keepExtremes = true,
     keepCorners = true,
@@ -8344,7 +8440,6 @@ function svgPathSimplify(input = '', {
     toPolygon = false,
 
     removeOrphanSubpaths = false,
-
     simplifyRound = false,
 
     scale = 1,
@@ -8352,31 +8447,27 @@ function svgPathSimplify(input = '', {
     crop = false,
     alignToOrigin = false,
 
-    // svg path optimizations
     decimals = 3,
     autoAccuracy = true,
 
     minifyD = 0,
     tolerance = 1,
-    reverse = false,
+    reversePath = false,
 
-    // svg cleanup options
-    cleanupSVGAtts=true,
+    cleanupSVGAtts = true,
     removePrologue = true,
     stylesToAttributes = true,
     fixHref = true,
-    removeNameSpaced=true,
-    attributesToGroup=false,
+    removeNameSpaced = true,
+    attributesToGroup = false,
     mergePaths = false,
     removeHidden = true,
     removeUnused = true,
-    shapesToPaths = true,
+    shapesToPaths = false,
+    lineToCubic = false,
 
     tMin = 0,
     tMax = 1,
-
-    // redraw - for messed up paths
-    redraw = false,
 
 } = {}) {
 
@@ -8435,14 +8526,16 @@ function svgPathSimplify(input = '', {
     else {
 
         let returnDom = true;
-        svg = cleanUpSVG(input, { cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, attributesToGroup, stylesToAttributes, removePrologue, fixHref ,mergePaths  }
+        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths }
         );
 
         if (shapesToPaths) {
             let shapes = svg.querySelectorAll('polygon, polyline, line, rect, circle, ellipse');
             shapes.forEach(shape => {
                 let path = shapeElToPath(shape);
+
                 shape.replaceWith(path);
+
             });
         }
 
@@ -8595,23 +8688,6 @@ function svgPathSimplify(input = '', {
             // remove zero length linetos
             if (removeColinear || removeZeroLength) pathDataSub = removeZeroLengthLinetos(pathDataSub);
 
-            /**
-             * try to redraw messed up paths
-             * based on significant points suchas
-             * extremes, semi-extremes and corners
-             */
-            if (redraw) {
-                addExtremes = true;
-                addSemiExtremes = true;
-                simplifyCorners = false;
-                keepCorners = true;
-                keepExtremes = true;
-                optimizeOrder = true;
-
-                tMin = 0;
-                tMax = 0;
-            }
-
             // sort to top left
             if (optimizeOrder) pathDataSub = pathDataToTopLeft(pathDataSub);
 
@@ -8620,6 +8696,11 @@ function svgPathSimplify(input = '', {
 
             if (addExtremes || addSemiExtremes) pathDataSub = addExtremePoints(pathDataSub,
                 { tMin, tMax, addExtremes, addSemiExtremes, angles: [30] });
+
+            // reverse
+            if(reversePath) {
+                pathDataSub = reversePathData(pathDataSub);
+            }
 
             // analyze pathdata to add info about signicant properties such as extremes, corners
             let pathDataPlus = analyzePathData(pathDataSub, {
@@ -8633,36 +8714,13 @@ function svgPathSimplify(input = '', {
 
             if (refineClosing) pathData = refineClosingCommand(pathData, { threshold: dimA * 0.001 });
 
-            pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, extrapolateDominant, revertToQuadratics, tolerance, reverse }) : pathData;
+            pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, extrapolateDominant, revertToQuadratics, tolerance }) : pathData;
 
             // refine extremes
             if (refineExtremes) {
 
                 let thresholdEx = (bb.width + bb.height) * 0.05;
                 pathData = refineAdjacentExtremes(pathData, { threshold: thresholdEx, tolerance });
-            }
-
-            /**
-              * try redrawing
-              */
-
-            if (redraw) {
-
-                /*
-                pathData = addExtremePoints(pathData,
-                    { tMin: 0, tMax: 1, addExtremes: true, addSemiExtremes: true })
-    
-                    pathData = analyzePathData(pathDataSub, {
-                        detectSemiExtremes: true,
-                        detectExtremes: true,
-                    }).pathData;
-    
-                    */
-
-                (bb.width + bb.height) * 0.1;
-
-                pathData = redrawPathData(pathData, { tolerance, threshold: dimA * 0.001 });
-
             }
 
             // cubic to arcs
@@ -8679,18 +8737,19 @@ function svgPathSimplify(input = '', {
                 let threshold = (bb.width + bb.height) * 0.1;
                 pathData = refineRoundedCorners(pathData, { threshold, tolerance });
             }
-            
+
             // refine round segment sequences
             if (simplifyRound) pathData = refineRoundSegments(pathData);
 
             // simplify to quadratics
             if (revertToQuadratics) pathData = pathDataRevertCubicToQuadratic(pathData, tolerance);
 
+            if (lineToCubic) pathData = pathDataLineToCubic(pathData);
+
             // optimize close path
             if (optimizeOrder) pathData = optimizeClosePath(pathData, { autoClose });
 
             // update
-
             pathDataPlusArr.push({ pathData, bb });
 
         } // end sup paths
@@ -8709,6 +8768,11 @@ function svgPathSimplify(input = '', {
             pathDataPlusArr = isPortrait ? pathDataPlusArr.sort((a, b) => a.bb.y - b.bb.y || a.bb.x - b.bb.x) : pathDataPlusArr.sort((a, b) => a.bb.x - b.bb.x || a.bb.y - b.bb.y);
         }
 
+        // fix path directions
+        if (fixDirections) {
+            pathDataPlusArr = fixPathDataDirections(pathDataPlusArr);
+        }
+
         // flatten compound paths 
         pathData = [];
         pathDataPlusArr.forEach(sub => {
@@ -8718,11 +8782,10 @@ function svgPathSimplify(input = '', {
         if (autoAccuracy) {
             decimals = detectAccuracy(pathData);
             pathOptions.decimals = decimals;
-
         }
 
         // collect for merged svg paths 
-        mergePaths= false;
+        mergePaths = false;
         if (el && mergePaths) {
             pathData_merged.push(...pathData);
         }
@@ -8825,7 +8888,16 @@ function svgPathSimplify(input = '', {
             }
         }
 
-        svg = stringifySVG(svg);
+        // remove fill rules
+        if (fixDirections) {
+            let elsFill = svg.querySelectorAll('path[fill-rule], path[clip-rule]');
+            elsFill.forEach(el => {
+                el.removeAttribute('fill-rule');
+                el.removeAttribute('clip-rule');
+            });
+        }
+
+        svg = stringifySVG(svg, omitNamespace);
 
         svgSizeOpt = svg.length;
 
@@ -8869,6 +8941,9 @@ export {fitCurveN as fitCurveN}
 
 import {parsePathDataString_plus} from './svgii/pathData_parse2';
 export {parsePathDataString_plus as parsePathDataString_plus}
+
+import {getPathDataFromEl} from './svgii/pathData_parse_els';
+export{getPathDataFromEl as getPathDataFromEl};
 */
 
 // IIFE 
