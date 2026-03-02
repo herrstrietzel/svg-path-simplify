@@ -1273,6 +1273,7 @@ export function intersectLines(p1, p2, p3, p4) {
  */
 export function getDistance(p1, p2, isArray = false) {
     //if(Array.isArray(p1)) isArray = true;
+    
     //console.log(p1, p2);
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);

@@ -7,61 +7,84 @@
 
 import { checkLineIntersection, getDistManhattan, interpolate, mirrorCpts } from "./geometry";
 import { getPolyBBox } from "./geometry_bbox";
-import { analyzePoly, getPolyChunks, isClosedPolygon } from "./poly_analyze";
-import { fitCurveN } from "../poly-fit-curve-schneider";
 import { renderPath, renderPoint, renderPoly } from "./visualize";
-import { simplifyRDP } from "../simplify_poly_RDP";
+import { simplifyPolyRDP } from "../simplify_poly_RDP";
 import { pathDataFromPoly } from "./pathData_fromPoly";
+import { getPolyChunks } from "./poly_analyze_get_chunks";
+import { analyzePoly, isClosedPolygon } from "./poly_analyze";
+import { fitCurveSchneider } from "../poly-fit-curve-schneider";
+import { simplifyPolyRD } from "../simplify_poly_radial_distance";
+
+
 
 export function simplifyPolygonToPathData(pts, {
     debug = false,
     width = 0,
     height = 0,
     denoise = 0.9,
-    keepCorners=true,
-    keepExtremes=true,
-    keepInflections=false,
+    keepCorners = true,
+    keepExtremes = true,
+    keepInflections = false,
     manhattan = false,
     absolute = false,
     closed = true,
-    tolerance = 1
+    tolerance = 1,
+    simplifyRD = 1,
+    simplifyRDP = 1,
 } = {}) {
 
 
-    denoise = 0
 
+    /*
     // denoise via RDP
     if (denoise && denoise !== 1) {
-        pts = simplifyRDP(pts, {
+        pts = simplifyPolyRDP(pts, {
             width,
             height,
             quality: denoise,
             manhattan,
             absolute
         })
+    }
+    */
 
+
+    /*
+    // simplify polygon
+    if (simplifyRD != 1) {
+        pts = simplifyPolyRD(pts, { quality: simplifyRD+'px' })
     }
 
+
+    if (simplifyRDP != 1) {
+        pts = simplifyPolyRDP(pts, { quality: simplifyRDP+'px' })
+    }
+    */
+
+
     // get topology of poly
-    let polyAnalyzed = !keepExtremes&&!keepCorners ? pts : analyzePoly(pts, {
+    let polyAnalyzed = !keepExtremes && !keepCorners ? pts : analyzePoly(pts, {
         debug: false
         //width,
         //height
     })
 
+    //console.log(polyAnalyzed, polyAnalyzed2);
+    //return
 
     // split into segment chunks
-    let chunks = !keepExtremes&&!keepCorners ? [polyAnalyzed] : getPolyChunks(polyAnalyzed, {keepCorners,keepExtremes, keepInflections});
+    let chunks = !keepExtremes && !keepCorners ? [polyAnalyzed] : getPolyChunks(polyAnalyzed, { keepCorners, keepExtremes, keepInflections });
 
 
     // Schneider curve fit
     let threshold = width && height ? (width + height) / 2 * 0.004 * tolerance : 2.5
 
-    threshold=2
+    //threshold = 2
 
     let polyPath = simplifyPolyChunks(chunks, {
         closed,
-        tolerance: threshold
+        tolerance: threshold,
+        keepCorners
     });
 
     return polyPath;
@@ -75,6 +98,7 @@ export function simplifyPolygonToPathData(pts, {
 
 export function simplifyPolyChunks(chunks = [], {
     closed = true,
+    keepCorners = true,
     tolerance = 1,
 } = {}) {
 
@@ -100,12 +124,14 @@ export function simplifyPolyChunks(chunks = [], {
         }
 
         // nothing to simplify
-        if (chunklen < 2 || (chunklen === 2 && chunk[1].isExtreme) ) {
+        if (chunklen < 2 || (chunklen === 2 && chunk[1].isExtreme)) {
             pLast = chunk[chunk.length - 1]
             segments = chunk.map(com => { return { type: 'L', values: [com.x, com.y] } })
 
         } else {
-            segments = fitCurveN(chunk, tolerance)
+            segments = fitCurveSchneider(chunk, {
+                maxError: tolerance, keepCorners
+            })
         }
 
         // remove first segment to connect to last segment
@@ -115,11 +141,12 @@ export function simplifyPolyChunks(chunks = [], {
 
 
     if (closed) pathData.push({ type: 'Z', values: [] })
-
-    //console.log('!!!pathData', pathData);
+    //console.log('!!!pathData from poly', pathData);
 
     // refine extremes
-    refineAdjacentExtremes(pathData)
+    let refineExtremes = false;
+    //refineExtremes=true;
+    if (refineExtremes) refineAdjacentExtremes(pathData)
     return pathData
 
 }
@@ -160,13 +187,13 @@ export function refineAdjacentExtremes(pathData) {
             let vertical2 = dx2 < dist1 && dy2 > dist1
 
 
-            let distCpO=0, distCpN=0, t=1;
+            let distCpO = 0, distCpN = 0, t = 1;
             let cp2N, cp1N;
 
             if (horizontal1 || vertical1) {
 
                 // adjust cp2 to horizontal
-                cp2N = horizontal1 ? {x:com.values[2], y: p.y} : (vertical1 ? {x:p.x, y:com.values[3]} : {x:com.values[2], y:com.values[3]})
+                cp2N = horizontal1 ? { x: com.values[2], y: p.y } : (vertical1 ? { x: p.x, y: com.values[3] } : { x: com.values[2], y: com.values[3] })
 
                 /*
                 // adjust length
@@ -182,14 +209,14 @@ export function refineAdjacentExtremes(pathData) {
                 com.values[3] = cp2N.y
 
             }
- 
+
 
             if (horizontal2 || vertical2) {
                 // adjust cp1 to horizontal
 
-                cp1N = horizontal2 ? 
-                {x:comN.values[0], y: p.y} : 
-                (vertical2 ? {x:p.x, y:comN.values[1]} : {x:comN.values[0], y:comN.values[1]})
+                cp1N = horizontal2 ?
+                    { x: comN.values[0], y: p.y } :
+                    (vertical2 ? { x: p.x, y: comN.values[1] } : { x: comN.values[0], y: comN.values[1] })
 
                 /*
                 // adjust length

@@ -1,9 +1,9 @@
-
+/*
 .input-wrap-number {
     width: 100%;
 }
 
-
+*/
 
 :root {
     --sidebar-width: clamp(25ch, 45ch, 50ch);
@@ -85,7 +85,9 @@ body {
     height: 100%;
 }
 
-
+.aside.scrollbar {
+    overflow-y: scroll
+}
 
 
 .main {
@@ -341,11 +343,13 @@ canvas {
 
 
 .btn-download {
+    /*
     display: inline-flex;
     padding: 0.5em;
     line-height: 1em;
     border-radius: 0.3rem;
     align-items: center;
+    */
 
     &:hover {
         color: var(--color-bg);
@@ -359,19 +363,20 @@ canvas {
 
 
 .preview {
-    height: 100%;
-    position: relative;
+    position: absolute;
     display: flex;
     align-items: center;
     mix-blend-mode: darken;
     justify-content: center;
+    height: 100%;
+    width: 100%;
+    inset: 0;
 
     .wrp-zoom svg {
         max-height: 90vh;
         overflow: visible;
         padding: 1em;
     }
-
 
     .svgO .pathO {
         --strokeWidthPrev: calc(0.3% / var(--scalePreview, 1));
@@ -397,7 +402,7 @@ canvas {
 
 
     .pathS {
-        fill:#ccc;
+        fill: #ccc;
         stroke: var(--color-focus);
         stroke-width: calc(var(--strokeWidthPrev, 0.3%) / var(--zoomScale));
     }
@@ -436,7 +441,7 @@ canvas {
     .svgWrap line,
     .svgWrap rect,
     .pathS {
-        fill:none;
+        fill: none;
         marker-start: url(#markerStart);
         marker-mid: url(#markerRound);
         /* marker-end: url(#markerRound); */
@@ -557,27 +562,25 @@ canvas {
     }
 }
 
-
+/* zoom area */
 .elzoomo {
     position: relative;
     overflow: hidden;
     line-height: 0px;
     width: 100%;
     height: 100%;
-}
 
-
-
-.main {
 
     .elzoomo-toolbar {
         left: 1em;
-        top: 2em;
+        top: 3em;
         --color-text: var(--color-focus);
         color: var(--color-focus);
     }
 
-}
+}    
+
+
 
 .pReport {
     line-height: 1em;
@@ -593,14 +596,14 @@ canvas {
 
 .label-span,
 .pReport {
-font-weight:700;
-text-shadow:
-0px 0px 20px var(--color-bg),
-0px 0px 20px var(--color-bg),
-0px 0px 10px var(--color-bg),
-1px 1px 5px var(--color-bg),
-1px 1px 3px var(--color-bg),
-1px 1px 2px var(--color-bg)
+    font-weight: 700;
+    text-shadow:
+        0px 0px 20px var(--color-bg),
+        0px 0px 20px var(--color-bg),
+        0px 0px 10px var(--color-bg),
+        1px 1px 5px var(--color-bg),
+        1px 1px 3px var(--color-bg),
+        1px 1px 2px var(--color-bg)
 }
 
 
@@ -617,3 +620,28 @@ text-shadow:
 
 }
 */
+
+.h3 {
+    font-size: 1.2em;
+    font-weight: 700;
+    line-height: 1.2em;
+    margin-bottom: 0.5rem;
+}
+
+
+
+summary.summary{
+--summary-gap:0.45em;
+}
+
+
+@media (max-width:1024px) {
+    .sidebar-wrap {
+        padding: 1em;
+    }
+
+    .aside {
+        display: contents;
+    }
+
+}

@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 export async function checkSVGFilesize(files) {
     let fileStack = [];
     let totalSize = 0;
@@ -17,7 +9,7 @@ export async function checkSVGFilesize(files) {
         fileStack.push({
             name,
             size,
-            svg:'',
+            svg: '',
             simplified: {}
         });
 
@@ -30,11 +22,11 @@ export async function checkSVGFilesize(files) {
 }
 
 
-export async function loadSVGFiles(files=[], fileStack=[]) {
+export async function loadSVGFiles(files = [], fileStack = []) {
 
-    for (let i=0; i<fileStack.length; i++) {
+    for (let i = 0; i < fileStack.length; i++) {
 
-        let file=files[i];
+        let file = files[i];
 
         // Load file
         //let svg = await file.text();
@@ -103,25 +95,25 @@ export function simplifyStack(fileStack = [], settings) {
 
         // use original as fallback
         let simplifiedObj = { svg }
-        let error=false;
+        let error = false;
 
         try {
             simplifiedObj = svgPathSimplify(svg, settings)
 
         } catch {
             console.warn('couldn not be processed');
-            error=false;
+            error = false;
         }
 
         //totalO += size
         totalS += simplifiedObj.svg.length
         fileStack[i].simplified = simplifiedObj;
         fileStack[i].error = error;
-        
+
     }
 
     // add new file size
-    fileStack[0].totalS= totalS;
+    fileStack[0].totalS = totalS;
     return fileStack;
 }
 
@@ -130,7 +122,7 @@ export function simplifyStack(fileStack = [], settings) {
 export function getSVGPreviews(fileStack = []) {
     let previews = [];
     for (let item of fileStack) {
-        let { name, simplified, error=false } = item;
+        let { name, simplified, error = false } = item;
         let svg = simplified.svg
 
         // add namespace for preview

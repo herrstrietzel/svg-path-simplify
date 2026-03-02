@@ -9,9 +9,36 @@ function detectInputType(input) {
     if (input instanceof Blob) return "blob";
     */
     if (Array.isArray(input)) {
-        if (input[0]?.type && input[0]?.values 
+
+        // nested array
+        if (Array.isArray(input[0])) {
+
+            if(input[0].length===2){
+
+                return 'polyArray'
+            }
+
+            else if (Array.isArray(input[0][0]) && input[0][0].length === 2 ) {
+
+                return 'polyComplexArray'
+            }
+            else if (input[0][0].x !== undefined && input[0][0].y !== undefined) {
+
+                return 'polyComplexObjectArray'
+            }
+        }
+
+        // is point array
+        else if (input[0].x!==undefined && input[0].y!==undefined) {
+
+            return 'polyObjectArray'
+        }
+
+        // path data array
+        else if (input[0]?.type && input[0]?.values
         ) {
-            return "pathData";
+            return "pathData"
+
         }
 
         return "array";
@@ -1024,6 +1051,8 @@ function quadraticBezierExtremeT(p0, cp1, p, { addExtremes = true, addSemiExtrem
  * pythagorean theorem
  */
 function getDistance(p1, p2, isArray = false) {
+
+    
 
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);

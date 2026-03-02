@@ -9,29 +9,10 @@
   */
 
 import { harmonizeCubicCpts, harmonizeCubicCptsThird } from "./pathData_simplify_harmonize_cpts";
-import { getAngle, getDistance, pointAtT, rotatePoint } from "./svgii/geometry";
-import { renderPoint } from "./svgii/visualize";
+import { getAngle, getDistance, getSquareDistance, pointAtT, rotatePoint } from "./svgii/geometry";
+import { getPolygonArea } from "./svgii/geometry_area";
+import { renderPath, renderPoint } from "./svgii/visualize";
 
-
-let polyPtsToArray = (pts) => {
-    return Array.from(pts).map(pt => [pt.x, pt.y])
-}
-
-// convert to pathdata
-let bezierPtsToPathData = (beziers) => {
-    //let pathData = [{ type: 'M', values: [beziers[0][0][0], beziers[0][0][1]] }];
-    let pathData = [];
-
-    beziers.forEach(bez => {
-        let cp1 = bez[1]
-        let cp2 = bez[2]
-        let p = bez[3]
-        let com = { type: 'C', values: [cp1[0], cp1[1], cp2[0], cp2[1], p[0], p[1]] }
-        pathData.push(com)
-    })
-
-    return pathData
-}
 
 
 
@@ -39,59 +20,47 @@ let bezierPtsToPathData = (beziers) => {
  * Fit one or more Bezier curves to a set of pts.
  *
  */
-export function fitCurveN(pts, maxError, adjustCpts = true, harmonize= true) {
-
-    if (!Array.isArray(pts) || (pts[0].x !== undefined)) {
-
-        if (pts[0].x !== undefined) {
-            pts = polyPtsToArray(pts)
-        } else {
-            throw Error("Not a valid point array");
-        }
-    }
-
-    //console.log(pts);
-
-    // Remove duplicate pts
-    pts = pts.filter(function (point, i) {
-        return i === 0 || !point.every((val, j) => {
-            return val === pts[i - 1][j];
-        });
-    });
+export function fitCurveSchneider(pts, {
+    maxError = 0,
+    adjustCpts = true,
+    harmonize = true,
+    keepCorners = true
+} = {}) {
 
     if (pts.length === 1) {
-        //return [{ type: 'L', values: [pts[0][0], pts[0][1]] }];
         return [];
     }
-
 
     // single lineto
     if (pts.length === 2) {
         return [
-            { type: 'L', values: [pts[0][0], pts[0][1]] },
-            { type: 'L', values: [pts[1][0], pts[1][1]] }
+            { type: 'L', values: [pts[0].x, pts[0].y] },
+            { type: 'L', values: [pts[1].x, pts[1].y] }
         ]
     }
 
+    // prevent bulging
+    //keepCorners = true
+    //keepCorners = false
 
     let len = pts.length;
-
     let leftTangent = createTangent(pts[1], pts[0]);
     let rightTangent = createTangent(pts[len - 2], pts[len - 1]);
-
-    let beziers = fitCubic(pts, leftTangent, rightTangent, maxError);
+    let beziers = fitCubic(pts, leftTangent, rightTangent, maxError, keepCorners);
 
     // create pathdata
     let pathData = bezierPtsToPathData(beziers)
 
 
 
-    // adjustCpts -post
-    //adjustCpts = false
-    //harmonize= false;
-
     let cp1, cp2;
+
+    adjustCpts = false
+    harmonize = false;
+
     if (adjustCpts) {
+
+        console.log('refine cpts');
 
         let len2 = pathData.length;
         let com1 = pathData[0]
@@ -100,9 +69,9 @@ export function fitCurveN(pts, maxError, adjustCpts = true, harmonize= true) {
         let com2 = pathData[len2 - 1]
 
         //adjust 1st and last angle
-        let p0 = { x: pts[0][0], y: pts[0][1] }
-        let p1 = { x: pts[1][0], y: pts[1][1] }
-        let p2 = pts[2] ? { x: pts[2][0], y: pts[2][1] } : null
+        let p0 = { x: pts[0].x, y: pts[0].y }
+        let p1 = { x: pts[1].x, y: pts[1].y }
+        let p2 = pts[2] ? { x: pts[2].x, y: pts[2].y } : null
 
         if (p2) {
             cp1 = { x: com1.values[0], y: com1.values[1] }
@@ -111,8 +80,8 @@ export function fitCurveN(pts, maxError, adjustCpts = true, harmonize= true) {
             com1.values[1] = cp1.y
         }
 
-        let pL = { x: pts[len - 1][0], y: pts[len - 1][1] }
-        let pL1 = { x: pts[len - 2][0], y: pts[len - 2][1] }
+        let pL = { x: pts[len - 1].x, y: pts[len - 1].y }
+        let pL1 = { x: pts[len - 2].x, y: pts[len - 2].y }
         let pL2 = pts[len - 3] ? { x: pts[len - 3][0], y: pts[len - 3][1] } : null
 
         if (pL2) {
@@ -124,12 +93,11 @@ export function fitCurveN(pts, maxError, adjustCpts = true, harmonize= true) {
 
         // harmonize too tight tangents
         //let harmonize= true;
-        if(harmonize){
-            pathData = harmonizeCubicCptsThird([{ type: 'M', values: [pts[0][0], pts[0][1]] }, 
+        if (harmonize) {
+            pathData = harmonizeCubicCptsThird([{ type: 'M', values: [pts[0].x, pts[0].y] },
             ...pathData])
             pathData.shift()
         }
-
 
     }
 
@@ -138,19 +106,124 @@ export function fitCurveN(pts, maxError, adjustCpts = true, harmonize= true) {
 }
 
 
-function adjustTangentAngle(cp, p0, p1, p2) {
-    let ang1 = getAngle(p0, p1)
-    let ang2 = getAngle(p0, p2)
-    let angDiff = (ang2 - ang1)
-    cp = rotatePoint(cp, p0.x, p0.y, -angDiff)
-    return cp
-}
+/**
+ * Fit a Bezier curve to a (sub)set of digitized pts.
+ * Your code should not call this function directly. Use fitCurve instead.
+ *control-point-1, control-point-2, second-point] and pts are [x, y]
+ */
+function fitCubic(pts, leftTangent, rightTangent, error, keepCorners = false) {
+
+
+    //Max times to try iterating (to find an acceptable curve)
+    let MaxIterations = 20;
+    let bezCurve;
+
+    /*
+    //Use heuristic if region only has two pts in it
+    if (pts.length === 2) {
+        let dist = getDistance(pts[0], pts[1], false) * 0.333;
+        bezCurve = [pts[0], addArrays(pts[0], mulItems(leftTangent, dist)), addArrays(pts[1], mulItems(rightTangent, dist)), pts[1]];
+        return [bezCurve];
+    }
+    */
+
+
+    //Parameterize pts, and attempt to fit curve
+    let u = chordLengthParameterize(pts);
+    let _generateAndReport = generateAndReport(pts, u, u, leftTangent, rightTangent);
+
+    bezCurve = _generateAndReport[0];
+
+    let maxError = _generateAndReport[1];
+    let splitPoint = _generateAndReport[2];
+
+
+    // check if curve is bulged
+    if (keepCorners) {
+        let checkBulge = areaDeviationTooLarge(pts, bezCurve);
+        let { isBulged, bezierNew } = checkBulge;
+        if (isBulged) {
+            // return cubic corner segment
+            bezCurve = bezierNew
+        }
+    }
+
+
+    if (maxError === 0 || maxError < error) {
+        return [bezCurve];
+    }
+
+
+    //If error not too large, try some reparameterization and iteration
+    if (maxError < error * error) {
+
+        let uPrime = u;
+        let prevErr = maxError;
+        let prevSplit = splitPoint;
+
+        for (let i = 0; i < MaxIterations; i++) {
+
+            uPrime = reparameterize(bezCurve, pts, uPrime);
+
+            let _generateAndReport2 = generateAndReport(pts, u, uPrime, leftTangent, rightTangent);
+
+            bezCurve = _generateAndReport2[0];
+            maxError = _generateAndReport2[1];
+            splitPoint = _generateAndReport2[2];
+
+
+            if (maxError < error) {
+                return [bezCurve];
+            }
+            //If the development of the fitted curve grinds to a halt,
+            //we abort this attempt (and try a shorter curve):
+            else if (splitPoint === prevSplit) {
+                let errChange = maxError / prevErr;
+                if (errChange > .9999 && errChange < 1.0001) {
+                    break;
+                }
+            }
+
+            prevErr = maxError;
+            prevSplit = splitPoint;
+        }
+    }
+
+    //Fitting failed -- split at max error point and fit recursively
+    let beziers = [];
+    let centerVector = subtract(pts[splitPoint - 1], pts[splitPoint + 1]);
+
+    if (centerVector.x === 0 && centerVector.y === 0) {
+        centerVector = subtract(pts[splitPoint - 1], pts[splitPoint]);
+        let _ref = { x: -centerVector.y, y: centerVector.x };
+        centerVector.x = _ref.x;
+        centerVector.y = _ref.y;
+    }
+
+    let toCenterTangent = normalize(centerVector);
+    //To and from need to point in opposite directions:
+    let fromCenterTangent = mulItems(toCenterTangent, -1);
+
+    if (pts.length === 3) {
+        //splitPoint--
+    }
+
+    beziers.push(
+        ...fitCubic(pts.slice(0, splitPoint + 1), leftTangent, toCenterTangent, error, keepCorners),
+        ...fitCubic(pts.slice(splitPoint), fromCenterTangent, rightTangent, error, keepCorners)
+    );
+
+
+
+    return beziers;
+};
+
 
 
 /**
  * Use least-squares method to find Bezier control pts for region.
 */
-let generateBezier = (pts, parameters, leftTangent, rightTangent) => {
+function generateBezier(pts, parameters, leftTangent, rightTangent) {
 
     //Bezier curve ctl pts
     let a, tmp, u, ux, firstPoint = pts[0], lastPoint = pts[pts.length - 1];
@@ -196,7 +269,7 @@ let generateBezier = (pts, parameters, leftTangent, rightTangent) => {
     //Finally, derive alpha values
     let alpha_l = det_C0_C1 === 0 ? 0 : det_X_C1 / det_C0_C1;
     let alpha_r = det_C0_C1 === 0 ? 0 : det_C0_X / det_C0_C1;
-    let segLength = getDistance(firstPoint, lastPoint, true);
+    let segLength = getDistance(firstPoint, lastPoint, false);
     let epsilon = 1.0e-6 * segLength;
 
     if (alpha_l < epsilon || alpha_r < epsilon) {
@@ -213,95 +286,7 @@ let generateBezier = (pts, parameters, leftTangent, rightTangent) => {
 };
 
 
-/**
- * Fit a Bezier curve to a (sub)set of digitized pts.
- * Your code should not call this function directly. Use {@link fitCurve} instead.
- *control-point-1, control-point-2, second-point] and pts are [x, y]
- */
-let fitCubic = (pts, leftTangent, rightTangent, error) => {
-    //Max times to try iterating (to find an acceptable curve)
-    let MaxIterations = 20; 
-    let bezCurve;
-
-    //Use heuristic if region only has two pts in it
-    if (pts.length === 2) {
-        let dist = getDistance(pts[0], pts[1], true) * 0.333;
-        bezCurve = [pts[0], addArrays(pts[0], mulItems(leftTangent, dist)), addArrays(pts[1], mulItems(rightTangent, dist)), pts[1]];
-        return [bezCurve];
-    }
-
-    //Parameterize pts, and attempt to fit curve
-    let u = chordLengthParameterize(pts);
-    let _generateAndReport = generateAndReport(pts, u, u, leftTangent, rightTangent);
-
-    bezCurve = _generateAndReport[0];
-    let maxError = _generateAndReport[1];
-    let splitPoint = _generateAndReport[2];
-
-    if (maxError === 0 || maxError < error) {
-        return [bezCurve];
-    }
-    //If error not too large, try some reparameterization and iteration
-    if (maxError < error * error) {
-
-        let uPrime = u;
-        let prevErr = maxError;
-        let prevSplit = splitPoint;
-
-        for (let i = 0; i < MaxIterations; i++) {
-
-            uPrime = reparameterize(bezCurve, pts, uPrime);
-
-            let _generateAndReport2 = generateAndReport(pts, u, uPrime, leftTangent, rightTangent);
-
-            bezCurve = _generateAndReport2[0];
-            maxError = _generateAndReport2[1];
-            splitPoint = _generateAndReport2[2];
-
-
-            if (maxError < error) {
-                return [bezCurve];
-            }
-            //If the development of the fitted curve grinds to a halt,
-            //we abort this attempt (and try a shorter curve):
-            else if (splitPoint === prevSplit) {
-                let errChange = maxError / prevErr;
-                if (errChange > .9999 && errChange < 1.0001) {
-                    break;
-                }
-            }
-
-            prevErr = maxError;
-            prevSplit = splitPoint;
-        }
-    }
-
-    //Fitting failed -- split at max error point and fit recursively
-    let beziers = [];
-    let centerVector = subtract(pts[splitPoint - 1], pts[splitPoint + 1]);
-
-    if (centerVector.every(function (val) {
-        return val === 0;
-    })) {
-        //[x,y] -> [-y,x]: http://stackoverflow.com/a/4780141/1869660
-        centerVector = subtract(pts[splitPoint - 1], pts[splitPoint]);
-        let _ref = [-centerVector[1], centerVector[0]];
-        centerVector[0] = _ref[0];
-        centerVector[1] = _ref[1];
-    }
-
-    let toCenterTangent = normalize(centerVector);
-    //To and from need to point in opposite directions:
-    let fromCenterTangent = mulItems(toCenterTangent, -1);
-
-
-    beziers = beziers.concat(fitCubic(pts.slice(0, splitPoint + 1), leftTangent, toCenterTangent, error));
-    beziers = beziers.concat(fitCubic(pts.slice(splitPoint), fromCenterTangent, rightTangent, error));
-    return beziers;
-};
-
-
-const generateAndReport = (pts, paramsOrig, paramsPrime, leftTangent, rightTangent) => {
+function generateAndReport(pts, paramsOrig, paramsPrime, leftTangent, rightTangent) {
     let bezCurve, maxError, splitPoint;
 
     bezCurve = generateBezier(pts, paramsPrime, leftTangent, rightTangent);
@@ -337,8 +322,8 @@ function newtonRaphsonRootFind(bez, point, u) {
     //let q = bezierQ(bez, u);
     let q = pointAtT(bez, u)
 
-    let dx = q[0] - point[0];
-    let dy = q[1] - point[1];
+    let dx = q.x - point.x;
+    let dy = q.y - point.y;
 
     // First derivative (tangent vector at u)
     let qp = bezierQprime(bez, u);
@@ -388,7 +373,7 @@ function chordLengthParameterize(pts) {
     for (let i = 0; i < l; i++) {
         p = pts[i];
         //currU = i ? prevU + length(subtract(p, p0)) : 0;
-        currU = prevU + getDistance(p, p0, true);
+        currU = prevU + getDistance(p, p0, false);
         u.push(currU);
         prevU = currU;
 
@@ -420,16 +405,24 @@ function computeMaxError(pts, bez, parameters) {
 
     let t_distMap = mapTtoRelativeDistances(bez, 10);
     let l = pts.length
+    let ptOnPath = null
 
     for (i = 0; i < l; i++) {
         point = pts[i];
         //Find 't' for a point on the bez curve that's as close to 'point' as possible:
         t = find_t(parameters[i], t_distMap, 10);
 
+        ptOnPath = pointAtT(bez, t);
+        dist = getSquareDistance(ptOnPath, point)
+
+        /*
+        console.log('v', v);
         v = subtract(pointAtT(bez, t), point);
-        dist = v[0] * v[0] + v[1] * v[1];
+        dist = v.x * v.x + v.y * v.y;
+        */
 
         if (dist > maxDist) {
+            //renderPoint(markers, ptOnPath)
             maxDist = dist;
             splitPoint = i;
         }
@@ -447,13 +440,13 @@ function mapTtoRelativeDistances(bez, B_parts) {
 
     for (let i = 1; i <= B_parts; i++) {
         B_t_curr = pointAtT(bez, i / B_parts);
-        sumLen += getDistance(B_t_curr, B_t_prev, true);
+        sumLen += getDistance(B_t_curr, B_t_prev);
         B_t_dist.push(sumLen);
         B_t_prev = B_t_curr;
     }
 
     //Normalize B_length to the same interval as the parameter distances; 0 to 1:
-    B_t_dist = B_t_dist.map(function (x) {
+    B_t_dist = B_t_dist.map((x) => {
         return x / sumLen;
     });
     return B_t_dist;
@@ -486,17 +479,80 @@ function find_t(param, t_distMap, B_parts) {
     return t;
 }
 
+
+function areaDeviationTooLarge(pts, bezCurve) {
+
+    let split = 4;
+    let step = 1 / split;
+    let l = pts.length
+
+    // create polygon from curve candidate
+    let poly = [bezCurve[0]];
+    let pt;
+
+    for (let i = 1; i < split; i++) {
+        let t = step * i
+        pt = pointAtT(bezCurve, t)
+        poly.push(pt);
+    }
+
+    poly.push(bezCurve[bezCurve.length - 1]);
+
+    // Original area
+    let polyArea = getPolygonArea(pts, false)
+
+    // flat line
+    if (!polyArea && pts.length === 2) {
+        polyArea = getSquareDistance(pts[0], pts[1]) * 0.01
+    }
+
+    let curveArea = getPolygonArea(poly, false);
+    let rat = curveArea / polyArea;
+
+    let isBulged = rat > 1.1
+    //|| rat < 0.9
+    // isBulged = rat > 2
+    let bezierNew = bezCurve
+    if (isBulged) {
+        let ptMid = pts[Math.floor(l * 0.5)]
+        let p = pts[l - 1];
+        /*
+        let cp1 = pointAtT([pts[0], ptMid], 0.666);
+        let cp2 = pointAtT([p, ptMid], 0.666);
+        //let ptMid2 = pts[Math.floor(pts.length*0.666)]
+        bezierNew = [pts[0], cp1, cp2, p]
+        //bezierNew = [pts[0], ptMid, ptMid, p]
+ 
+        //renderPoint(markers, cp1, 'cyan')
+        //renderPoint(markers, cp2, 'cyan')
+        //console.log('bezCurve', bezCurve,  pts);
+ 
+        cp1 = pointAtT([bezCurve[0], bezCurve[3]], 0.333);
+        cp2 = pointAtT([bezCurve[0], bezCurve[3]], 0.666);
+        bezCurve = [bezCurve[0], cp1, cp2, bezCurve[3]]
+        */
+
+        //console.log('!!!bulged');
+
+        bezCurve = [pts[0], ptMid, ptMid, p]
+        bezierNew = bezCurve
+    }
+
+    return { isBulged, bezierNew };
+}
+
+
 /**
  * Creates a vector of length 1 which shows the direction from B to A
  */
 function createTangent(p1, p2) {
     // Returns unit vector pointing from B to A
-    let dx = p1[0] - p2[0];
-    let dy = p1[1] - p2[1];
+    let dx = p1.x - p2.x;
+    let dy = p1.y - p2.y;
     let length = Math.sqrt(dx * dx + dy * dy);
 
-    if (length === 0) return [0, 0];
-    return [dx / length, dy / length];
+    if (length === 0) return { x: 0, y: 0 };
+    return { x: dx / length, y: dy / length };
 }
 
 
@@ -506,26 +562,26 @@ function createTangent(p1, p2) {
 
 // Basic vector utilities (only what's absolutely necessary)
 function subtract(a, b) {
-    return [a[0] - b[0], a[1] - b[1]];
+    return { x: a.x - b.x, y: a.y - b.y };
 }
 
 function addArrays(a, b) {
-    return [a[0] + b[0], a[1] + b[1]];
+    return { x: a.x + b.x, y: a.y + b.y };
 }
 
 
 function mulItems(v, s) {
-    return [v[0] * s, v[1] * s];
+    return { x: v.x * s, y: v.y * s };
 }
 
 
 function normalize(v) {
-    let len = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
-    return len === 0 ? [0, 0] : [v[0] / len, v[1] / len];
+    let len = Math.sqrt(v.x * v.x + v.y * v.y);
+    return len === 0 ? { x: 0, y: 0 } : { x: v.x / len, y: v.y / len };
 }
 
 function dot(a, b) {
-    return a[0] * b[0] + a[1] * b[1];
+    return a.x * b.x + a.y * b.y;
 }
 
 function zeros_Xx2x2(x) {
@@ -547,24 +603,59 @@ function bezierQprime(bez, u, second = false) {
     let dx, dy;
 
     if (second) {
-        dx = 6 * mt * (cp2[0] - 2 * cp1[0] + p0[0]) +
-            6 * t * (p1[0] - 2 * cp2[0] + cp1[0]);
+        dx = 6 * mt * (cp2.x - 2 * cp1.x + p0.x) +
+            6 * t * (p1.x - 2 * cp2.x + cp1.x);
 
-        dy = 6 * mt * (cp2[1] - 2 * cp1[1] + p0[1]) +
-            6 * t * (p1[1] - 2 * cp2[1] + cp1[1]);
+        dy = 6 * mt * (cp2.y - 2 * cp1.y + p0.y) +
+            6 * t * (p1.y - 2 * cp2.y + cp1.y);
 
     } else {
-        dx = 3 * mt2 * (cp1[0] - p0[0]) +
-            6 * mt * t * (cp2[0] - cp1[0]) +
-            3 * t2 * (p1[0] - cp2[0]);
+        dx = 3 * mt2 * (cp1.x - p0.x) +
+            6 * mt * t * (cp2.x - cp1.x) +
+            3 * t2 * (p1.x - cp2.x);
 
-        dy = 3 * mt2 * (cp1[1] - p0[1]) +
-            6 * mt * t * (cp2[1] - cp1[1]) +
-            3 * t2 * (p1[1] - cp2[1]);
+        dy = 3 * mt2 * (cp1.y - p0.y) +
+            6 * mt * t * (cp2.y - cp1.y) +
+            3 * t2 * (p1.y - cp2.y);
     }
 
     return [dx, dy];
 }
 
+
+function adjustTangentAngle(cp, p0, p1, p2) {
+    let ang1 = getAngle(p0, p1)
+    let ang2 = getAngle(p0, p2)
+    let angDiff = (ang2 - ang1)
+    cp = rotatePoint(cp, p0.x, p0.y, -angDiff)
+    return cp
+}
+
+
+
+// convert to pathdata
+function bezierPtsToPathData(beziers = []) {
+    let pathData = [];
+    beziers.forEach(bez => {
+
+        let type = bez.length === 4 ? 'C' : (bez.length === 3 ? 'Q' : 'L')
+
+        let cp1 = type === 'C' || type === 'Q' ? bez[1] : null;
+        let cp2 = type === 'C' ? bez[2] : null;
+        let p = bez[bez.length - 1]
+
+        let values = type === 'C' ?
+            [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y] :
+            (type === 'Q' ?
+                [cp1.x, cp1.y, p.x, p.y] :
+                [p.x, p.y]
+            )
+
+        let com = { type, values }
+        pathData.push(com)
+    })
+
+    return pathData
+}
 
 

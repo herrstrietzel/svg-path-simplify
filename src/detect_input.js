@@ -9,9 +9,37 @@ export function detectInputType(input) {
     if (input instanceof Blob) return "blob";
     */
     if (Array.isArray(input)) {
-        if (input[0]?.type && input[0]?.values 
+
+        // nested array
+        if (Array.isArray(input[0])) {
+            //console.log('is array', input[0], input[0][0])
+
+            if(input[0].length===2){
+                //console.log('is single poly value array')
+                return 'polyArray'
+            }
+
+            else if (Array.isArray(input[0][0]) && input[0][0].length === 2 ) {
+                //console.log('is complex poly point value array', input[0][0])
+                return 'polyComplexArray'
+            }
+            else if (input[0][0].x !== undefined && input[0][0].y !== undefined) {
+                //console.log('is nested point object array')
+                return 'polyComplexObjectArray'
+            }
+        }
+
+        // is point array
+        else if (input[0].x!==undefined && input[0].y!==undefined) {
+            //console.log('is nested point object array')
+            return 'polyObjectArray'
+        }
+
+        // path data array
+        else if (input[0]?.type && input[0]?.values
         ) {
-            return "pathData";
+            return "pathData"
+
         }
         //console.log(input[0], typeof input[0]);
         return "array";
@@ -23,7 +51,6 @@ export function detectInputType(input) {
         let isPathData = input.startsWith('M') || input.startsWith('m');
         let isPolyString = !isNaN(input.substring(0, 1)) && !isNaN(input.substring(input.length - 1, input.length))
 
-        //console.log(input.substring(0, 1), input.substring(input.length-1, input.length));
 
         if (isSVG) {
             type = 'svgMarkup'

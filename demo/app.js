@@ -15,7 +15,7 @@ let useWorker = false;
 window.addEventListener('DOMContentLoaded', (e) => {
 
     settings = enhanceInputsSettings;
-    //console.log('settings', settings);
+   // console.log('settings', settings);
 
     // check query strings
     let queryParams = getQueryParams();
@@ -314,8 +314,12 @@ function updateSVG(settings = {}, processed = false) {
     console.log('pathDataOpt', pathDataOpt, 'timing', t1);
 
 
-    let { d, svg, report, inputType, mode } = pathDataOpt;
+    let { d, svg, polys, report, inputType, mode } = pathDataOpt;
     let { original, decimals = null } = report;
+
+    if(polys.length){
+        polyOut.value=JSON.stringify(polys).replaceAll('"', '')
+    }
 
 
     //lastFileName

@@ -7,6 +7,42 @@
 import { getDistAv, getDistManhattan } from "./geometry";
 
 
+
+export function detectAccuracyPoly(pts) {
+
+    let minDim = Infinity
+    let dims = [];
+    //console.log(pathData);
+
+    // add average distances
+    for (let i = 1, len = pts.length; i < len; i++) {
+        let pt = pts[i];
+        let { p0 = null, p = null, dimA = 0 } = pt;
+
+        // use existing averave dimension value or calculate
+        if ( p && p0) {
+            dimA = dimA ? dimA : getDistManhattan(p0, p);
+
+            if (dimA) dims.push(dimA);
+            if (dimA && dimA < minDim) minDim = dimA;
+        }
+    }
+
+    let dim_min = dims.sort()
+    let sliceIdx = Math.ceil(dim_min.length / 8);
+    dim_min = dim_min.slice(0, sliceIdx);
+    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
+
+    let threshold = 75
+    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length
+    // clamp
+    return Math.min(Math.max(0, decimalsAuto), 8)
+
+}
+
+
+
+
 export function detectAccuracy(pathData) {
 
     let minDim = Infinity
