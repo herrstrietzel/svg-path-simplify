@@ -138,11 +138,10 @@ export function svgPathSimplify(input = '', {
     let report = {};
     let d = '';
     let mode = inputType === 'svgMarkup' ? 1 : 0;
-    //console.log(inputType);
+    //console.log('inputType', inputType);
 
     // pathdata superset array - containing additional data
-    let pathDataPlusArr = []
-
+    let pathDataPlusArr_global = []
     let paths = []
     let polys = []
     let dStr = '';
@@ -203,6 +202,7 @@ export function svgPathSimplify(input = '', {
 
         paths.push({ d, el: null })
     }
+
     // mode:1 – process complete svg DOM
     else {
         //sanitize
@@ -221,10 +221,14 @@ export function svgPathSimplify(input = '', {
 
         // collect paths
         let pathEls = svg.querySelectorAll('path')
-
-        pathEls.forEach(path => {
-            paths.push({ d: path.getAttribute('d'), el: path })
+        //let pathEls2 = svg.getElementsByTagName('path')
+        //console.log(pathEls2);
+        
+        pathEls.forEach((path, i) => {
+            paths.push({ d: path.getAttribute('d'), el: path, idx: i })
         })
+
+
 
         // get viewBox/dimensions
         viewBox = getViewBox(svg, decimals)
@@ -253,8 +257,10 @@ export function svgPathSimplify(input = '', {
 
     for (let i = 0, l = paths.length; l && i < l; i++) {
 
+        let pathDataPlusArr = []
         let path = paths[i];
         let { d, el } = path;
+        let dN = ''
 
 
         let pathData = parsePathDataNormalized(d, { quadraticToCubic, arcToCubic });
@@ -311,7 +317,6 @@ export function svgPathSimplify(input = '', {
 
         // loop sub paths
         for (let i = 0; i < lenSub; i++) {
-
 
             //let { pathData, bb } = subPathArr[i];
             let pathDataSub = subPathArr[i];
@@ -410,7 +415,7 @@ export function svgPathSimplify(input = '', {
 
 
             // harmonize cpts
-           // if (harmonizeCpts) pathDataSub = harmonizeCubicCpts(pathDataSub)
+            // if (harmonizeCpts) pathDataSub = harmonizeCubicCpts(pathDataSub)
 
 
             // remove zero length linetos
@@ -526,6 +531,10 @@ export function svgPathSimplify(input = '', {
 
         // flatten compound paths 
         pathData = [];
+
+        // add to global array - including multiple path elements
+        pathDataPlusArr_global.push(pathDataPlusArr);
+
         pathDataPlusArr.forEach(sub => {
             pathData.push(...sub.pathData)
         })
@@ -538,7 +547,7 @@ export function svgPathSimplify(input = '', {
 
 
         // collect for merged svg paths 
-        mergePaths = false
+        //mergePaths = false
         if (el && mergePaths) {
             pathData_merged.push(...pathData)
         }
@@ -546,18 +555,17 @@ export function svgPathSimplify(input = '', {
         else {
 
             // clone pathdata 
-            pathData = pathData.map(com => ({ ...com }));
+            pathData = pathData.map(com => ({type:com.type, values:[...com.values]}));
+            //pathData = JSON.parse(JSON.stringify(pathData));
 
             // optimize path data
             pathData = convertPathData(pathData, pathOptions)
 
             // remove zero-length segments introduced by rounding
-            pathData = removeZeroLengthLinetos(pathData);
-
+            if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
 
             // realign path to zero origin
             if (alignToOrigin) {
-                console.log(bb_global);
 
                 pathData[0].values[0] = (pathData[0].values[0] - bb_global.x).toFixed(decimals)
                 pathData[0].values[1] = (pathData[0].values[1] - bb_global.y).toFixed(decimals)
@@ -586,8 +594,11 @@ export function svgPathSimplify(input = '', {
                 //success: comCountS < comCount
             }
 
+            //console.log('el', el);
             // apply new path for svgs
-            if (el) el.setAttribute('d', dOpt)
+            if (el) {
+                el.setAttribute('d', dOpt)
+            }
         }
 
     } // end path array
@@ -596,7 +607,6 @@ export function svgPathSimplify(input = '', {
      *  stringify new SVG
      */
     if (mode) {
-
 
         if (pathData_merged.length) {
 
@@ -684,7 +694,7 @@ export function svgPathSimplify(input = '', {
         polys = polys[0]
     }
 
-    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr, inputType };
+    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr:pathDataPlusArr_global, inputType };
 
 }
 

@@ -5623,6 +5623,16 @@
       });
     }
 
+    // remove empty defs
+    let defs = svg.querySelectorAll('defs');
+    defs.forEach(def=>{
+      let children=[...def.children];
+      let attributes = [...def.attributes];
+      if(!attributes.length && !children.length){
+        def.remove();
+      }
+    });
+
     if (returnDom) return svg
     let markup = stringifySVG(svg);
 
@@ -8444,8 +8454,7 @@
       let mode = inputType === 'svgMarkup' ? 1 : 0;
 
       // pathdata superset array - containing additional data
-      let pathDataPlusArr = [];
-
+      let pathDataPlusArr_global = [];
       let paths = [];
       let polys = [];
       let dStr = '';
@@ -8502,6 +8511,7 @@
 
           paths.push({ d, el: null });
       }
+
       // mode:1 – process complete svg DOM
       else {
 
@@ -8521,8 +8531,9 @@
           // collect paths
           let pathEls = svg.querySelectorAll('path');
 
-          pathEls.forEach(path => {
-              paths.push({ d: path.getAttribute('d'), el: path });
+          
+          pathEls.forEach((path, i) => {
+              paths.push({ d: path.getAttribute('d'), el: path, idx: i });
           });
 
           // get viewBox/dimensions
@@ -8549,6 +8560,7 @@
 
       for (let i = 0, l = paths.length; l && i < l; i++) {
 
+          let pathDataPlusArr = [];
           let path = paths[i];
           let { d, el } = path;
 
@@ -8682,7 +8694,7 @@
               }
 
               // harmonize cpts
-             // if (harmonizeCpts) pathDataSub = harmonizeCubicCpts(pathDataSub)
+              // if (harmonizeCpts) pathDataSub = harmonizeCubicCpts(pathDataSub)
 
               // remove zero length linetos
               if (removeColinear || removeZeroLength) pathDataSub = removeZeroLengthLinetos(pathDataSub);
@@ -8774,6 +8786,10 @@
 
           // flatten compound paths 
           pathData = [];
+
+          // add to global array - including multiple path elements
+          pathDataPlusArr_global.push(pathDataPlusArr);
+
           pathDataPlusArr.forEach(sub => {
               pathData.push(...sub.pathData);
           });
@@ -8784,7 +8800,7 @@
           }
 
           // collect for merged svg paths 
-          mergePaths = false;
+
           if (el && mergePaths) {
               pathData_merged.push(...pathData);
           }
@@ -8792,17 +8808,16 @@
           else {
 
               // clone pathdata 
-              pathData = pathData.map(com => ({ ...com }));
+              pathData = pathData.map(com => ({type:com.type, values:[...com.values]}));
 
               // optimize path data
               pathData = convertPathData(pathData, pathOptions);
 
               // remove zero-length segments introduced by rounding
-              pathData = removeZeroLengthLinetos(pathData);
+              if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
 
               // realign path to zero origin
               if (alignToOrigin) {
-                  console.log(bb_global);
 
                   pathData[0].values[0] = (pathData[0].values[0] - bb_global.x).toFixed(decimals);
                   pathData[0].values[1] = (pathData[0].values[1] - bb_global.y).toFixed(decimals);
@@ -8831,7 +8846,9 @@
               };
 
               // apply new path for svgs
-              if (el) el.setAttribute('d', dOpt);
+              if (el) {
+                  el.setAttribute('d', dOpt);
+              }
           }
 
       } // end path array
@@ -8923,7 +8940,7 @@
           polys = polys[0];
       }
 
-      return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr, inputType };
+      return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr:pathDataPlusArr_global, inputType };
 
   }
 

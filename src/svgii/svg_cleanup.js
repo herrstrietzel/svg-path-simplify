@@ -113,6 +113,16 @@ export function cleanUpSVG(svgMarkup, {
   //console.log('!!!svgMarkup', svgMarkup);
 
 
+  // remove empty defs
+  let defs = svg.querySelectorAll('defs')
+  defs.forEach(def=>{
+    let children=[...def.children]
+    let attributes = [...def.attributes]
+    if(!attributes.length && !children.length){
+      def.remove()
+    }
+  })
+
   if (returnDom) return svg
   let markup = stringifySVG(svg)
 

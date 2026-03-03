@@ -1,3 +1,5 @@
+//import {inputSampleData} from './samples.js'
+
 import { checkSVGFilesize, loadSVGFiles, simplifyStack, getSVGPreviews, generateSVGZip, getZipObjectUrl } from './app_helpers.js';
 
 let settings = {}
@@ -88,6 +90,7 @@ inputSvg.addEventListener('input', async (e) => {
 });
 
 
+// file upload
 inputFile.addEventListener('input', async (e) => {
     let files = inputFile.files;
     let l = files.length;
@@ -122,7 +125,6 @@ inputFile.addEventListener('input', async (e) => {
     // process
     processFileStack(fileStack, settings, useWorker, WorkerUrl)
 
-
     // multi file
     if (l > 1) {
         document.body.classList.add('multiFile')
@@ -131,11 +133,13 @@ inputFile.addEventListener('input', async (e) => {
 
     else {
 
+        
         let fileItem = fileStack[0]
         lastFileName = fileItem.name;
         btnDownload.setAttribute('download', lastFileName);
+        sizeKB = +(fileItem.size / 1024).toFixed(3)
 
-        if (fileItem.size > 500) {
+        if (sizeKB > 500) {
             if (!window.confirm(`This image is quite large ${sizeKB} KB – processing may take a while.\n Wanna proceed?`)) {
                 inputFile.value = '';
                 return
@@ -314,7 +318,11 @@ function updateSVG(settings = {}, processed = false) {
     console.log('pathDataOpt', pathDataOpt, 'timing', t1);
 
 
-    let { d, svg, polys, report, inputType, mode } = pathDataOpt;
+    let { d, svg, polys, report, inputType } = pathDataOpt;
+
+    // single path or svg
+    let mode = inputType === "svgMarkup" ? 1 : 0;
+
     let { original, decimals = null } = report;
 
     if(polys.length){
@@ -430,7 +438,8 @@ function updateSVG(settings = {}, processed = false) {
     let obj_codepen = {
         title: `svg-path-simplify`,
         description: `svg-path-simplify`,
-        html: svgExport
+        html: svgExport,
+        css:`body{background:#ccc} svg{display:block; outline: 1px solid #ccc; overflow:visible}`
     }
 
     let dataCodepen = JSON.stringify(obj_codepen)

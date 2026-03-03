@@ -11,6 +11,16 @@
     --strokeWidthPrev: 0.3%;
 }
 
+body {
+    font-size: 19px;
+}
+
+@media (min-width:1024px) {
+    body {
+        font-size: 16px;
+    }
+}
+
 .hgh-100vh {
     height: 100vh
 }
@@ -366,7 +376,7 @@ canvas {
     position: absolute;
     display: flex;
     align-items: center;
-    mix-blend-mode: darken;
+    /* mix-blend-mode: darken; */
     justify-content: center;
     height: 100%;
     width: 100%;
@@ -427,7 +437,8 @@ canvas {
         rect {
             fill: none !important;
             stroke: var(--color-focus) !important;
-            stroke-width: var(--strokeWidthPrev, 0.3%) !important;
+            /* stroke-width: var(--strokeWidthPrev, 0.3%) !important; */
+            stroke-width: calc(var(--strokeWidthPrev, 0.3%) * 4 / var(--zoomScale));
             stroke-linecap: square;
         }
     }
@@ -578,7 +589,7 @@ canvas {
         color: var(--color-focus);
     }
 
-}    
+}
 
 
 
@@ -628,10 +639,14 @@ canvas {
     margin-bottom: 0.5rem;
 }
 
+.h4 {
+    font-weight: 700;
+}
 
 
-summary.summary{
---summary-gap:0.45em;
+
+summary.summary {
+    --summary-gap: 0.45em;
 }
 
 
