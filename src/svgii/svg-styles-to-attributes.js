@@ -1,6 +1,79 @@
 import { getMatrix, parseCSSTransform } from './svg-styles-getTransforms';
 import { attLookup } from './svg-styles-to-attributes-const';
 
+
+
+export function getElementProps(el, {
+    removeNameSpaced = true,
+    decimals = -1
+} = {}) {
+
+    let nodeName = el.nodeName.toLowerCase();
+    let attProps = getElAttributes(el)
+    let cssProps = getElStyleProps(el)
+
+
+    // normalize transform attributes
+    if (attProps['transform']) {
+
+        let transAtt = attProps['transform']
+        let transArr = transAtt.match(/[a-z]+\([^)]*\)/gi);
+
+
+        //console.log(`attProps['transform']`, transAtt);
+
+
+        let transforms = [];
+        transArr.forEach(trans => {
+            let [prop, vals] = trans.split(/\(|\)/).filter(Boolean)
+            //let prop = vals[0];
+            vals = vals.split(/,| /).filter(Boolean).map(Number)
+            console.log('trans', prop, vals);
+
+            let cssTrans = '';
+
+            // rotate has origin
+            if (prop === 'rotate' && vals.length === 3) {
+
+                cssTrans = `
+                translate(${vals[1]}px, ${vals[2]}px)
+                rotate(${vals[0]}deg)
+                translate(${-vals[1]}px, ${-vals[2]}px)
+                `
+                /*
+                transforms.push({ prop: 'translate', values: [vals[1], vals[2]] })
+                transforms.push({ prop: 'rotate', values: [vals[0]] })
+                transforms.push({ prop: 'translate', values: [-vals[1], -vals[2]] })
+                */
+            } else {
+                cssTrans = `
+                ${prop}(${vals[1]}px, ${vals[2]}px)
+                rotate(${vals[0]}deg)
+                translate(${-vals[1]}px, ${-vals[2]}px)
+                `
+
+
+                //transforms.push({ prop, values: [vals[0]] })
+            }
+        })
+
+        console.log('transforms', transforms);
+
+
+
+
+    }
+
+    // merge properties
+    let props = {
+        ...attProps,
+        ...cssProps
+    }
+
+
+}
+
+
 export function svgStylesToAttributes(el, {
     removeNameSpaced = true,
     decimals = -1
@@ -9,6 +82,11 @@ export function svgStylesToAttributes(el, {
     let nodeName = el.nodeName.toLowerCase();
     let attProps = getElAttributes(el)
     let cssProps = getElStyleProps(el)
+
+    // normalize transform attributes
+    if (attProps['transform']) {
+        console.log(`attProps['transform']`, attProps['transform']);
+    }
 
     // merge properties
     let props = {
@@ -21,7 +99,7 @@ export function svgStylesToAttributes(el, {
 
     // parse CSS transforms
     let cssTrans = cssProps['transform']
-    
+
     if (cssTrans) {
         let transStr = `${cssTrans}`
         let transformObj = parseCSSTransform(transStr)
@@ -98,13 +176,13 @@ function parseInlineStyle(styleAtt = '') {
     return props
 }
 
-function getElStyleProps(el) {
+export function getElStyleProps(el) {
     let styleAtt = el.getAttribute('style')
     let props = styleAtt ? parseInlineStyle(styleAtt) : {}
     return props
 }
 
-function getElAttributes(el) {
+export function getElAttributes(el) {
     let props = {}
     let atts = [...el.attributes].map((att) => att.name);
     let l = atts.length;

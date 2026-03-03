@@ -3,7 +3,41 @@
  * transform property object
  */
 
-export function parseCSSTransform(transformString, transformOrigin={x:0, y:0}) {
+export function parseTransform(transformString, transformOrigin = { x: 0, y: 0 }) {
+
+    //let regex = /(\w+)\(([^)]+)\)/g;
+    let transArr = transformString.match(/[a-z]+\([^)]*\)/gi);
+
+    //console.log('transArr', transArr);
+
+    let transforms = [];
+    transArr.forEach(trans => {
+        let [prop, vals] = trans.split(/\(|\)/).filter(Boolean)
+        //let prop = vals[0];
+        vals = vals.split(/,| /).filter(Boolean).map(Number)
+        console.log('trans', prop, vals);
+
+        // rotate has origin
+        if(prop==='rotate' && vals.length===3){
+            transforms.push({prop:'translate', values:[vals[1], vals[2]]})
+            transforms.push({prop:'rotate', values:[vals[0]]})
+            transforms.push({prop:'translate', values:[-vals[1], -vals[2]]})
+        }else{
+            transforms.push({prop, values:[vals[0]]})
+        }
+    })
+
+    console.log('transforms', transforms);
+
+    //let values = 
+
+}
+
+
+export function parseCSSTransform(transformString, transformOrigin = { x: 0, y: 0 }) {
+
+    if (!transformString) return false;
+
     let transformOptions = {
         transforms: [],
         transformOrigin,
@@ -53,7 +87,11 @@ export function parseCSSTransform(transformString, transformOrigin={x:0, y:0}) {
             case 'skewY':
                 transformOptions.transforms.push({ skew: [0, values[0] || 0] });
                 break;
+
             case 'rotate':
+
+                console.log('rotate', values);
+
                 transformOptions.transforms.push({ rotate: [0, 0, values[0] || 0] });
                 break;
             case 'matrix':
@@ -165,9 +203,9 @@ export function getMatrix2D(transformations = [], origin = { x: 0, y: 0 }) {
 
 
     // Process transformations in the provided order (right-to-left)
-    for (const transform of transformations) {
-        const type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
-        const values = transform[type] || defaults[type]; // Use default values if none provided
+    for (let transform of transformations) {
+        let type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
+        let values = transform[type] || defaults[type]; // Use default values if none provided
 
         // Destructure values with fallbacks
         let [x, y = defaults[type][1]] = values
@@ -268,6 +306,6 @@ export function getCSSTransform({
     let cssParent = `perspective-origin:${perspectiveOrigin.x}px ${perspectiveOrigin.y}px; perspective:${perspective}px;`;
 
     css = `transform:${css.join(' ')};transform-origin:${transFormOrigin.x}px ${transFormOrigin.y}px;`;
-    return {el:css, parent:cssParent}
+    return { el: css, parent: cssParent }
 
 }

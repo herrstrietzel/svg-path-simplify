@@ -4879,7 +4879,10 @@ function refineAdjacentExtremes(pathData, {
  * transform property object
  */
 
-function parseCSSTransform(transformString, transformOrigin={x:0, y:0}) {
+function parseCSSTransform(transformString, transformOrigin = { x: 0, y: 0 }) {
+
+    if (!transformString) return false;
+
     let transformOptions = {
         transforms: [],
         transformOrigin,
@@ -4929,7 +4932,11 @@ function parseCSSTransform(transformString, transformOrigin={x:0, y:0}) {
             case 'skewY':
                 transformOptions.transforms.push({ skew: [0, values[0] || 0] });
                 break;
+
             case 'rotate':
+
+                console.log('rotate', values);
+
                 transformOptions.transforms.push({ rotate: [0, 0, values[0] || 0] });
                 break;
             case 'matrix':
@@ -5025,9 +5032,9 @@ function getMatrix2D(transformations = [], origin = { x: 0, y: 0 }) {
     };
 
     // Process transformations in the provided order (right-to-left)
-    for (const transform of transformations) {
-        const type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
-        const values = transform[type] || defaults[type]; // Use default values if none provided
+    for (let transform of transformations) {
+        let type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
+        let values = transform[type] || defaults[type]; // Use default values if none provided
 
         // Destructure values with fallbacks
         let [x, y = defaults[type][1]] = values;
@@ -5413,6 +5420,11 @@ function svgStylesToAttributes(el, {
     let attProps = getElAttributes(el);
     let cssProps = getElStyleProps(el);
 
+    // normalize transform attributes
+    if (attProps['transform']) {
+        console.log(`attProps['transform']`, attProps['transform']);
+    }
+
     // merge properties
     let props = {
         ...attProps,
@@ -5424,7 +5436,7 @@ function svgStylesToAttributes(el, {
 
     // parse CSS transforms
     let cssTrans = cssProps['transform'];
-    
+
     if (cssTrans) {
         let transStr = `${cssTrans}`;
         let transformObj = parseCSSTransform(transStr);
@@ -5540,6 +5552,7 @@ function cleanUpSVG(svgMarkup, {
   removeNameSpaced = true,
   attributesToGroup = true,
   shapesToPaths = false,
+  convertTransforms = false,
   decimals = -1,
   excludedEls = [],
 } = {}) {
@@ -5624,11 +5637,17 @@ function cleanUpSVG(svgMarkup, {
   let defs = svg.querySelectorAll('defs');
   defs.forEach(def=>{
     let children=[...def.children];
-    let attributes = [...def.attributes];
-    if(!attributes.length && !children.length){
+    [...def.attributes];
+    if(!children.length){
       def.remove();
     }
   });
+
+  /*
+  if(convertTransforms){
+    flattenTransforms(svg)
+  }
+  */
 
   if (returnDom) return svg
   let markup = stringifySVG(svg);
@@ -8415,6 +8434,7 @@ function svgPathSimplify(input = '', {
     scaleTo = 0,
     crop = false,
     alignToOrigin = false,
+    convertTransforms=false,
 
     decimals = 3,
     autoAccuracy = true,
@@ -8513,7 +8533,7 @@ function svgPathSimplify(input = '', {
     else {
 
         let returnDom = true;
-        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths }
+        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths, convertTransforms }
         );
 
         if (shapesToPaths) {
@@ -8528,7 +8548,6 @@ function svgPathSimplify(input = '', {
         // collect paths
         let pathEls = svg.querySelectorAll('path');
 
-        
         pathEls.forEach((path, i) => {
             paths.push({ d: path.getAttribute('d'), el: path, idx: i });
         });

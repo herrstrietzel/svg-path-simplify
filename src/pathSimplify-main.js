@@ -100,6 +100,7 @@ export function svgPathSimplify(input = '', {
     scaleTo = 0,
     crop = false,
     alignToOrigin = false,
+    convertTransforms=false,
 
 
     //svg path optimizations
@@ -207,7 +208,7 @@ export function svgPathSimplify(input = '', {
     else {
         //sanitize
         let returnDom = true
-        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths }
+        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths, convertTransforms }
         );
 
         if (shapesToPaths) {
@@ -223,7 +224,7 @@ export function svgPathSimplify(input = '', {
         let pathEls = svg.querySelectorAll('path')
         //let pathEls2 = svg.getElementsByTagName('path')
         //console.log(pathEls2);
-        
+
         pathEls.forEach((path, i) => {
             paths.push({ d: path.getAttribute('d'), el: path, idx: i })
         })

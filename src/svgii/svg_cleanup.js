@@ -1,3 +1,4 @@
+import { flattenTransforms } from "../svg_flatten_transforms";
 import { parsePathDataString } from "./pathData_parse";
 import { shapeElToPath } from "./pathData_parse_els";
 import { svgStylesToAttributes } from "./svg-styles-to-attributes";
@@ -27,6 +28,7 @@ export function cleanUpSVG(svgMarkup, {
   removeNameSpaced = true,
   attributesToGroup = true,
   shapesToPaths = false,
+  convertTransforms = false,
   decimals = -1,
   excludedEls = [],
 } = {}) {
@@ -118,10 +120,18 @@ export function cleanUpSVG(svgMarkup, {
   defs.forEach(def=>{
     let children=[...def.children]
     let attributes = [...def.attributes]
-    if(!attributes.length && !children.length){
+    if(!children.length){
       def.remove()
     }
   })
+
+
+  /*
+  if(convertTransforms){
+    flattenTransforms(svg)
+  }
+  */
+
 
   if (returnDom) return svg
   let markup = stringifySVG(svg)

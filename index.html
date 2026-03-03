@@ -49,7 +49,7 @@
         <script src="https://cdn.jsdelivr.net/npm/svg-path-simplify@0.1.2/dist/svg-path-simplify.min.js" defer></script>
     -->
 
-    <script src="dist/svg-path-simplify.min.js" defer></script>
+    <script src="dist/svg-path-simplify.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
     <script src="demo/lib/elzoomo/elzoomo.min.js" defer></script>
@@ -118,6 +118,7 @@
                         <label><input type="checkbox" name="stylesToAttributes"
                                 data-info="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
 
+                        
                         <label><input type="checkbox" name="mergePaths">mergePaths</label>
                         <label><input type="checkbox" name="shapesToPaths"
                                 data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
@@ -127,6 +128,12 @@
                         <label><input type="checkbox" name="removeClassNames">removeClassNames</label>
                         <label><input type="checkbox" name="omitNamespace"
                                 data-info="Removes xmlns attribute - only recommended when embedding svg in DOM">omitNamespace</label>
+
+                        
+                                <!-- 
+                                
+                                <label><input type="checkbox" class="dsp-debug" name="convertTransforms">convertTransforms</label>
+                                -->
 
                     </p>
                 </details>
