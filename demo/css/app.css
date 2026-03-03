@@ -9,6 +9,8 @@
     --sidebar-width: clamp(25ch, 45ch, 50ch);
     --scalePreview: 1;
     --strokeWidthPrev: 0.3%;
+    --color-focus-dark: var(--color-text);
+
 }
 
 body {
@@ -659,4 +661,18 @@ summary.summary {
         display: contents;
     }
 
+}
+
+
+
+.btn-neg {
+    --color-background-button: var(--color-focus-dark);
+}
+
+.btn-neg:hover {
+    --color-background-button: var(--color-focus) !important;
+}
+
+details {
+    margin-bottom: 0.5em;
 }
