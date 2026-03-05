@@ -123,6 +123,7 @@ export function svgPathSimplify(input = '', {
     removeUnused = true,
     shapesToPaths = false,
     lineToCubic = false,
+    cleanUpStrokes = true,
 
 } = {}) {
 

@@ -5556,6 +5556,7 @@
     attributesToGroup = true,
     shapesToPaths = false,
     convertTransforms = false,
+    cleanUpStrokes=true,
     decimals = -1,
     excludedEls = [],
   } = {}) {
@@ -8457,6 +8458,7 @@
       removeUnused = true,
       shapesToPaths = false,
       lineToCubic = false,
+      cleanUpStrokes = true,
 
   } = {}) {
 

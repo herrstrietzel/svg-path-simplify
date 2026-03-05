@@ -5553,6 +5553,7 @@ function cleanUpSVG(svgMarkup, {
   attributesToGroup = true,
   shapesToPaths = false,
   convertTransforms = false,
+  cleanUpStrokes=true,
   decimals = -1,
   excludedEls = [],
 } = {}) {
@@ -8454,6 +8455,7 @@ function svgPathSimplify(input = '', {
     removeUnused = true,
     shapesToPaths = false,
     lineToCubic = false,
+    cleanUpStrokes = true,
 
 } = {}) {
 

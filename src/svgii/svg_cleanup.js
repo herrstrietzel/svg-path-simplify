@@ -29,6 +29,7 @@ export function cleanUpSVG(svgMarkup, {
   attributesToGroup = true,
   shapesToPaths = false,
   convertTransforms = false,
+  cleanUpStrokes=true,
   decimals = -1,
   excludedEls = [],
 } = {}) {
