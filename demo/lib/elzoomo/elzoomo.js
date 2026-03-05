@@ -15,8 +15,8 @@ function initZoomEls() {
         let child = el.children[0]
         let rect = child.getBoundingClientRect();
         let mtx0 = { a: 1, b: 0, c: 0, d: 1, e: 0, f: rect.top };
-        el.style.transform=`matrix(${Object.values(mtx0).join(', ')})`
-        el.style.setProperty('--zoomScale', mtx0.a ) 
+        el.style.transform = `matrix(${Object.values(mtx0).join(', ')})`
+        el.style.setProperty('--zoomScale', mtx0.a)
 
     });
 }
@@ -87,7 +87,7 @@ function initZoomEl(el, options) {
 
     const setTransforms = (el, mtx) => {
         el.style.transform = `matrix(${Object.values(mtx).join(", ")})`;
-        el.style.setProperty('--zoomScale', mtx.a ) 
+        el.style.setProperty('--zoomScale', mtx.a)
     };
 
     // initial scale
@@ -119,6 +119,9 @@ function initZoomEl(el, options) {
      * add zoom buttons
      */
 
+    let btnZoomIn = null;
+    let btnZoomOut = null;
+
     if (options.toolbar) {
         let toolbar = `<div class="elzoomo-toolbar">
             <button type="button" class="elzoomo-btn elzoomo-btn-zoomin" title="zoom in">+</button>
@@ -127,8 +130,22 @@ function initZoomEl(el, options) {
 
         container.insertAdjacentHTML("beforeend", toolbar);
 
-        let btnZoomIn = container.querySelector(".elzoomo-btn-zoomin");
-        let btnZoomOut = container.querySelector(".elzoomo-btn-zoomout");
+        btnZoomIn = container.querySelector(".elzoomo-btn-zoomin")
+
+
+        btnZoomOut = container.querySelector(".elzoomo-btn-zoomout")
+
+    } else {
+
+        if (!btnZoomIn) {
+            btnZoomIn = document.body.querySelector(".elzoomo-btn-zoomin");
+        }
+        if (!btnZoomOut) {
+            btnZoomOut = document.body.querySelector(".elzoomo-btn-zoomout");
+        }
+    }
+
+    if (btnZoomIn && btnZoomOut) {
 
         btnZoomIn.addEventListener("click", (e) => {
             e.deltaY = -100;
@@ -140,6 +157,7 @@ function initZoomEl(el, options) {
             zoom(e);
         });
     }
+
 
     /**
      * Zoom:
@@ -155,7 +173,8 @@ function initZoomEl(el, options) {
         let clamp = (v, min, max) => Math.max(min, Math.min(max, v));
         let scale = clamp(newScale, minScale || 1, maxScale || 10);
         //let el = e.currentTarget.firstElementChild;
-        let el = e.currentTarget.closest(".elzoomo").firstElementChild;
+        //let el = e.currentTarget.closest(".elzoomo").firstElementChild;
+        let el = document.querySelector(".elzoomo").firstElementChild;
         //console.log(e.currentTarget);
 
         let [prevScale, translateX, translateY] = [mtx.a, mtx.e, mtx.f];
@@ -210,7 +229,8 @@ function initZoomEl(el, options) {
     const zoom = (e) => {
         let { zoomStep, minScale, maxScale, snapToOrigin, scaleStroke } = options;
         let zoomFactor = zoomStep ** -e.deltaY || 1;
-        let el = e.currentTarget.closest(".elzoomo").firstElementChild;
+        //let el = e.currentTarget.closest(".elzoomo").firstElementChild;
+        let el = document.querySelector(".elzoomo").firstElementChild;
 
         // get current matrix
         let m = getCurrentTransforms(el);

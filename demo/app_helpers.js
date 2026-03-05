@@ -16,8 +16,12 @@ export async function checkSVGFilesize(files) {
         totalSize += size
     }
 
-    fileStack[0].totalO = totalSize
-    fileStack[0].totalS = 0
+    if(fileStack[0]){
+        fileStack[0].totalO = totalSize
+        fileStack[0].totalS = 0
+    }
+
+    //console.log(fileStack);
     return fileStack
 }
 

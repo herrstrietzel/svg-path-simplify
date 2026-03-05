@@ -5,23 +5,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simplify SVG files and path data</title>
-    <meta name="description" content="Optimizes SVG data by removing excessive commands and applying markup minifications such as coordinate rounding, relative and applicable shorthand commands">
+    <meta name="description"
+        content="Optimizes SVG data by removing excessive commands and applying markup minifications such as coordinate rounding, relative and applicable shorthand commands">
 
     <meta property="og:title" content="Simplify SVG files and path data">
-    <meta property="og:description" content="Optimizes SVG data by removing excessive commands and applying markup minifications such as coordinate rounding, relative and applicable shorthand commands">
-    <meta property="og:image" content="https://herrstrietzel.github.io/svg-path-simplify/demo/img/repository-open-graph-template.png">
+    <meta property="og:description"
+        content="Optimizes SVG data by removing excessive commands and applying markup minifications such as coordinate rounding, relative and applicable shorthand commands">
+    <meta property="og:image"
+        content="https://herrstrietzel.github.io/svg-path-simplify/demo/img/repository-open-graph-template.png">
 
 
+    <script type="application/ld+json">
+        {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "SVG Path Simplify",
+        "codeRepository": "https://github.com/herrstrietzel/svg-path-simplify",
+        "programmingLanguage": "JavaScript",
+        "description": "A JavaScript library to simplify and optimize SVG path data."
+        }
+    </script>
+
+
+
+    <link rel="stylesheet" href="demo/css/IBM-Plex-Sans_VF/css/IBM-Plex-Sans.css">
 
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="icon" type="image/png" href="./demo/favicon/favicon-96x96.png" sizes="96x96" />
+    <!-- 
+        <link rel="shortcut icon" href="./demo/favicon/favicon.ico" />
+    -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./demo/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="svg-path-simplify" />
+    <link rel="manifest" href="./site.webmanifest" />
+
+
     <link rel="mask-icon" href="favicon.svg" color="#000000">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#f6f6f4">
 
-
-    
 
     <!-- 
-    
     <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
     <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
 
@@ -38,14 +61,15 @@
 
 
     <!-- UI helpers -->
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@latest/dist/enhanceInputs.min.css">
     <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@latest/dist/enhanceInputs.min.js" defer></script>
-    
     <!-- 
+
         <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
         <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
+        -->
 
-    -->
 
 
     <!-- 
@@ -55,7 +79,7 @@
     <script src="dist/svg-path-simplify.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
-    <script src="demo/lib/elzoomo/elzoomo.min.js" defer></script>
+    <script src="demo/lib/elzoomo/elzoomo.js" defer></script>
     <script src="demo/app.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/uzip@0.20201231.0/UZIP.min.js" defer></script>
 
@@ -70,14 +94,26 @@
     <div class="grd-main hgh-100vh grd grd-md-3 grd-ld-5 gap-0">
         <div class="sidebar-wrap scrollbar scroll-content scroll-track">
 
+            <header class="header-left dsp-inl-blc">
+                <label class="navToggle"><input type="checkbox" name="showNav0" class="showNav0 showNav" id="showNav0"
+                        data-icon="adjustments-vertical" checked title="show settings" data-sync="showNav"></label>
+            </header>
+
+
             <!--toolbars-->
             <aside class="aside aside-1 hgh-100 aside scrollbar scroll-content-ld scroll-track   pdd-1em pos-rlt">
+
+
+
+
                 <p class="txt-cnt mrg-0">
-                    <img class="icn-svg icn-logo " width="100" height="100" src="./favicon.svg" alt="svg-path-simplify">
+                    <img class="icn-logo " width="100" height="100"
+                        src="https://herrstrietzel.github.io/svg-path-simplify/favicon.svg" alt="svg-path-simplify">
                 </p>
 
                 <h1 class="txt-cnt h1">Simplify SVG files and path data</h1>
-                <h2 class="p txt-cnt">Optimizes SVG data by removing excessive commands and applying markup minifications such as coordinate rounding, relative and applicable shorthand commands</h2>
+                <h2 class="p txt-cnt">Optimizes SVG data by removing excessive commands and applying markup
+                    minifications such as coordinate rounding, relative and applicable shorthand commands</h2>
 
                 <!-- 
                     <h1 class="h1 --txt-cnt"><img class="icn-svg icn-svg-logo dsp-inl-blc fnt-siz-1em" width="100" height="100" src="./favicon.svg" alt="svg-path-simplify">Simplify SVG files and path data</h1>
@@ -95,7 +131,7 @@
 
                 <p>
                     <label for="inputSamples" class="sr-only"> Select samples</label>
-                        <select name="samples" id="inputSamples" data-options="samples"></select>
+                    <select name="samples" id="inputSamples" data-options="samples"></select>
                 </p>
 
 
@@ -107,41 +143,46 @@
                 <details open>
                     <summary class="h3">SVG input normalization</summary>
                     <p>
-                        <label><input type="checkbox" name="arcToCubic">arcToCubic</label>
-                        <label><input type="checkbox" name="quadraticToCubic" checked>quadraticToCubic</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="arcToCubic">arcToCubic</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="quadraticToCubic"
+                                checked>quadraticToCubic</label>
 
                         <!-- 
 
                         <label><input type="checkbox" name="removePrologue" checked>removePrologue</label>
                     -->
 
-                        <label><input type="checkbox" name="removeNameSpaced" checked>removeNameSpaced</label>
-                        <label><input type="checkbox" name="cleanupSVGAtts" checked
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeNameSpaced"
+                                checked>removeNameSpaced</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupSVGAtts" checked
                                 data-info="remove SVG non-essential attributes">cleanupSVGAtts</label>
 
-                        <label><input type="checkbox" name="fixHref" checked
+                        <label><input type="checkbox" data-type="checkbox-switch" name="fixHref" checked
                                 data-info="replaces xlibnk:href with href">fixHref</label>
 
 
-                        <label><input type="checkbox" name="removeHidden" checked>removeHidden</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeHidden"
+                                checked>removeHidden</label>
 
 
-                        <label><input type="checkbox" name="stylesToAttributes"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
                                 data-info="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
 
-                        
-                        <label><input type="checkbox" name="mergePaths">mergePaths</label>
-                        <label><input type="checkbox" name="shapesToPaths"
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="mergePaths">mergePaths</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="shapesToPaths"
                                 data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
 
-                        <label><input type="checkbox" name="removeDimensions">removeDimensions</label>
-                        <label><input type="checkbox" name="removeIds">removeIds</label>
-                        <label><input type="checkbox" name="removeClassNames">removeClassNames</label>
-                        <label><input type="checkbox" name="omitNamespace"
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="removeDimensions">removeDimensions</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeIds">removeIds</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="removeClassNames">removeClassNames</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="omitNamespace"
                                 data-info="Removes xmlns attribute - only recommended when embedding svg in DOM">omitNamespace</label>
 
-                        
-                                <!-- 
+
+                        <!-- 
                                 
                                 <label><input type="checkbox" class="dsp-debug" name="convertTransforms">convertTransforms</label>
                                 -->
@@ -159,8 +200,9 @@
                         <label>ScaleTo <input type="number" value="0" name="scaleTo"></label>
                     </p>
                     <p>
-                        <label><input type="checkbox" name="crop" data-info="crops svgs to tight bbox">crop</label>
-                        <label><input type="checkbox" name="alignToOrigin"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="crop"
+                                data-info="crops svgs to tight bbox">crop</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="alignToOrigin"
                                 data-info="aligns path to x/y 0 origin">alignToOrigin</label>
 
                     </p>
@@ -175,22 +217,30 @@
                 <details open>
                     <summary class="h3">Simplification</summary>
                     <p>
-                        <label><input type="checkbox" name="simplifyBezier" checked>simplifyBezier</label>
-                        <label><input type="checkbox" name="removeZeroLength" checked>removeZeroLength</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="simplifyBezier"
+                                checked>simplifyBezier</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeZeroLength"
+                                checked>removeZeroLength</label>
 
-                        <label><input type="checkbox" name="refineClosing" checked>refineClosing</label>
-
-
-                        <label><input type="checkbox" name="removeColinear" checked>remove colinear linetos</label>
-
-                        <label><input type="checkbox" name="flatBezierToLinetos" checked>flat beziers to linetos</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="refineClosing"
+                                checked>refineClosing</label>
 
 
-                        <label><input type="checkbox" name="optimizeOrder" checked>optimize path order</label>
-                        <label><input type="checkbox" name="keepExtremes" checked>keepExtremes</label>
-                        <label><input type="checkbox" name="keepCorners" checked>keepCorners</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeColinear" checked>remove
+                            colinear linetos</label>
 
-                        <label><input type="checkbox" name="keepInflections"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="flatBezierToLinetos"
+                                checked>flat beziers to linetos</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="optimizeOrder" checked>optimize
+                            path order</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepExtremes"
+                                checked>keepExtremes</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepCorners"
+                                checked>keepCorners</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepInflections"
                                 data-info="retain inflections e.g spine of an S shape">keepInflections</label>
 
                         <!-- 
@@ -198,9 +248,9 @@
                                 data-info="extrapolates dominant bezier segment – rather sloppy">extrapolateDominant</label>
                     -->
 
-                        <label><input type="checkbox" name="revertToQuadratics"
-                                data-info="Reverts cubic to quadratic Béziers if applicable" checked>revert
-                            revertToQuadratics</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="revertToQuadratics"
+                                data-info="Reverts cubic to quadratic Béziers if applicable"
+                                checked>revertToQuadratics</label>
 
                         <!-- 
                                 <label><input type="checkbox" name="reverse">try with reversed drawing direction</label>
@@ -228,26 +278,31 @@
                     <summary class="h3">Advanced simplifications</summary>
                     <p>
 
-                        <label><input type="checkbox" name="cubicToArc"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cubicToArc"
                                 data-info="Reverts cubic to arcs if applicable">cubicToArc</label>
 
-                        <label><input type="checkbox" name="removeOrphanSubpaths"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeOrphanSubpaths"
                                 data-info="remove orphaned M commands not connecting to lines or curve segments"
                                 checked>removeOrphanSubpaths</label>
-                        <label><input type="checkbox" name="refineExtremes">refineExtremes</label>
-                        <label><input type="checkbox" name="simplifyCorners">simplifyCorners</label>
-                        <label><input type="checkbox" name="simplifyRound">simplifyRound</label>
-                        <label><input type="checkbox" name="addExtremes">addExtremes</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="refineExtremes">refineExtremes</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="simplifyCorners">simplifyCorners</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="simplifyRound">simplifyRound</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="addExtremes">addExtremes</label>
 
                         <!-- 
                         <label><input type="checkbox" name="redraw"
                                 data-info="try to redraw messed up paths based on extremes, semiextermes and corners">redraw</label>
 
+
+                                <label class="dsp-debug"><input type="checkbox" data-type="checkbox-switch"
+                                        name="addSemiExtremes">addSemiExtremes</label>
+                                <label class="dsp-debug"><input type="checkbox" data-type="checkbox-switch"
+                                        name="harmonizeCpts">harmonizeCpts</label>
                     -->
 
-
-                        <label class="dsp-debug"><input type="checkbox" name="addSemiExtremes">addSemiExtremes</label>
-                        <label class="dsp-debug"><input type="checkbox" name="harmonizeCpts">harmonizeCpts</label>
 
                     </p>
                 </details>
@@ -256,10 +311,10 @@
                 <details>
                     <summary class="h3">Path directions</summary>
                     <p>
-                        <label><input type="checkbox" name="reversePath"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="reversePath"
                                 data-info="Reverses path drawing direction">reversePath</label>
 
-                        <label><input type="checkbox" name="fixDirections"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="fixDirections"
                                 data-info="Fixes sub path drawing directions to make fill rules obsolete">fixDirections</label>
                     </p>
                 </details>
@@ -267,9 +322,11 @@
                 <details open>
                     <summary class="h3">SVG output settings</summary>
                     <p>
-                        <label><input type="checkbox" name="toRelative" checked>toRelative</label>
-                        <label><input type="checkbox" name="toShorthands" checked>toShorthands</label>
-                        <label><input type="checkbox" name="lineToCubic"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="toRelative"
+                                checked>toRelative</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="toShorthands"
+                                checked>toShorthands</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="lineToCubic"
                                 data-info="converts lines to cubics – helpful for morphing animations">lineToCubic</label>
 
                     </p>
@@ -280,7 +337,7 @@
                         <label><input type="radio" name="minifyD" value="2">beautify</label>
                     </p>
                     <p>
-                        <label><input type="checkbox" name="autoAccuracy"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="autoAccuracy"
                                 data-info="takes an estimated suitable floating point accuracy based on smallest segment"
                                 checked>autoAccuracy</label>
                     </p>
@@ -301,10 +358,11 @@
                 <details>
                     <summary class="h3">Polygon</summary>
                     <p>
-                        <label class="--dsp-debug"><input type="checkbox" name="smoothPoly"
+                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch" name="smoothPoly"
                                 data-info="Converts a polygon to smooth cubic beziers using the Philip J. Schneider curve fitting algorithm">smoothPoly</label>
 
-                        <label class="--dsp-debug"><input type="checkbox" name="toPolygon">toPolygon</label>
+                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch"
+                                name="toPolygon">toPolygon</label>
                     </p>
 
 
@@ -347,7 +405,7 @@
                             <textarea class="code" name="config" id="textConfig" data-tools="copy" data-ignore="true"
                                 readonly></textarea>
                         </label>
-                        <label><input type="checkbox" name="omitDefaults"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="omitDefaults"
                                 data-info="only include settings that are not defaults" checked>omitDefaults</label>
 
                     </p>
@@ -362,8 +420,17 @@
 
 
             <header class="pst-sticky --pdd-1em z-ind-1000 pdd-1em">
-                <label class="navToggle"><input type="checkbox" name="showNav" class="showNav"
-                        data-icon="adjustments-vertical" checked title="show settings"></label>
+
+                <div class="header-nav">
+                    <label class="navToggle"><input type="checkbox" name="showNav" class="showNav" id="showNav"
+                            data-icon="adjustments-vertical" checked title="show settings" data-sync="showNav0"></label>
+
+                    <a href="#" class="a-dialog" data-dialog="#about" data-dialog-title="Options" data-icon="question"
+                        title="Available parameters"></a>
+
+                    <button type="button" class="elzoomo-btn elzoomo-btn-zoomin" title="zoom in" data-icon="plus"></button>
+                    <button type="button" class="elzoomo-btn elzoomo-btn-zoomout" title="zoom out" data-icon="minus"></button>
+                </div>
 
                 <a class="lnk-github" href="https://github.com/herrstrietzel/svg-path-simplify"
                     title="See github repository">
@@ -371,58 +438,80 @@
                         <use href="#github"></use>
                     </svg>
                 </a>
+
+
             </header>
 
             <footer class="footer pst-abs btt-0 lft-0 rgh-0 z-ind-1000">
                 <div class="footer-wrp --dsp-flx --alg-itm-cnt pdd-1em">
                     <p class="pReport txt-rgh" id="pReport"></p>
 
-                    <div class="wrp-btns txt-rgh">
+                    <div class="grd-btns grd grd-1 grd-ld-2 wrp-btns --txt-rgh">
 
-                        <label><input type="checkbox" name="showMarkers" checked>showMarkers</label>
+                        <div class="col col-switch">
+                            <p class="mrg-0">
+                                <label><input type="checkbox" data-type="checkbox-switch" name="showMarkers"
+                                        checked>showMarkers</label>
 
-                        <!-- Share -->
-                        <a href="#" class="drp-shd btn btn-default btn-download btn-neg" id="shareUrl"
-                            data-icon="link">Share</a>
+                                <label><input type="checkbox" data-type="checkbox-switch"
+                                        name="showTransparency">showTransparency</label>
+                            </p>
+                        </div>
 
-                        <!-- codepen -->
-                        <form action="https://codepen.io/pen/define" method="POST" target="_blank"
-                            class="form-codepen dsp-inl-blc">
-                            <input id="inputCodepen" type="hidden" value="" name="data" data-ignore="true">
-                            <button title="Edit in codepen"
-                                class="drp-shd btn btnCodepen btn-default btn-download btn-neg" type="submit">
-                                <span class="icn-wrp icn-wrp-codepen icn-wrp-left">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="icn-svg" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path
-                                            d="M12 2l10 6.5v7l-10 6.5-10-6.5v-7zm0 20v-6.5m10-7l-10 7-10-7m0 7l10-7 10 7m-10-13.5v6.5" />
-                                    </svg>
-                                </span> Codepen
-                            </button>
-                        </form>
+                        <div class="col col-btns grd grd-1">
 
-                        <!-- svg editor -->
-                        <a class="drp-shd btn lnk-edit btn-default btn-download btn-neg" id="linkEdit"
-                            title="Edit in svg-path-editor" target="_blank" rel="noopener noreferrer" data-icon="pencil"
-                            href="">Edit</a>
+                            <div class="col">
+                                <!-- Share -->
+                                <a href="#" class="drp-shd btn btn-default btn-download btn-neg" id="shareUrl"
+                                    data-icon="link">Share</a>
 
+                                <!-- codepen -->
+                                <form action="https://codepen.io/pen/define" method="POST" target="_blank"
+                                    class="form-codepen dsp-inl-blc">
+                                    <input id="inputCodepen" type="hidden" value="" name="data" data-ignore="true">
+                                    <button title="Edit in codepen"
+                                        class="drp-shd btn btnCodepen btn-default btn-download btn-neg" type="submit">
+                                        <span class="icn-wrp icn-wrp-codepen icn-wrp-left">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="icn-svg" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2"
+                                                stroke-linecap="round" stroke-linejoin="round">
+                                                <path
+                                                    d="M12 2l10 6.5v7l-10 6.5-10-6.5v-7zm0 20v-6.5m10-7l-10 7-10-7m0 7l10-7 10 7m-10-13.5v6.5" />
+                                            </svg>
+                                        </span> Codepen
+                                    </button>
+                                </form>
 
-                        <!-- copy -->
-                        <button id="btnCopy" class="drp-shd btn btn-default btn-download btn-neg btn-copy"
-                            data-icon="copy">Copy</button>
-
-                        <!-- save -->
-                        <a href="#" data-name=""
-                            class="drp-shd btn btn-default btn-download btn-neg btn-download-single" id="btnDownload"
-                            data-icon="arrow-down-tray" download="simplified.svg"> Download SVG</a>
+                                <!-- svg editor -->
+                                <a class="drp-shd btn lnk-edit btn-default btn-download btn-neg" id="linkEdit"
+                                    title="Edit in svg-path-editor" target="_blank" rel="noopener noreferrer"
+                                    data-icon="pencil" href="">Edit</a>
 
 
-                        <!-- save multi -->
-                        <a href="#" data-name=""
-                            class="drp-shd btn btn-default btn-download btn-download-multi btn-neg processing"
-                            id="btnDownloadZip" data-icon="arrow-down-tray" download="simplified.zip"> Download Zip</a>
+                            </div>
 
+                            <div class="col">
+
+                                <!-- copy -->
+                                <button id="btnCopy" class="drp-shd btn btn-default btn-download btn-neg btn-copy"
+                                    data-icon="copy">Copy</button>
+
+
+                                <!-- save -->
+                                <a href="#" data-name=""
+                                    class="drp-shd btn btn-default btn-download btn-neg btn-download-single"
+                                    id="btnDownload" data-icon="arrow-down-tray" download="simplified.svg"> Download
+                                    SVG</a>
+
+
+                                <!-- save multi -->
+                                <a href="#" data-name=""
+                                    class="drp-shd btn btn-default btn-download btn-download-multi btn-neg processing"
+                                    id="btnDownloadZip" data-icon="arrow-down-tray" download="simplified.zip"> Download
+                                    Zip</a>
+
+                            </div>
+                        </div>
 
 
                     </div>
@@ -437,9 +526,16 @@
                     <p class="fnt-siz-2em"><span data-icon="spinner"></span> Processing</p>
                 </div>
 
+                <!-- 
+                <div class="elzoomo-toolbar">
+            <button type="button" class="elzoomo-btn elzoomo-btn-zoomin" title="zoom in">+</button>
+            <button type="button" class="elzoomo-btn elzoomo-btn-zoomout" title="zoom out">−</button>
+        </div>
+                
+                -->
 
                 <div class="wrp-zoom"
-                    data-zoom='{"minScale":0.1,"maxScale":100,"zoom":1,"zoomStep":1.001, "toolbar":true}'>
+                    data-zoom='{"minScale":0.1,"maxScale":100,"zoom":1,"zoomStep":1.001, "toolbar":false}'>
 
                     <svg id="svg" class="svgO" viewBox="0 0 100 100">
 
@@ -482,7 +578,138 @@
 
 
 
+    <dialog class="--dialog sr-only" id="about">
 
+        <h3 class="" dir="auto">Simplification parameters</h3>
+        <p>These params control shich simplifications are applied. The default settings aim at a safe or balanced
+            performance-to-minification ratio. However if your main goal is to get the most compact result you can
+            enable additional options which also require more processing time.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>parameter</th>
+                    <th>effect</th>
+                    <th>type</th>
+                    <th>default</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>simplifyBezier</td>
+                    <td>main Bézier simplification. When disabled you get the common optimization similar to SVGO
+                        (rounding, to all relative and shorthand conversions)</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>tolerance</td>
+                    <td>increase or decrease tolerance: higher values allow more distortions, lower ones more shape
+                        fidelity</td>
+                    <td>Number</td>
+                    <td>1</td>
+                </tr>
+                <tr>
+                    <td>optimizeOrder</td>
+                    <td>reorders commands to get more adjacent simplification candidates. Improves optimization
+                        efficiency</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>removeColinear</td>
+                    <td>removes unnecessary zero-length or colinear lineto commands</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>flatBezierToLinetos</td>
+                    <td>replaces flat Béziers with linetos which also can be stripped via previous colinear removal</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>revertToQuadratics</td>
+                    <td>replaces cubic Béziers with quadratic (more compact) ones when applicable</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>keepExtremes</td>
+                    <td>skips simplification accross x/y extrema – improves shape fidelity</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>keepCorners</td>
+                    <td>skips simplification corners – improves shape fidelity</td>
+                    <td>Boolean</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>keepInflections</td>
+                    <td>retains commands introducing direction changes – adds complexity but may help for editing in a
+                        graphic application</td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Advanced simplifications</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>parameter</th>
+                    <th>effect</th>
+                    <th>type</th>
+                    <th>default</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>refineExtremes</td>
+                    <td>tries to combine commands close to an adjacent x/y extreme segment</td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>addExtremes</td>
+                    <td>adds commands at x/y extrema – adds complexity but may help for editing in a graphic application
+                        – when using this option enable <code>refineExtremes</code> as well to avoid tiny adjacent
+                        segments</td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>simplifyCorners</td>
+                    <td>replaces Bézier segments enclosed by linetos with single quadratic commands – handy to reduce
+                        overly complex tiny corner roundings. See example in <a
+                            href="https://herrstrietzel.github.io/svg-path-simplify?samples=fontawesome_gears&amp;refineExtremes=true&amp;simplifyCorners=true"
+                            rel="nofollow">webapp</a></td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>cubicToArc</td>
+                    <td>replaces Bézier segments by elliptic arc <code>A</code> commands where applicable – can reduce
+                        complexity for semi- or full circles</td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>simplifyRound</td>
+                    <td>replaces small round segments encloses by linetos – helps to simplify shapes like gears/cogs
+                    </td>
+                    <td>Boolean</td>
+                    <td>false</td>
+                </tr>
+            </tbody>
+        </table>
+
+
+
+    </dialog>
 
     <!-- 
         <div id="spriteMap"></div>
