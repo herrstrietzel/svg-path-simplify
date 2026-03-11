@@ -316,7 +316,7 @@ export function getPathDataVerbose(pathData, {
             }
         }
 
-        else if (type === 'A') {
+        else if (type === 'A' && addArcParams) {
             let { rx, ry, cx, cy, startAngle, endAngle, deltaAngle } = svgArcToCenterParam(p0.x, p0.y, ...values)
             com.cx = cx
             com.cy = cy

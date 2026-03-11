@@ -38,17 +38,23 @@ import {getPathDataFromEl} from './svgii/pathData_parse_els';
 export{getPathDataFromEl as getPathDataFromEl};
 */
 
+import {getElementTransform} from './svgii/geometry.js';
+export{getElementTransform as getElementTransform};
+
+import {getViewBox} from './svg_getViewbox.js';
+export{getViewBox as getViewBox};
 
 
 // IIFE 
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
+    window.getElementTransform = getElementTransform;
     //window.simplifyPolySchneider = simplifyPolySchneider;
     //window.getPathDataFromEl = getPathDataFromEl;
     //window.parsePathDataString = parsePathDataString;
     //window.svgPathSimplify = svgPathSimplify;
     //window.svgPathSimplify = parsePathDataNormalized;
-    //window.getViewBox = getViewBox;
+    window.getViewBox = getViewBox;
     //window.renderPoint = renderPoint;
 }
 

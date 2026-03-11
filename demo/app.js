@@ -355,6 +355,7 @@ function updateSVG(settings = {}, processed = false) {
 
     // return path data or svg 
     outputSvg.value = !mode ? d : svg;
+    //console.log('svg out', svg);
 
 
     // update preview rendering
@@ -386,14 +387,24 @@ function updateSVG(settings = {}, processed = false) {
     if (mode) {
         svgEl.classList.add('dsp-non')
 
+        // prefix ids and refs
+        svg = svg
+        .replaceAll('id="', 'id="__')
+        .replaceAll('url(#', 'url(#__')
+        .replaceAll('href="#', 'href="#__');
+        //console.log('preview svg', svg);
+
+
         svgWrap.insertAdjacentHTML('beforeend', svg)
         let svgDocEl = svgWrap.querySelector('svg')
 
+        let viewBox = getViewBox(svgDocEl);
         let viewBoxAtt = svgDocEl.getAttribute('viewBox')
+
+
 
         if (!viewBoxAtt) {
 
-            let viewBox = getViewBox(svgDocEl);
             viewBoxAtt = [viewBox.x, viewBox.y, viewBox.width, viewBox.height].join(' ')
 
             //console.log('viewBox', viewBox);
@@ -403,10 +414,25 @@ function updateSVG(settings = {}, processed = false) {
         svgDocEl.removeAttribute('width')
         svgDocEl.removeAttribute('height')
 
-        // scale element
-        //svgDocEl.style.setProperty('--scalePreview', scale)
 
+        /**
+         * adjust marker size 
+         * based on 1st transformed element
+         */
+        let svgEl1 = svgDocEl.querySelectorAll('path, polygon, polyline, line, circle, ellipse, rect')
+        if(svgEl1[0]){
+            svgEl1 = svgEl1[0]
+            //console.log(svgDocEl, svgEl1);
+            let matrix1 = getElementTransform(svgDocEl, svgEl1 )
+            let scale1 = +matrix1.a.toFixed(7)
+    
+            let wrap = svgDocEl.closest('.wrp-zoom');
+            if(wrap){
+                // scale element
+                wrap.style.setProperty('--elScale', scale1)
+            }
 
+        }
 
     }
 
@@ -493,6 +519,53 @@ export function simplifyStackWorker(data = [], settings = {}, workerurl = '') {
 }
 
 
+
+/**
+ * get viewBox 
+ * either from explicit attribute or
+ * width and height attributes
+ */
+/*
+function getViewBox(svg = null, decimals = -1) {
+
+    const getUnit=(val)=>{
+        return val && isNaN(val) ? val.match(/[^\d|.]+/g)[0] : '';
+    }
+
+    // browser default
+    if (!svg) return false
+
+
+    let hasWidth = svg.hasAttribute('width')
+    let hasHeight = svg.hasAttribute('height')
+    let hasViewBox = svg.hasAttribute('viewBox')
+
+
+    let widthAtt = hasWidth ? svg.getAttribute('width') : 0;
+    let heightAtt = hasHeight ? svg.getAttribute('height') : 0;
+
+
+
+    let widthUnit = hasWidth ? getUnit(widthAtt) : false;
+    let heightUnit = hasHeight ? getUnit(widthAtt) : false
+
+    let w = widthAtt ? (!widthAtt.includes('%') ? parseFloat(widthAtt) : 0 ) : 300
+    let h = heightAtt ? (!heightAtt.includes('%') ? parseFloat(heightAtt) : 0 ) : 150
+
+
+    let viewBoxVals =  hasViewBox ? svg.getAttribute('viewBox').split(/,| /).filter(Boolean).map(Number) : [0, 0, w, h];
+
+    // round
+    if (decimals>-1) {
+        [w, h] = [w, h].map(val=>+val.toFixed(decimals))
+        viewBoxVals = viewBoxVals.map(val=>+val.toFixed(decimals))
+    }
+
+    let viewBox = { x:viewBoxVals[0] , y:viewBoxVals[1], width:viewBoxVals[2], height:viewBoxVals[3], w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit };
+
+    return viewBox
+}
+*/
 
 
 

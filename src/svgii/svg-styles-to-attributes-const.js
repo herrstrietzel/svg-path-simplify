@@ -4,7 +4,7 @@
  * used to remove unnecessary attribution
  */
 
-const shapeEls = [
+export const shapeEls = [
     "polygon",
     "polyline",
     "line",
@@ -13,16 +13,21 @@ const shapeEls = [
     "ellipse",
 ]
 
-const geometryEls = [
+export const horizontalProps = ['x', 'cx', 'rx', 'dx', 'width', 'translateX'];
+export const verticalProps = ['y', 'cy', 'ry', 'dy', 'height', 'translateY'];
+
+export const geometryEls = [
     "path",
     ...shapeEls
 ]
 
-const textEls = [
+export const textEls = [
     "textPath",
     "text",
     "tspan",
 ]
+
+export const strokeAtts = ['stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin','stroke-linecap', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit', 'stroke-opacity' ];
 
 export const attLookup = {
 

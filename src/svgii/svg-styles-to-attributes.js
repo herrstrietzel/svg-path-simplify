@@ -1,6 +1,26 @@
-import { getMatrix, parseCSSTransform } from './svg-styles-getTransforms';
+import { getMatrix, parseCSSTransform, parseTransform } from './svg-styles-getTransforms';
 import { attLookup } from './svg-styles-to-attributes-const';
 
+/*
+export function parseStyleProperty(propName='', value=''){
+
+    let propObj = {}
+    //console.log(propName, value);
+
+    // check for numbers or units
+    if(propName==='transform'){
+
+        //let trans = parseCSSTransform()
+
+    }
+    else if(propName==='d'){
+        propObj = {name:propName, value}
+    }
+
+    return propObj
+
+}
+*/
 
 
 export function getElementProps(el, {
@@ -84,9 +104,11 @@ export function svgStylesToAttributes(el, {
     let cssProps = getElStyleProps(el)
 
     // normalize transform attributes
+    /*
     if (attProps['transform']) {
         console.log(`attProps['transform']`, attProps['transform']);
     }
+    */
 
     // merge properties
     let props = {
@@ -198,11 +220,7 @@ export function getElAttributes(el) {
 }
 
 
-function getUnit(val) {
-    return val && isNaN(val) ? val.match(/[^\d|.]+/g)[0] : '';
-}
-
-
+/*
 function roundValue(value = '', decimals = -1) {
     if (decimals < 0) return value;
     value = value.replace(/["]/g, '').trim()
@@ -215,3 +233,4 @@ function roundValue(value = '', decimals = -1) {
     //console.log('rounded', value)
     return value;
 }
+*/

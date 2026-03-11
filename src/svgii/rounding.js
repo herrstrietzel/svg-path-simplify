@@ -85,11 +85,38 @@ export function detectAccuracy(pathData) {
 }
 
 
+
+
 export function roundTo(num = 0, decimals = 3) {
     if (!decimals) return Math.round(num);
     let factor = 10 ** decimals;
     return Math.round(num * factor) / factor;
 }
+
+/**
+ * round to reasonable 
+ * floating point accuracy 
+ * based on numeric value
+ */
+export function autoRound(val, integerThresh = 10){
+  let decimals=8;  
+
+  //console.log('val', val);
+  
+  if(val>integerThresh){
+    decimals=0
+  }
+  else if(val>5){
+    decimals=1
+  }else{
+     decimals=Math.ceil(integerThresh/val).toString().length
+  }
+      
+  let factor = 10 ** decimals;
+  return Math.round(val * factor) / factor;
+}
+
+
 
 
 /**
@@ -97,20 +124,24 @@ export function roundTo(num = 0, decimals = 3) {
  * either by explicit decimal value or
  * based on suggested accuracy in path data
  */
-export function roundPathData(pathData, decimals = -1) {
+export function roundPathData(pathData, decimalsGlobal = -1) {
 
-    if (decimals < 0) return pathData;
+    if (decimalsGlobal < 0) return pathData;
 
     let len = pathData.length;
+    //let decimals = pathData[0].decimals ? pathData[0].decimals+1 : decimalsGlobal
+    let decimals = decimalsGlobal
+    //decimals = decimalsGlobal;
+    //console.log('decimals subpath', decimals, pathData[0].decimals, 'decimalsGlobal', decimalsGlobal);
 
     for (let c = 0; c < len; c++) {
-        //let com = pathData[c];
-        let values = pathData[c].values
+        let com = pathData[c];
+        let {values} = com
+        //let values = pathData[c].values
         let valLen = values.length;
         if (!valLen) continue
 
         for (let v = 0; v < valLen; v++) {
-            //pathData[c].values[v] =  +values[v].toFixed(decimals);
             pathData[c].values[v] = roundTo(values[v], decimals);
         }
     };

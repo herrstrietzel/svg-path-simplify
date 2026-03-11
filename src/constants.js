@@ -5,3 +5,5 @@ export const {
 
 export const rad2Deg = 180/Math.PI  
 export const deg2rad = Math.PI/180
+export const root2 = 1.4142135623730951
+export const svgNs = 'http://www.w3.org/2000/svg'

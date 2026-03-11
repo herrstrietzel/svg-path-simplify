@@ -34,9 +34,7 @@ export function simplifyPathDataCubic(pathData, {
 
             // cannot be combined as crossing extremes or corners
             if (
-                //(keepInflections && isDirChangeN) ||
                 (keepCorners && corner) ||
-                //(!isDirChange && keepExtremes && extreme)
                 (keepExtremes && extreme)
             ) {
                 //renderPoint(markers, p, 'red', '1%')
@@ -49,9 +47,6 @@ export function simplifyPathDataCubic(pathData, {
                 let combined = combineCubicPairs(com, comN, { tolerance })
                 let error = 0;
 
-                //!count simplification success or failure - just for debugging
-                //let log = [];
-
                 // combining successful! try next segment
                 if (combined.length === 1) {
                     com = combined[0]
@@ -59,8 +54,6 @@ export function simplifyPathDataCubic(pathData, {
 
                     // add cumulative error to prevent distortions
                     error += com.error;
-
-                    //!log.push(`success1: ${i} and ${i + 1}`)
 
                     // find next candidates
                     for (let n = i + 1; error < tolerance && n < l; n++) {
@@ -80,7 +73,6 @@ export function simplifyPathDataCubic(pathData, {
 
                         // failure - could not be combined - exit loop
                         if (combined.length > 1) {
-                            //log.push(`fail: ${i} and ${n}`)
                             break
                         }
 
@@ -88,10 +80,9 @@ export function simplifyPathDataCubic(pathData, {
                          * success
                          * add cumulative error to prevent distortions
                          */
+                        //error += combined[0].error * 0.5;
                         error += combined[0].error * 0.5;
                         offset++
-
-                        //!log.push(`success2: ${i} and ${n}`)
 
                         // return combined
                         com = combined[0]

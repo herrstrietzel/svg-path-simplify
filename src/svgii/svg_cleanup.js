@@ -1,7 +1,16 @@
+import { getElementAtts } from "../svg-getAttributes";
 import { flattenTransforms } from "../svg_flatten_transforms";
+import { getViewBox } from "../svg_getViewbox";
+import { normalizeUnits } from "./convert_units";
+import { getPathDataVertices } from "./geometry";
+import { checkBBoxIntersections, getPathDataBBox, getPolyBBox } from "./geometry_bbox";
+import { getElBBox } from "./geometry_bbox_element";
 import { parsePathDataString } from "./pathData_parse";
-import { shapeElToPath } from "./pathData_parse_els";
+import { parsePathDataNormalized } from "./pathData_convert";
+import { pathElToShape, shapeElToPath } from "./pathData_parse_els";
 import { svgStylesToAttributes } from "./svg-styles-to-attributes";
+import { strokeAtts } from "./svg-styles-to-attributes-const";
+import { parseStylesProperties } from "./svg_el_parse_style_props";
 
 
 export function removeEmptySVGEls(svg) {
@@ -14,27 +23,40 @@ export function removeEmptySVGEls(svg) {
 //const DOMParserPoly = globalThis.DOMParser;
 
 export function cleanUpSVG(svgMarkup, {
-  returnDom = false,
   removeHidden = true,
-  removeUnused = true,
+  //removeUnused = true,
   stylesToAttributes = true,
   removePrologue = true,
   removeIds = false,
   removeClassNames = false,
   removeDimensions = false,
-  fixHref = true,
+  fixHref = false,
+  legacyHref = false,
+  cleanupDefs = true,
+  cleanupClip = true,
+  addViewBox = false,
+  addDimensions = false,
+
   mergePaths = false,
+  removeOffCanvas = true,
   cleanupSVGAtts = true,
   removeNameSpaced = true,
   attributesToGroup = true,
-  shapesToPaths = false,
+  //shapesToPaths = false,
+  shapeConvert = false,
+  convert_rects = false,
+  convert_ellipses = false,
+  convert_poly = false,
+  convert_lines=false,
+
   convertTransforms = false,
-  cleanUpStrokes=true,
+  cleanUpStrokes = true,
   decimals = -1,
   excludedEls = [],
 } = {}) {
 
   attributesToGroup = cleanupSVGAtts ? true : false;
+
 
   // replace namespaced refs 
   if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
@@ -43,21 +65,56 @@ export function cleanUpSVG(svgMarkup, {
     .parseFromString(svgMarkup, "text/html")
     .querySelector("svg");
 
+  let viewBox = getViewBox(svg)
+  let { x, y, width, height } = viewBox;
+
 
   if (cleanupSVGAtts) {
     //console.log('cleanupSVGAtts');
     let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
     removeExcludedAttribues(svg, allowed)
-
   }
+
+  // add viewBox
+  if (addViewBox) addSvgViewBox(svg, { x, y, width, height })
+  if (addDimensions) {
+    svg.setAttribute('width', width); 
+    svg.setAttribute('height', height);
+  }
+
+
+  // remove unused defs or optimize order
+  if (cleanupDefs) cleanupSvgDefs(svg, { x, y, width, height, cleanupClip });
+
+
+  // remove off canvas
+  if (removeOffCanvas) removeOffCanvasEls(svg, { x, y, width, height });
+
 
   // always remove scripts
   let removeEls = ['metadata', 'script', ...excludedEls]
 
   let els = svg.querySelectorAll('*')
-  let elProps = []
+
+  // an array of all elements' properties
+  let svgElProps = []
 
   let geometryElements = ['polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse']
+
+    //console.log('shapeConvert', shapeConvert);
+
+
+  /** convert paths to shapes */
+  if(shapeConvert === 'toShapes'){
+    let paths = svg.querySelectorAll('path')
+    paths.forEach(path=>{
+      let shape = pathElToShape(path, {convert_rects, convert_ellipses, convert_poly, convert_lines})
+      path.replaceWith(shape)
+      path = shape;
+      //console.log('path', path);
+    })
+
+  }
 
 
   for (let i = 0; i < els.length; i++) {
@@ -66,8 +123,8 @@ export function cleanUpSVG(svgMarkup, {
     let name = el.nodeName.toLowerCase();
 
     // convert shapes
-    if (shapesToPaths && name !== 'path' && geometryElements.includes(name)) {
-      let path = shapeElToPath(el);
+    if (shapeConvert === 'toPaths' && name !== 'path' && geometryElements.includes(name)) {
+      let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines });
       el.replaceWith(path)
       name = 'path'
       el = path;
@@ -83,19 +140,61 @@ export function cleanUpSVG(svgMarkup, {
       continue;
     }
 
+
+    /**
+     * get all style properties
+     * convert relative or physical units
+     * to user units
+     */
+
+
+    /*
+    let styleProps = parseStylesProperties(el, {
+      width:viewBox.width,
+      height:viewBox.height
+    })
+      */
+
+
+    /*
+    let propTest = normalizeUnits('50%',{width:200, height:100, isHorizontal:true})
+    console.log('propTest', propTest);
+    */
+
+
     // styles to attributes
-    if (stylesToAttributes || attributesToGroup || mergePaths) {
+    if (stylesToAttributes || attributesToGroup || mergePaths || cleanUpStrokes) {
       let propsFiltered = svgStylesToAttributes(el, { removeNameSpaced, decimals })
-      if (name === 'path') {
-        elProps.push({ el, name, idx: i, propsFiltered })
+      //if (name === 'path') {}
+      svgElProps.push({ el, name, idx: i, propsFiltered })
+    }
+
+  }
+
+
+
+  // remove stroke properties if no stroke color applied - common inkscape issue
+  if (cleanUpStrokes) {
+
+    for (let item of svgElProps) {
+
+      let { el, propsFiltered } = item;
+      let strokeProps = Object.keys(propsFiltered)
+
+      if (!strokeProps.includes('stroke')) {
+        strokeAtts.forEach(att => {
+          el.removeAttribute(att)
+
+          // delete in property object
+          if (item['propsFiltered'][att] !== undefined) delete item['propsFiltered'][att]
+        })
       }
     }
   }
 
-
   // group styles
   if (attributesToGroup || mergePaths) {
-    moveAttributesToGroup(elProps, mergePaths)
+    moveAttributesToGroup(svgElProps, mergePaths)
   }
 
   if (removeDimensions) {
@@ -116,53 +215,194 @@ export function cleanUpSVG(svgMarkup, {
   //console.log('!!!svgMarkup', svgMarkup);
 
 
-  // remove empty defs
-  let defs = svg.querySelectorAll('defs')
-  defs.forEach(def=>{
-    let children=[...def.children]
-    let attributes = [...def.attributes]
-    if(!children.length){
-      def.remove()
-    }
-  })
 
+  /**
+   * refine properties 
+   * such as transforms or properties including units
+   */
 
   /*
-  if(convertTransforms){
-    flattenTransforms(svg)
+  for(let i=0; i<svgElProps.length; i++){
+    let item = svgElProps[i];
+    let {propsFiltered} = item;
+
+    for(let prop in propsFiltered){
+
+      let propOb = parseStyleProperty(prop, propsFiltered[prop])
+
+    }
+
   }
   */
 
-
-  if (returnDom) return svg
-  let markup = stringifySVG(svg)
-
-  //console.log(svg.outerHTML);
+  // remove futile clip-paths
+  if (cleanupClip) removeFutileClipPaths(svg, { x, y, width, height })
 
 
-  return markup;
+  // replace href attributes with namespace - required by many older applications
+  if (legacyHref) {
+    svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink")
+    let hrefs = svg.querySelectorAll('[href]')
+    hrefs.forEach(el => {
+      let href = el.getAttribute('href')
+      el.setAttribute('xlink:href', href)
+      el.removeAttribute('href')
+    })
+  }
+
+
+
+  return { svg, svgElProps }
+
 }
 
 
-function moveAttributesToGroup(elProps = [], mergePaths = true) {
+function removeOffCanvasEls(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  let els = [...svg.querySelectorAll('path, polygon, polyline, line, rect, circle, ellipse, text')];
+  els = els.filter(el => !el.parentNode.closest('defs') && !el.parentNode.closest('symbol') && !el.parentNode.closest('clipPath') && !el.parentNode.closest('mask') && !el.parentNode.closest('pattern'))
+  //console.log('removeOffCanvasEls', els, width, height);
 
-  let combine = [[elProps[0]]]
+  let bb0 = { x, y, width, height }
+  bb0.right = x + width
+  bb0.bottom = y + height
+
+  els.forEach(el => {
+    let bb = getElBBox(el)
+    let outside = bb.right < bb0.x || bb.bottom < bb0.y || bb.x > bb0.right || bb.y > bb.bottom
+    if (outside) el.remove();
+  })
+
+}
+
+function addSvgViewBox(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  if (svg.hasAttribute('viewBox')) return;
+  if (!width || !height) {
+    ({ x, y, width, height } = getViewBox(svg));
+  }
+  svg.setAttribute('viewBox', [x, y, width, height].join(' '))
+}
+
+
+function cleanupSvgDefs(svg, { x = 0, y = 0, width = 0, height = 0, cleanupClip = true } = {}) {
+  let defs = svg.querySelectorAll('defs')
+  let defEls = svg.querySelectorAll('symbol, pattern, linearGradient, radialGradient, clipPath, mask, marker, filter')
+
+  // no defs to remove/optimize
+  if (!defs.length && !defEls.length) return;
+
+  defs.forEach(def => {
+    // remove empty defs
+    let children = [...def.children]
+    if (!children.length) {
+      def.remove()
+    }
+    // move defs to top
+    else {
+      svg.insertBefore(def, svg.children[0])
+    }
+  })
+
+  //clean up unused defs
+  let refIds = new Set([])
+  defEls.forEach(def => {
+    refIds.add(def.id)
+  })
+
+  Array.from(refIds).forEach(id => {
+    let els = svg.querySelectorAll(`[href="#${id}"], [xlink\\:href="#${id}"], [clip-path="url(#${id})"], [mask="url(#${id})"],  [fill="url(#${id})"], [stroke="url(#${id})"]`);
+
+    //definition is unused – remove
+    if (!els.length) {
+      //console.log('remove', id);
+      svg.getElementById(id).remove()
+    }
+  })
+
+  // remove futile clip-paths
+  //if (cleanupClip) removeFutileClipPaths(svg, {x, y, width, height})
+
+}
+
+
+function removeFutileClipPaths(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  let clipPaths = svg.querySelectorAll('clipPath');
+
+  if (!clipPaths.length) return
+
+  if (!width || !height) {
+    ({ x, y, width, height } = getViewBox(svg));
+  }
+
+  clipPaths.forEach(clip => {
+    let children = [...clip.children];
+    if (children.length > 1) return;
+
+    let clipEl = children[0]
+    let type = clipEl.nodeName.toLowerCase();
+
+    if (type === 'path' || type === 'rect') {
+      let bb = { x: 0, y: 0, width: 0, height: 0 }
+
+      if (type === 'path') {
+        let pathData = parsePathDataNormalized(clipEl.getAttribute('d'));
+        let coms = Array.from(new Set(pathData.map(com => com.type.toLowerCase()))).join('');
+        let isPolygon = !(/[acqts]/gi).test(coms);
+
+        // path is too complex - unlikely to be a rectangle
+        if (!isPolygon || pathData.length > 5) return
+
+        let vertices = getPathDataVertices(pathData)
+        bb = getPolyBBox(vertices)
+      }
+
+      else if (type === 'rect') {
+        bb = { x: +clipEl.getAttribute('x'), y: +clipEl.getAttribute('y'), width: +clipEl.getAttribute('width'), height: +clipEl.getAttribute('height') }
+      }
+
+      // is futile if clip path's bbox equals the SVG's viewBox
+      if (bb.x === x && bb.y === y && bb.width === width && bb.height === height) {
+        clip.remove();
+        let clippedEls = svg.querySelectorAll(`[clip-path="url(#${clip.id})"]`);
+        //console.log('clippedEls', clippedEls);
+        clippedEls.forEach(clipped => {
+          clipped.removeAttribute('clip-path')
+        })
+      }
+    }
+  })
+
+}
+
+
+
+function moveAttributesToGroup(svgElProps = [], mergePaths = true) {
+
+  let combine = [[svgElProps[0]]]
   let idx = 0;
   let lastProps = '';
-  let l = elProps.length;
-  let itemsWithProps = elProps.filter(item => item.propstr)
+  let l = svgElProps.length;
+  let itemsWithProps = svgElProps.filter(item => item.propstr)
   let path0;
 
 
   // merge paths without properties
+  let dCombined = ''
   if (!itemsWithProps.length && mergePaths) {
-    let item0 = elProps[0]
-    path0 = item0.el
-    let dCombined = item0.propsFiltered.d
+    let path0 = null;
 
-    for (let i = 1; i < l; i++) {
-      let item = elProps[i]
+    for (let i = 0; i < l; i++) {
+      let item = svgElProps[i]
+      if (item.name !== 'path') continue;
+      let remove = true;
+
+
       let path = item.el;
+
+      // set 1st path
+      if (!path0) {
+        path0 = path;
+        remove = false;
+      }
 
       let d = item.propsFiltered.d
       let isAbs = d.startsWith('M')
@@ -171,17 +411,18 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
       dCombined += dAbs;
 
       // delete path el
-      path.remove();
+      if (remove) path.remove();
     }
 
-    path0.setAttribute('d', dCombined)
+    //console.log('dCombined', dCombined);
+    if (path0) path0.setAttribute('d', dCombined)
     return
   }
 
 
   // add to combine chunks
   for (let i = 0; i < l; i++) {
-    let item = elProps[i];
+    let item = svgElProps[i];
     let props = item.propsFiltered;
     let propstr = [];
     for (let prop in props) {
@@ -255,6 +496,8 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
             let isAbs = d.startsWith('M')
 
             let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
+
+            console.log('dAbs', dAbs);
 
             //console.log(isAbs, dAbs);
             // concat pathdata string
@@ -333,7 +576,9 @@ export function stringifySVG(svg, omitNamespace = false) {
     //.replace(/  +/g, ' ')
     .replace(/> </g, '><')
     .trim()
-    
+     // sanitize linebreaks within pathdata
+    .replaceAll('&#10;', '\n');
+
 
   return markup
 }

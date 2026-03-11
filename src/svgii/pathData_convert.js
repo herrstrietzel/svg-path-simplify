@@ -12,40 +12,54 @@ import { renderPoint, renderPath } from "./visualize";
 
 import { checkLineIntersection, getAngle, getDeltaAngle, getDistance, getDistAv, getDistManhattan, getSquareDistance, interpolate, pointAtT, rotatePoint, toParametricAngle } from './geometry';
 import { getPathArea, getPolygonArea, getRelativeAreaDiff } from './geometry_area';
+import { parsePathDataString } from './pathData_parse';
 import { pathDataToD } from './pathData_stringify';
 import { roundPathData } from './rounding';
 import { renderPoint } from './visualize';
 
-export function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance=1) {
 
-    // test if cubic can be simplified to quadratic
-    let cp1X = interpolate(p0, cp1, 1.5)
-    let cp2X = interpolate(p, cp2, 1.5)
+export function parsePathDataNormalized(d,
+    {
+        // necessary for most calculations
+        toAbsolute = true,
+        toLonghands = true,
 
-    let dist0 = getDistManhattan(p0, p)
-    let threshold = dist0 * 0.01 * tolerance;
-    let dist1 = getDistManhattan(cp1X, cp2X)
+        // not necessary unless you need cubics only
+        quadraticToCubic = false,
 
-    let cp1_Q = null;
-    let type = 'C'
-    let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
-    let comN = { type, values }
+        // mostly a fallback if arc calculations fail      
+        arcToCubic = false,
+        // arc to cubic precision - adds more segments for better precision     
+        arcAccuracy = 4,
+    } = {}
+) {
 
-    if (dist1 < threshold ) {
-        cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false);
-        if (cp1_Q) {
-            //renderPoint(markers, cp1_Q )
-            comN.type = 'Q'
-            comN.values = [cp1_Q.x, cp1_Q.y, p.x, p.y];
-            comN.p0 = p0;
-            comN.cp1 = cp1_Q;
-            comN.cp2 = null;
-            comN.p = p
-        }
+    // is already array
+    let isArray = Array.isArray(d);
+
+    // normalize native pathData to regular array
+    let hasConstructor = isArray && typeof d[0] === 'object' && typeof d[0].constructor === 'function'
+    /*
+    if (hasConstructor) {
+        d = d.map(com => { return { type: com.type, values: com.values } })
+        console.log('hasConstructor', hasConstructor, (typeof d[0].constructor), d);
     }
+    */
 
-    return comN
+    let pathDataObj = isArray ? d : parsePathDataString(d);
 
+    let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
+    let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
+
+    // normalize
+    pathData = normalizePathData(pathData,
+        {
+            toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy,
+            hasRelatives, hasShorthands, hasQuadratics, hasArcs
+        },
+    )
+
+    return pathData;
 }
 
 
@@ -87,7 +101,7 @@ export function convertPathData(pathData, {
 
     //console.log(toShorthands, toRelative, decimals);
     if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
-    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
+
 
     //if(decimals>-1 && decimals<2) pathData = roundPathData(pathData, decimals);
     if (toShorthands) pathData = pathDataToShorthands(pathData);
@@ -95,15 +109,115 @@ export function convertPathData(pathData, {
 
     if (toAbsolute) pathData = pathDataToAbsolute(pathData);
 
+    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData)
+
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
     if (toRelative) pathData = pathDataToRelative(pathData);
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
-
-
     return pathData
 }
+
+
+
+/**
+ * parse normalized
+ */
+
+export function normalizePathData(pathData = [],
+    {
+        toAbsolute = true,
+        toLonghands = true,
+        quadraticToCubic = false,
+        arcToCubic = false,
+        arcAccuracy = 2,
+
+        // assume we need full normalization
+        hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true, testTypes = false
+
+    } = {}
+) {
+
+    return convertPathData(pathData, { toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy, hasRelatives, hasShorthands, hasQuadratics, hasArcs, testTypes, decimals: -1 })
+}
+
+/*
+export function normalizePathData(pathData = [],
+    {
+        toAbsolute = true,
+        toLonghands = true,
+        quadraticToCubic = false,
+        arcToCubic = false,
+        arcAccuracy = 2,
+
+        // assume we need full normalization
+        hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true, testTypes = false
+
+    } = {}
+) {
+
+    // pathdata properties - test= true adds a manual test 
+    if (testTypes) {
+        //console.log('test for conversions');
+        let commands = Array.from(new Set(pathData.map(com => com.type))).join('');
+        hasRelatives = /[lcqamts]/gi.test(commands);
+        hasQuadratics = /[qt]/gi.test(commands);
+        hasArcs = /[a]/gi.test(commands);
+        hasShorthands = /[vhst]/gi.test(commands);
+        isPoly = /[mlz]/gi.test(commands);
+    }
+
+    if ((hasQuadratics && quadraticToCubic) || (hasArcs && arcToCubic)) {
+        toLonghands = true
+        toAbsolute = true
+    }
+
+    if (hasRelatives && toAbsolute) pathData = pathDataToAbsoluteOrRelative(pathData, false);
+    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData, -1, false);
+    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData, arcAccuracy);
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
+    return pathData;
+
+}
+*/
+
+
+
+
+export function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance = 1) {
+
+    // test if cubic can be simplified to quadratic
+    let cp1X = interpolate(p0, cp1, 1.5)
+    let cp2X = interpolate(p, cp2, 1.5)
+
+    let dist0 = getDistManhattan(p0, p)
+    let threshold = dist0 * 0.01 * tolerance;
+    let dist1 = getDistManhattan(cp1X, cp2X)
+
+    let cp1_Q = null;
+    let type = 'C'
+    let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
+    let comN = { type, values }
+
+    if (dist1 < threshold) {
+        cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false, true);
+        if (cp1_Q) {
+            //renderPoint(markers, cp1_Q )
+            comN.type = 'Q'
+            comN.values = [cp1_Q.x, cp1_Q.y, p.x, p.y];
+            comN.p0 = p0;
+            comN.cp1 = cp1_Q;
+            comN.cp2 = null;
+            comN.p = p
+        }
+    }
+
+    return comN
+
+}
+
 
 
 /**
@@ -218,7 +332,7 @@ export function pathDataToAbsoluteOrRelative(pathData, toRelative = false, decim
         let { type, values } = com;
         let vLen = values.length;
         let typeRel = type.toLowerCase();
-        let typeAbs =type.toUpperCase();
+        let typeAbs = type.toUpperCase();
         let typeNew = toRelative ? typeRel : typeAbs;
 
         if (type !== typeNew) {
@@ -495,13 +609,13 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
                 }
 
                 // V
-               if (isVertical) {
+                if (isVertical) {
                     //console.log('is V', w, h);
                     comShort = {
                         type: "V",
                         values: [values[1]]
                     };
-                } 
+                }
                 break;
 
             case "Q":
@@ -522,7 +636,7 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
                         type: "S",
                         values: [values[2], values[3], p.x, p.y]
                     };
-                } 
+                }
                 break;
             default:
                 comShort = {

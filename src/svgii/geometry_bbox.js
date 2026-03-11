@@ -1,9 +1,10 @@
 
 //import { splitSubpaths } from "./convert_segments";
+import { getElementAtts } from "../svg-getAttributes";
 import { pointAtT, svgArcToCenterParam, getBezierExtremeT, getArcExtemes, getDistance, interpolate, getPointOnEllipse } from "./geometry";
+//import { parsePathDataNormalized } from "./pathData_convert";
 import { renderPoint } from "./visualize";
 //import {arcToBezier} from'./pathData_convert';
-
 
 /**
  * calculate polygon bbox

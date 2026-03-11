@@ -1,8 +1,8 @@
 import { detectInputType } from './detect_input';
 import { simplifyPathDataCubic } from './pathData_simplify_cubic';
 import { analyzePathData } from './svgii/pathData_analyze';
-import { convertPathData } from './svgii/pathData_convert';
-import { parsePathDataNormalized } from './svgii/pathData_parse';
+import { convertPathData, parsePathDataNormalized } from './svgii/pathData_convert';
+//import { parsePathDataNormalized } from './svgii/pathData_parse';
 import { pathDataRemoveColinear } from './svgii/pathData_remove_collinear';
 import { removeOrphanedM } from './svgii/pathData_remove_orphaned';
 import { removeZeroLengthLinetos } from './svgii/pathData_remove_zerolength';

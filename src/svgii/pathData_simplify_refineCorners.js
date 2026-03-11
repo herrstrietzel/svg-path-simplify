@@ -19,8 +19,8 @@ export function refineRoundedCorners(pathData, {
 
     let isClosed = pathData[l - 1].type.toLowerCase() === 'z';
     let zIsLineto = isClosed ?
-    (pathData[l-1].p.x === pathData[0].p0.x && pathData[l-1].p.y === pathData[0].p0.y)
-     : false ;
+        (pathData[l - 1].p.x === pathData[0].p0.x && pathData[l - 1].p.y === pathData[0].p0.y)
+        : false;
 
     let lastOff = isClosed ? 2 : 1;
 
@@ -30,12 +30,8 @@ export function refineRoundedCorners(pathData, {
     let firstIsLine = pathData[1].type === 'L';
     let firstIsBez = pathData[1].type === 'C';
 
-    //console.log('lastIsLine', lastIsLine, 'firstIsLine', firstIsLine, 'lastIsBez', lastIsBez, 'firstIsBez', firstIsBez, 'isClosed', isClosed, 'comLast1', comLast1);
 
     let normalizeClose = isClosed && firstIsBez && (lastIsLine || zIsLineto);
-    //let adjustStart = false
-    //normalizeClose = false
-    //console.log('normalizeClose', normalizeClose);
 
     // normalize closepath to lineto
     if (normalizeClose) {
@@ -53,7 +49,7 @@ export function refineRoundedCorners(pathData, {
         if ((type === 'L' && comN && comN.type === 'C') ||
             (type === 'C' && comN && comN.type === 'L')
         ) {
-            let comL0 = type==='L' ? com : null;
+            let comL0 = type === 'L' ? com : null;
             let comL1 = null;
             let comBez = [];
             let offset = 0;
@@ -66,7 +62,7 @@ export function refineRoundedCorners(pathData, {
                 //renderPoint(markers, com.p, 'purple')
             }
 
-            if(!comL0) {
+            if (!comL0) {
                 pathDataN.push(com)
                 continue
             }
@@ -94,14 +90,14 @@ export function refineRoundedCorners(pathData, {
             }
 
             if (comL1) {
+                //console.log('comL1', comL1);
 
                 // linetos
                 let len1 = getDistManhattan(comL0.p0, comL0.p)
                 let len2 = getDistManhattan(comL1.p0, comL1.p)
 
                 // bezier
-                //comBez = comBez[0];
-                let comBezLen = comBez.length;
+                //let comBezLen = comBez.length;
                 //let len3 = getDistManhattan(comBez[0].p0, comBez[comBezLen - 1].p)
                 let len3 = getDistManhattan(comL0.p, comL1.p0)
 
@@ -113,54 +109,87 @@ export function refineRoundedCorners(pathData, {
                 let signChange = (area1 < 0 && area2 > 0) || (area1 > 0 && area2 < 0)
 
                 // exclude mid bezier segments that are larger than surrounding linetos
-                let bezThresh = len3*0.5 * tolerance
-                let isSmall = bezThresh < len1 && bezThresh < len2 ;
+                let bezThresh = len3 * 0.5 * tolerance
+                let isSmall = bezThresh < len1 && bezThresh < len2;
 
 
                 //len1 > len3 && len2 > len3
-                if (comBez.length && !signChange &&  isSmall ) {
+                if (comBez.length && !signChange && isSmall) {
 
-                    let isFlatBezier = Math.abs(area2) <= getSquareDistance(comBez[0].p0, comBez[0].p)*0.005
-                    let ptQ = !isFlatBezier ? checkLineIntersection(comL0.p0, comL0.p, comL1.p0, comL1.p, false) : null
+                    let isFlatBezier = Math.abs(area2) < getSquareDistance(comBez[0].p0, comBez[0].p) * 0.005
+                    let ptQ = !isFlatBezier ? checkLineIntersection(comL0.p0, comL0.p, comL1.p, comL1.p0, false, true) : null
 
-                    if (!isFlatBezier && ptQ) {
+                    if (!ptQ) {
+                        pathDataN.push(com);
+                        continue
+                    }
 
-                        // final check: mid point proximity
-                        let ptM = pointAtT([comL0.p, ptQ, comL1.p0], 0.5)
+                    // check sign change
+                    if (ptQ) {
+                        let area0 = getPolygonArea([comL0.p0, comL0.p, comL1.p0, comL1.p], false);
+                        let area0_abs = Math.abs(area0);
+                        let area1 = getPolygonArea([comL0.p0, comL0.p, ptQ, comL1.p0, comL1.p], false);
+                        let area1_abs = Math.abs(area1);
+                        let areaDiff = Math.abs(area0_abs - area1_abs) / area0_abs
+                        //console.log('areaDiff', areaDiff);
 
-                        let ptM_bez = comBez.length===1 ? pointAtT( [comBez[0].p0, comBez[0].cp1, comBez[0].cp2, comBez[0].p], 0.5 ) : comBez[0].p ;
 
-                        let dist1 = getDistManhattan(ptM, ptM_bez) * 0.75
-
-                        //renderPoint(markers, ptM, 'red', '0.5%', '0.5')
-                        //renderPoint(markers, ptM_bez, 'green', '0.5%', '0.5')
-
-                        // not in tolerance – return original command
-                        if(bezThresh && dist1>bezThresh && dist1>len3*0.3){
-                            //renderPoint(markers, ptM_bez, 'cyan', '0.5%', '0.5')
-                            //renderPoint(markers, ptQ, 'magenta', '0.5%', '0.5')
+                        /*
+                        renderPoint(markers, comL0.p0, 'green', '0.5%', '0.5')
+                        renderPoint(markers, comL0.p, 'red', '1.5%', '0.5')
+                        renderPoint(markers, comL1.p0, 'blue', '0.5%', '0.5')
+                        renderPoint(markers, comL1.p, 'orange', '0.5%', '0.5')
+                        if(!area0) {
                             pathDataN.push(com);
-                            continue;
+                            continue
+                        }
+                        */
 
-                        } else{
+                        let signChange = area0 < 0 && area1 > 0 || area0 > 0 && area1 < 0;
 
-                            //renderPoint(markers, ptQ, 'magenta', '0.5%', '0.5')
-
-                            let comQ = { type: 'Q', values: [ptQ.x, ptQ.y, comL1.p0.x, comL1.p0.y] }
-                            comQ.p0 = comL0.p;
-                            comQ.cp1 = ptQ;
-                            comQ.p = comL1.p0;
-    
-                            // add quadratic command
-                            pathDataN.push(comL0, comQ);
-                            i += offset;
-                            //i++
-
-                            //offset++
-                            continue;
+                        if (!ptQ || signChange || areaDiff > 0.5) {
+                            //console.log(signChange, area0, area1, 'pts', comL0.p0, comL0.p, comL1.p0, comL1.p);
+                            //renderPoint(markers, ptQ, 'cyan', '0.5%', '0.5')
+                            pathDataN.push(com);
+                            continue
                         }
 
                     }
+
+
+                    // final check: mid point proximity
+                    let ptM = pointAtT([comL0.p, ptQ, comL1.p0], 0.5)
+                    let ptM_bez = comBez.length === 1 ? pointAtT([comBez[0].p0, comBez[0].cp1, comBez[0].cp2, comBez[0].p], 0.5) : comBez[0].p;
+
+                    let dist1 = getDistManhattan(ptM, ptM_bez) * 0.75
+
+                    //renderPoint(markers, ptM, 'red', '0.5%', '0.5')
+                    //renderPoint(markers, ptM_bez, 'green', '0.5%', '0.5')
+
+                    // not in tolerance – return original command
+                    if (bezThresh && dist1 > bezThresh && dist1 > len3 * 0.3) {
+                        //renderPoint(markers, ptM_bez, 'cyan', '0.5%', '0.5')
+                        //renderPoint(markers, ptQ, 'magenta', '0.5%', '0.5')
+                        pathDataN.push(com);
+                        continue;
+
+                    } else {
+
+                        //renderPoint(markers, ptQ, 'magenta', '0.5%', '0.5')
+                        let comQ = { type: 'Q', values: [ptQ.x, ptQ.y, comL1.p0.x, comL1.p0.y] }
+                        comQ.p0 = comL0.p;
+                        comQ.cp1 = ptQ;
+                        comQ.p = comL1.p0;
+
+                        // add quadratic command
+                        pathDataN.push(comL0, comQ);
+                        i += offset;
+                        //i++
+
+                        //offset++
+                        continue;
+                    }
+
                 }
             }
         }
@@ -177,7 +206,7 @@ export function refineRoundedCorners(pathData, {
 
 
     // revert close path normalization
-    if (normalizeClose  || (isClosed && pathDataN[pathDataN.length-1].type!=='Z') ) {
+    if (normalizeClose || (isClosed && pathDataN[pathDataN.length - 1].type !== 'Z')) {
         pathDataN.push({ type: 'Z', values: [] })
     }
 

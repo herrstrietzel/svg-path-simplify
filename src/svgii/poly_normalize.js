@@ -4,6 +4,12 @@ export function normalizePoly(pts, {
     flatten = false
 } = {}) {
 
+    // is stringified flat point attribute
+    if(typeof pts === 'string' && !isNaN(pts[0])){
+        pts = toPointArray(pts.split(/,| /).filter(Boolean).map(Number));
+        return pts
+    }
+
     if (flatten) pts = pts.flat(2);
     let poly = toArray ? polyPtsToArray(pts) : polyArrayToObject(pts)
     return poly
@@ -29,6 +35,11 @@ export function polyArrayToObject(pts) {
         return poly
     }
 
+    else if(pts.length>3){
+        pts = toPointArray(pts)
+        return pts
+    }
+
     return pts.map(pt => { return { x: pt[0], y: pt[1] } })
 }
 
@@ -49,3 +60,12 @@ export function polyPtsToArray(pts) {
     poly = Array.from(pts).map(pt => [pt.x, pt.y])
     return poly
 }
+
+// convert flat point value array to point object array
+export function toPointArray(pts) {
+    let ptArr = [];
+    for (let i = 1, l = pts.length; i < l; i += 2) {
+        ptArr.push({ x: pts[i - 1], y: pts[i] });
+    }
+    return ptArr;
+};

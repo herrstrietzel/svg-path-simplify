@@ -3,8 +3,10 @@ import {abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
     log, max, min, pow, random, round, sin, sqrt, tan, PI} from '/.constants.js';
     */
 
-import { rad2Deg } from "../constants";
+import { rad2Deg, root2 } from "../constants";
+//import { getPolyBBox } from "./geometry_bbox";
 import { renderPoint } from "./visualize";
+
 
 export const {
     abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
@@ -127,6 +129,15 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
         return false
     }
 
+    // coinciding line points
+    if (
+        (p1.x === p2.x && p1.y === p2.y) ||
+        (p3.x === p4.x && p3.y === p4.y)
+    ) {
+        return false
+    }
+
+
     try {
         denominator = ((p4.y - p3.y) * (p2.x - p1.x)) - ((p4.x - p3.x) * (p2.y - p1.y));
 
@@ -171,6 +182,8 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
         return false;
     }
 
+
+
     // if line1 and line2 are segments, they intersect if both of the above are true
     //console.log('inter', intersectionPoint)
     return intersectionPoint;
@@ -192,7 +205,7 @@ export function isPointInPolygon(pt, polygon, bb, skipBB = false) {
         }
     }
 
-    let l=polygon.length;
+    let l = polygon.length;
     for (let i = l - 1, j = 0; j < l; i = j, j++) {
         const A = polygon[i];
         const B = polygon[j];
@@ -204,7 +217,7 @@ export function isPointInPolygon(pt, polygon, bb, skipBB = false) {
             /** 
              * if pt inside the vertical range filter out "ray pass vertex" problem 
              * by treating the line a little lower
-             */ 
+             */
             if ((pt.y == A.y && B.y >= A.y) || (pt.y == B.y && A.y >= B.y)) continue;
             // calc cross product `ptA X ptB`, pt lays on left side of AB if c > 0
             const c = (A.x - pt.x) * (B.y - pt.y) - (B.x - pt.x) * (A.y - pt.y);
@@ -1273,7 +1286,7 @@ export function intersectLines(p1, p2, p3, p4) {
  */
 export function getDistance(p1, p2, isArray = false) {
     //if(Array.isArray(p1)) isArray = true;
-    
+
     //console.log(p1, p2);
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
@@ -1385,6 +1398,13 @@ export function reducePoints(points, maxPoints = 48) {
     }
 
     return reduced;
+}
+
+
+export function getElementTransform(parent, el) {
+    if (!parent || !el) return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+    let matrix = parent.getScreenCTM().inverse().multiply(el.getScreenCTM());
+    return matrix
 }
 
 

@@ -71,9 +71,9 @@
 :root {
     --sidebar-width: clamp(25ch, 45ch, 50ch);
     --scalePreview: 1;
-    --strokeWidthPrev: 0.3%;
+    --strokeWidthPrev: 0.2%;
     --color-focus-dark: var(--color-text);
-    --color-border: hsl(55, 10%, 55%);
+    --color-border: hsl(55, 3%, 45%);
     --color-text: hsl(55, 10%, 20%);
 }
 
@@ -567,7 +567,7 @@ canvas {
     }
 
     .svgO .pathO {
-        --strokeWidthPrev: calc(0.3% / var(--scalePreview, 1));
+        --strokeWidthPrev: calc(var(--strokeWidthPrev) / var(--scalePreview, 1));
         transform: scale(var(--scalePreview, 1));
         /* vector-effect: non-scaling-stroke; */
     }
@@ -616,7 +616,7 @@ canvas {
             fill: none !important;
             stroke: var(--color-focus) !important;
             /* stroke-width: var(--strokeWidthPrev, 0.3%) !important; */
-            stroke-width: calc(var(--strokeWidthPrev, 0.3%) * 4 / var(--zoomScale));
+            stroke-width: calc(var(--strokeWidthPrev, 0.15%) / var(--zoomScale) / var(--elScale, 1)) !important;
             stroke-linecap: square;
         }
     }
@@ -976,6 +976,37 @@ dialog {
 }
 
 
+
+
+
+
+/*
+
 .input-textarea {
     font-size: 0.9em;
 }
+
+
+.input-file-info {
+    padding: var(--padding-input)
+}
+
+.input-file-ul {
+    margin: 0;
+}
+.input-number-btns .input-number-btn {
+    background: rgba(0, 0, 0, 0);
+    font-weight: 700;
+    color: var(--color-icon);
+    margin-right: .05em;
+    font-size: 1.2em;
+    line-height: 0.75em;
+    width: 1.2em;
+    height: 1.2em;
+    border-radius: 50%;
+    padding: 0;
+    padding-bottom: 0em;
+    text-align: center;
+    transform: translateY(0.05em);
+}
+*/

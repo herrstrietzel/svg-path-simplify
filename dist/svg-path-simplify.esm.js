@@ -119,6 +119,10 @@ const {
     log: log$1, hypot, max: max$1, min: min$1, pow: pow$1, random: random$1, round: round$1, sin: sin$1, sqrt: sqrt$1, tan: tan$1, PI: PI$1
 } = Math;
 
+const rad2Deg = 180/Math.PI;  
+const root2 = 1.4142135623730951;
+const svgNs = 'http://www.w3.org/2000/svg';
+
 /*
 import {abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
     log, max, min, pow, random, round, sin, sqrt, tan, PI} from '/.constants.js';
@@ -196,6 +200,14 @@ function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null, exact
         return false
     }
 
+    // coinciding line points
+    if (
+        (p1.x === p2.x && p1.y === p2.y) ||
+        (p3.x === p4.x && p3.y === p4.y)
+    ) {
+        return false
+    }
+
     try {
         denominator = ((p4.y - p3.y) * (p2.x - p1.x)) - ((p4.x - p3.x) * (p2.y - p1.y));
 
@@ -259,7 +271,7 @@ function isPointInPolygon(pt, polygon, bb, skipBB = false) {
         }
     }
 
-    let l=polygon.length;
+    let l = polygon.length;
     for (let i = l - 1, j = 0; j < l; i = j, j++) {
         const A = polygon[i];
         const B = polygon[j];
@@ -271,7 +283,7 @@ function isPointInPolygon(pt, polygon, bb, skipBB = false) {
             /** 
              * if pt inside the vertical range filter out "ray pass vertex" problem 
              * by treating the line a little lower
-             */ 
+             */
             if ((pt.y == A.y && B.y >= A.y) || (pt.y == B.y && A.y >= B.y)) continue;
             // calc cross product `ptA X ptB`, pt lays on left side of AB if c > 0
             const c = (A.x - pt.x) * (B.y - pt.y) - (B.x - pt.x) * (A.y - pt.y);
@@ -1095,8 +1107,6 @@ function quadraticBezierExtremeT(p0, cp1, p, { addExtremes = true, addSemiExtrem
  */
 function getDistance(p1, p2, isArray = false) {
 
-    
-
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
@@ -1154,6 +1164,12 @@ function reducePoints(points, maxPoints = 48) {
     }
 
     return reduced;
+}
+
+function getElementTransform(parent, el) {
+    if (!parent || !el) return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+    let matrix = parent.getScreenCTM().inverse().multiply(el.getScreenCTM());
+    return matrix
 }
 
 /**
@@ -1451,6 +1467,606 @@ function splitCommandAtTValues(p0, values, tArr, returnCommand = true) {
     }
 
     return segmentPoints;
+}
+
+function detectAccuracyPoly(pts) {
+    let dims = [];
+
+    // add average distances
+    for (let i = 1, len = pts.length; i < len; i++) {
+        let pt = pts[i];
+        let { p0 = null, p = null, dimA = 0 } = pt;
+
+        // use existing averave dimension value or calculate
+        if ( p && p0) {
+            dimA = dimA ? dimA : getDistManhattan(p0, p);
+
+            if (dimA) dims.push(dimA);
+        }
+    }
+
+    let dim_min = dims.sort();
+    let sliceIdx = Math.ceil(dim_min.length / 8);
+    dim_min = dim_min.slice(0, sliceIdx);
+    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
+
+    let threshold = 75;
+    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
+    // clamp
+    return Math.min(Math.max(0, decimalsAuto), 8)
+
+}
+
+function detectAccuracy(pathData) {
+    let dims = [];
+
+    // add average distances
+    for (let i = 1, len = pathData.length; i < len; i++) {
+        let com = pathData[i];
+        let { type, values, p0 = null, p = null, dimA = 0 } = com;
+
+        // use existing averave dimension value or calculate
+        if (values.length && p && p0) {
+
+            dimA = dimA ? dimA : getDistManhattan(p0, p);
+
+            if (dimA) dims.push(dimA);
+
+        }
+
+    }
+
+    let dim_min = dims.sort();
+
+    let sliceIdx = Math.ceil(dim_min.length / 8);
+    dim_min = dim_min.slice(0, sliceIdx);
+    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
+
+    let threshold = 75;
+    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
+
+    // clamp
+    return Math.min(Math.max(0, decimalsAuto), 8)
+
+}
+
+function roundTo(num = 0, decimals = 3) {
+    if (!decimals) return Math.round(num);
+    let factor = 10 ** decimals;
+    return Math.round(num * factor) / factor;
+}
+
+/**
+ * round to reasonable 
+ * floating point accuracy 
+ * based on numeric value
+ */
+function autoRound(val, integerThresh = 10){
+  let decimals=8;  
+
+  
+  if(val>integerThresh){
+    decimals=0;
+  }
+  else if(val>5){
+    decimals=1;
+  }else {
+     decimals=Math.ceil(integerThresh/val).toString().length;
+  }
+      
+  let factor = 10 ** decimals;
+  return Math.round(val * factor) / factor;
+}
+
+/**
+ * round path data
+ * either by explicit decimal value or
+ * based on suggested accuracy in path data
+ */
+function roundPathData(pathData, decimalsGlobal = -1) {
+
+    if (decimalsGlobal < 0) return pathData;
+
+    let len = pathData.length;
+
+    let decimals = decimalsGlobal;
+
+    for (let c = 0; c < len; c++) {
+        let com = pathData[c];
+        let {values} = com;
+
+        let valLen = values.length;
+        if (!valLen) continue
+
+        for (let v = 0; v < valLen; v++) {
+            pathData[c].values[v] = roundTo(values[v], decimals);
+        }
+    }
+
+    return pathData;
+}
+
+/**
+ * all SVG attributes
+ * mapped to elements
+ * used to remove unnecessary attribution
+ */
+
+const shapeEls = [
+    "polygon",
+    "polyline",
+    "line",
+    "rect",
+    "circle",
+    "ellipse",
+];
+
+const horizontalProps = ['x', 'cx', 'rx', 'dx', 'width', 'translateX'];
+const verticalProps = ['y', 'cy', 'ry', 'dy', 'height', 'translateY'];
+
+const geometryEls = [
+    "path",
+    ...shapeEls
+];
+
+const textEls = [
+    "textPath",
+    "text",
+    "tspan",
+];
+
+const strokeAtts = ['stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin','stroke-linecap', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit', 'stroke-opacity' ];
+
+const attLookup = {
+
+    atts: {
+
+        // wildcard
+        id:'*',
+        class:'*',
+
+        // svg
+        viewBox: ["symbol", "svg"],
+        preserveAspectRatio: ["symbol", "svg"],
+        width: ["svg", "rect", "use", "image"],
+        height: ["svg", "rect", "use", "image"],
+
+        // geometry
+        d: ["path"],
+        points: ["polygon", "polyline"],
+
+        x: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
+        y: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
+        x1: ["line", "linearGradient"],
+        x2: ["line", "linearGradient"],
+        y1: ["line", "linearGradient"],
+        y2: ["line", "linearGradient"],
+
+        r: ["circle", "radialGradient"],
+        rx: ["rect", "ellipse"],
+        ry: ["rect", "ellipse"],
+
+        cx: ["circle", "ellipse", "radialGradient"],
+        cy: ["circle", "ellipse", "radialGradient"],
+
+        refX: ["symbol", "markers"],
+        refY: ["symbol", "markers"],
+
+        // transforms
+        transform: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "transform-origin": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        fill: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "animate",
+            "animateMotion"
+        ],
+
+        "fill-opacity": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "fill-rule": ["svg", "g", "path", "polygon",  "text", "textPath"],
+
+        opacity: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        stroke: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "stroke-width": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-opacity": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-miterlimit": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-linejoin": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-linecap": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-dashoffset": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "stroke-dasharray": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+            "mask",
+        ],
+
+        "clip-path": [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+
+        "clip-rule": [
+            "path",
+            "polygon",
+        ],
+
+        clipPathUnits: ["clipPath"],
+
+        mask: [
+            "svg",
+            "g",
+            "use",
+            ...geometryEls,
+            ...textEls,
+        ],
+        maskContentUnits: ["mask"],
+        maskUnits: ["mask"],
+
+        // text els
+        "font-family": ["svg", "g", ...textEls],
+        "font-size": ["svg", "g", ...textEls],
+        "font-style": ["svg", "g", ...textEls],
+        "font-weight": ["svg", "g", ...textEls],
+        "font-stretch": ["svg", "g", ...textEls],
+        "dominant-baseline": [...textEls],
+        lengthAdjust: [...textEls],
+        "text-anchor": ["text"],
+        textLength: ["text", "textPath", "tspan"],
+        dx: ["text", "tspan"],
+        dy: ["text", "tspan"],
+        method: ["textPath"],
+
+        spacing: ["textPath"],
+        startOffset: ["textPath"],
+        rotate: ["text", "tspan", "animateMotion"],
+        side: ["textPath"],
+        "white-space": ["svg", "g", ...textEls],
+
+        // actually nonsense but might be used for currentColor
+        "color": ["svg", "g", ...textEls],
+
+        // animate
+        playbackorder: ["svg"],
+        timelinebegin: ["svg"],
+
+        dur: ["animate", "animateTransform", "animateMotion"],
+        end: ["animate", "animateTransform", "animateMotion"],
+        from: ["animate", "animateTransform", "animateMotion"],
+        to: ["animate", "animateTransform", "animateMotion"],
+        type: ["animateTransform"],
+        values: ["animate", "animateTransform", "animateMotion"],
+        accumulate: ["animate", "animateTransform", "animateMotion"],
+        additive: ["animate", "animateTransform", "animateMotion"],
+        attributeName: ["animate", "animateTransform"],
+        begin: ["animate", "animateTransform", "animateMotion"],
+        by: ["animate", "animateTransform", "animateMotion"],
+        calcMode: ["animate", "animateTransform", "animateMotion"],
+        keyPoints: ["animateMotion"],
+        keySplines: ["animate", "animateTransform", "animateMotion"],
+        keyTimes: ["animate", "animateTransform", "animateMotion"],
+        max: ["animate", "animateTransform", "animateMotion"],
+        min: ["animate", "animateTransform", "animateMotion"],
+        origin: ["animateMotion"],
+        repeatCount: ["animate", "animateTransform", "animateMotion"],
+        repeatDur: ["animate", "animateTransform", "animateMotion"],
+        restart: ["animate", "animateTransform", "animateMotion"],
+
+        // gradients
+        gradientUnits: ["linearGradient", "radialGradient"],
+        gradientTransform: ["linearGradient", "radialGradient"],
+        fr: ["radialGradient"],
+        fx: ["radialGradient"],
+        fy: ["radialGradient"],
+        offset: ["stop"],
+        "stop-color": ["stop"],
+        "stop-opacity": ["stop"],
+        spreadMethod: ["linearGradient", "radialGradient"],
+
+        // object references
+        href: [
+            "pattern",
+            "textPath",
+            "linearGradient",
+            "radialGradient",
+            "use",
+            "animate",
+            "animateTransform",
+            "animateMotion",
+            "image"
+        ],
+
+        pathLength: [
+            ...geometryEls
+        ],
+
+    },
+
+    defaults: {
+
+        transform: ["none", "matrix(1, 0, 0, 1, 0, 0)"],
+        "transform-origin": ["0px, 0px", "0 0"],
+        rx: ["0", "0px"],
+        ry: ["0", "0px"],
+        x: ["0", "0px"],
+        y: ["0", "0px"],
+
+        fill: ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
+        "color": ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
+
+        stroke: ["none"],
+        "stroke-width": ["1", "1px"],
+        opacity: ["1"],
+        "fill-opacity": ["1"],
+        "stroke-opacity": ["1"],
+        "stroke-linecap": ["butt"],
+        "stroke-miterlimit": ["4"],
+        "stroke-linejoin": ["miter"],
+        "stroke-dasharray": ["none"],
+        "stroke-dashoffset": ["0", "0px", "none"],
+        "pathLength": ["none"],
+
+        // text
+        "font-family": ["serif"],
+        "font-weight": ["normal", "400"],
+        "font-stretch": ["normal"],
+        "font-width": ["normal"],
+        "letter-spacing": ["auto", "normal", "0"],
+        "lengthAdjust": ["spacing"],
+        "text-anchor": ["start"],
+        "dominant-baseline": ["auto"],
+        spacing: ["auto"],
+        "white-space": ["normal"],
+
+        // gradients
+        "stop-opacity": ["1"],
+
+        gradientUnits: ["objectBoundingBox"],
+        patternUnits: ["objectBoundingBox"],
+
+        // clips and masks
+        "clip-path": ["none"],
+        "clip-rule": ["nonzero"],
+        "fill-rule": ["nonzero"],
+        clipPathUnits: ["userSpaceOnUse"],
+
+        mask: ["none"],
+        maskUnits: ["objectBoundingBox"],
+
+    }
+};
+
+function svgElUnitsToPixel(el, {
+    width = 0,
+    height = 0,
+    fontSize = 16,
+    dpi = 96,
+    autoRoundValues = false,
+    decimals = -1,
+} = {}) {
+
+    let attributes = [...el.attributes];
+    let attNames = attributes.map(att => att.name);
+    let attValues = attributes.map(att => att.nodeValue);
+
+    let isSquare = width === height;
+
+    let atts = {};
+    attNames.forEach((att, i) => {
+        let isHorizontal = horizontalProps.includes(att);
+        let isVertical = verticalProps.includes(att);
+        let normalizedDiagonal = !isSquare && att === 'r' ? true : false;
+        let attValue = attValues[i];
+
+        let val = normalizeUnits(attValue, { isHorizontal, isVertical, width, height, normalizedDiagonal, autoRoundValues });
+        atts[att] = val;
+
+        // apply
+        el.setAttribute(att, val);
+    });
+
+    return atts;
+}
+
+// convert real life units to pixels
+function normalizeUnits(value = null, {
+    unit = null,
+    width = 0,
+    height = 0,
+    decimals = -1,
+    isHorizontal = false,
+    isVertical = false,
+    autoRoundValues = false,
+    dpi = 96,
+    fontSize = 16,
+    normalizedDiagonal = false,
+} = {}) {
+
+    // only required for circle r normalization when height!=width
+    normalizedDiagonal = width === height ? false : normalizedDiagonal;
+
+    if (!value) return value;
+
+    // check if value is string
+    let isArray = value.split(/,| /).length>1;
+    let isFunction = value.includes('(');
+
+    let isNum = isNumericValue(value);
+    if (!isNum || isArray || isFunction) return value
+
+    // check unit if not specified
+    unit = !unit ? getUnit(value) : unit;
+
+    let val = parseFloat(value);
+    let scale=1;
+    let scaleRoot = Math.sqrt(width * width + height * height) / root2;
+
+    // no unit - already pixes/user unit
+    if (!unit) {
+        return val;
+    }
+
+    switch (unit) {
+        case "%":
+            if (width && isHorizontal) {
+                scale = width / 100;
+            }
+            else if (height && isVertical) {
+                scale = height / 100;
+            }
+            else {
+                scale = normalizedDiagonal ? scaleRoot / 100 : 1;
+            }
+            break;
+
+        case "rad":
+            scale = rad2Deg;
+            break;
+        case "turn":
+            scale = 360;
+            break;
+
+        case "in":
+            scale = dpi;
+            break;
+        case "pt":
+            scale = (1 / 72) * dpi;
+            break;
+        case "cm":
+            scale = (1 / 2.54) * dpi;
+            break;
+        case "mm":
+            scale = ((1 / 2.54) * dpi) / 10;
+            break;
+        // just a default approximation
+        case "em":
+        case "rem":
+            scale = fontSize;
+            break;
+        default:
+            scale = 1;
+    }
+    let valuePx = val * scale;
+    if (autoRoundValues) valuePx = autoRound(valuePx);
+    else if (decimals > -1) valuePx = +valuePx.toFixed(decimals);
+
+    return valuePx;
+}
+
+function getUnit(val) {
+    if (!val || !isNaN(val)) return '';
+    val = val.replace(/\+|\-/g, '');
+    let unit = val.match(/[^\d|.]+/g)[0];
+    return unit;
+}
+
+function isNumericValue(val = '') {
+    // is number
+    if (!isNaN(val)) return true;
+    // parse with unit
+    return !isNaN(parseFloat(val))
+}
+
+function getElementAtts(el, {x=0, y=0, width=0, height=0}={}){
+    let attributes = [...el.attributes];
+
+    let atts={};
+    attributes.forEach(att=>{
+        let value = normalizeUnits(att.nodeValue, {x, y, width, height});   
+        atts[att.name] = value;
+    });
+
+    return atts
 }
 
 /**
@@ -1858,15 +2474,17 @@ function pathDataToD(pathData, optimize = 0) {
     let minify = beautify || optimize ? false : true;
 
     let d = '';
+    let valsString = pathData[0].values.join(" ");
     let separator_command = beautify ? `\n` : (minify ? '' : ' ');
-    let separator_type =  !minify ? ' ' : '';
+    let separator_type = !minify ? ' ' : '';
 
-    d = `${pathData[0].type}${separator_type}${pathData[0].values.join(" ")}${separator_command}`;
+    d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
 
     for (let i = 1; i < len; i++) {
         let com0 = pathData[i - 1];
         let com = pathData[i];
         let { type, values } = com;
+        valsString = '';
 
         // Minify Arc commands (A/a) – actually sucks!
         if (minify && (type === 'A' || type === 'a')) {
@@ -1878,7 +2496,7 @@ function pathDataToD(pathData, optimize = 0) {
         }
 
         // Omit type for repeated commands
-        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm' )
+        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm')
             ? " "
             : (minify && com0.type === "M" && com.type === "L"
                 ? " "
@@ -1887,7 +2505,6 @@ function pathDataToD(pathData, optimize = 0) {
         // concatenate subsequent floating point values
         if (minify) {
 
-            let valsString = '';
             let prevWasFloat = false;
 
             for (let v = 0, l = values.length; v < l; v++) {
@@ -1921,6 +2538,7 @@ function pathDataToD(pathData, optimize = 0) {
 
     if (minify) {
         d = d
+            .replace(/[A-Za-z]0(?=\.)/g, m => m[0])
             .replace(/ 0\./g, " .") // Space before small decimals
             .replace(/ -/g, "-")     // Remove space before negatives
             .replace(/-0\./g, "-.")  // Remove leading zero from negative decimals
@@ -2163,9 +2781,7 @@ function simplifyPathDataCubic(pathData, {
 
             // cannot be combined as crossing extremes or corners
             if (
-
                 (keepCorners && corner) ||
-
                 (keepExtremes && extreme)
             ) {
 
@@ -2204,7 +2820,6 @@ function simplifyPathDataCubic(pathData, {
 
                         // failure - could not be combined - exit loop
                         if (combined.length > 1) {
-
                             break
                         }
 
@@ -2212,6 +2827,7 @@ function simplifyPathDataCubic(pathData, {
                          * success
                          * add cumulative error to prevent distortions
                          */
+
                         error += combined[0].error * 0.5;
                         offset++;
 
@@ -2419,99 +3035,6 @@ function commandIsFlat(points, {
     }
 
     return !debug ? isFlat : report;
-}
-
-function detectAccuracyPoly(pts) {
-    let dims = [];
-
-    // add average distances
-    for (let i = 1, len = pts.length; i < len; i++) {
-        let pt = pts[i];
-        let { p0 = null, p = null, dimA = 0 } = pt;
-
-        // use existing averave dimension value or calculate
-        if ( p && p0) {
-            dimA = dimA ? dimA : getDistManhattan(p0, p);
-
-            if (dimA) dims.push(dimA);
-        }
-    }
-
-    let dim_min = dims.sort();
-    let sliceIdx = Math.ceil(dim_min.length / 8);
-    dim_min = dim_min.slice(0, sliceIdx);
-    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
-
-    let threshold = 75;
-    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
-    // clamp
-    return Math.min(Math.max(0, decimalsAuto), 8)
-
-}
-
-function detectAccuracy(pathData) {
-    let dims = [];
-
-    // add average distances
-    for (let i = 1, len = pathData.length; i < len; i++) {
-        let com = pathData[i];
-        let { type, values, p0 = null, p = null, dimA = 0 } = com;
-
-        // use existing averave dimension value or calculate
-        if (values.length && p && p0) {
-
-            dimA = dimA ? dimA : getDistManhattan(p0, p);
-
-            if (dimA) dims.push(dimA);
-
-        }
-
-    }
-
-    let dim_min = dims.sort();
-
-    let sliceIdx = Math.ceil(dim_min.length / 8);
-    dim_min = dim_min.slice(0, sliceIdx);
-    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
-
-    let threshold = 75;
-    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
-
-    // clamp
-    return Math.min(Math.max(0, decimalsAuto), 8)
-
-}
-
-function roundTo(num = 0, decimals = 3) {
-    if (!decimals) return Math.round(num);
-    let factor = 10 ** decimals;
-    return Math.round(num * factor) / factor;
-}
-
-/**
- * round path data
- * either by explicit decimal value or
- * based on suggested accuracy in path data
- */
-function roundPathData(pathData, decimals = -1) {
-
-    if (decimals < 0) return pathData;
-
-    let len = pathData.length;
-
-    for (let c = 0; c < len; c++) {
-
-        let values = pathData[c].values;
-        let valLen = values.length;
-        if (!valLen) continue
-
-        for (let v = 0; v < valLen; v++) {
-
-            pathData[c].values[v] = roundTo(values[v], decimals);
-        }
-    }
-
-    return pathData;
 }
 
 /**
@@ -2742,7 +3265,7 @@ function getPathDataVerbose(pathData, {
             }
         }
 
-        else if (type === 'A') {
+        else if (type === 'A' && addArcParams) {
             let { rx, ry, cx, cy, startAngle, endAngle, deltaAngle } = svgArcToCenterParam(p0.x, p0.y, ...values);
             com.cx = cx;
             com.cy = cy;
@@ -2786,827 +3309,6 @@ function getPathDataVerbose(pathData, {
     }
 
     return pathDataVerbose;
-}
-
-function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance=1) {
-
-    // test if cubic can be simplified to quadratic
-    let cp1X = interpolate(p0, cp1, 1.5);
-    let cp2X = interpolate(p, cp2, 1.5);
-
-    let dist0 = getDistManhattan(p0, p);
-    let threshold = dist0 * 0.01 * tolerance;
-    let dist1 = getDistManhattan(cp1X, cp2X);
-
-    let cp1_Q = null;
-    let type = 'C';
-    let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
-    let comN = { type, values };
-
-    if (dist1 < threshold ) {
-        cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false);
-        if (cp1_Q) {
-
-            comN.type = 'Q';
-            comN.values = [cp1_Q.x, cp1_Q.y, p.x, p.y];
-            comN.p0 = p0;
-            comN.cp1 = cp1_Q;
-            comN.cp2 = null;
-            comN.p = p;
-        }
-    }
-
-    return comN
-
-}
-
-function convertPathData(pathData, {
-    toShorthands = true,
-    toLonghands = false,
-    toRelative = true,
-    toAbsolute = false,
-    decimals = 3,
-    arcToCubic = false,
-    quadraticToCubic = false,
-
-    // assume we need full normalization
-    hasRelatives = true,
-    hasShorthands = true,
-    hasQuadratics = true,
-    hasArcs = true,
-    testTypes = false
-
-} = {}) {
-
-    // pathdata properties - test= true adds a manual test 
-    if (testTypes) {
-
-        let commands = Array.from(new Set(pathData.map(com => com.type))).join('');
-        hasRelatives = /[lcqamts]/gi.test(commands);
-        hasQuadratics = /[qt]/gi.test(commands);
-        hasArcs = /[a]/gi.test(commands);
-        hasShorthands = /[vhst]/gi.test(commands);
-        isPoly = /[mlz]/gi.test(commands);
-    }
-
-    // some params exclude each other
-    toRelative = toAbsolute ? false : toRelative;
-    toShorthands = toLonghands ? false : toShorthands;
-
-    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
-    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
-
-    if (toShorthands) pathData = pathDataToShorthands(pathData);
-    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
-
-    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
-
-    // pre round - before relative conversion to minimize distortions
-    if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
-    if (toRelative) pathData = pathDataToRelative(pathData);
-    if (decimals > -1) pathData = roundPathData(pathData, decimals);
-
-    return pathData
-}
-
-/**
- * convert cubic circle approximations
- * to more compact arcs
- */
-
-function pathDataArcsToCubics(pathData, {
-    arcAccuracy = 1
-} = {}) {
-
-    let pathDataCubic = [pathData[0]];
-    for (let i = 1, len = pathData.length; i < len; i++) {
-
-        let com = pathData[i];
-        let comPrev = pathData[i - 1];
-        let valuesPrev = comPrev.values;
-        let valuesPrevL = valuesPrev.length;
-        let p0 = { x: valuesPrev[valuesPrevL - 2], y: valuesPrev[valuesPrevL - 1] };
-
-        if (com.type === 'A') {
-            // add all C commands instead of Arc
-            let cubicArcs = arcToBezier$1(p0, com.values, arcAccuracy);
-            cubicArcs.forEach((cubicArc) => {
-                pathDataCubic.push(cubicArc);
-            });
-        }
-
-        else {
-            // add command
-            pathDataCubic.push(com);
-        }
-    }
-
-    return pathDataCubic
-
-}
-
-function pathDataQuadraticToCubic(pathData) {
-
-    let pathDataQuadratic = [pathData[0]];
-    for (let i = 1, len = pathData.length; i < len; i++) {
-
-        let com = pathData[i];
-        let comPrev = pathData[i - 1];
-        let valuesPrev = comPrev.values;
-        let valuesPrevL = valuesPrev.length;
-        let p0 = { x: valuesPrev[valuesPrevL - 2], y: valuesPrev[valuesPrevL - 1] };
-
-        if (com.type === 'Q') {
-            pathDataQuadratic.push(quadratic2Cubic(p0, com.values));
-        }
-
-        else {
-            // add command
-            pathDataQuadratic.push(com);
-        }
-    }
-
-    return pathDataQuadratic
-}
-
-/**
- * convert quadratic commands to cubic
- */
-function quadratic2Cubic(p0, values) {
-    if (Array.isArray(p0)) {
-        p0 = {
-            x: p0[0],
-            y: p0[1]
-        };
-    }
-    let cp1 = {
-        x: p0.x + 2 / 3 * (values[0] - p0.x),
-        y: p0.y + 2 / 3 * (values[1] - p0.y)
-    };
-    let cp2 = {
-        x: values[2] + 2 / 3 * (values[0] - values[2]),
-        y: values[3] + 2 / 3 * (values[1] - values[3])
-    };
-    return ({ type: "C", values: [cp1.x, cp1.y, cp2.x, cp2.y, values[2], values[3]] });
-}
-
-/**
- * convert pathData to 
- * This is just a port of Dmitry Baranovskiy's 
- * pathToRelative/Absolute methods used in snap.svg
- * https://github.com/adobe-webplatform/Snap.svg/
- */
-
-function pathDataToAbsoluteOrRelative(pathData, toRelative = false, decimals = -1) {
-    if (decimals >= 0) {
-        pathData[0].values = pathData[0].values.map(val => +val.toFixed(decimals));
-    }
-
-    let len = pathData.length;
-    let M = pathData[0].values;
-    let x = M[0],
-        y = M[1],
-        mx = x,
-        my = y;
-
-    for (let i = 1; i < len; i++) {
-        let com = pathData[i];
-        let { type, values } = com;
-        let vLen = values.length;
-        let typeRel = type.toLowerCase();
-        let typeAbs =type.toUpperCase();
-        let typeNew = toRelative ? typeRel : typeAbs;
-
-        if (type !== typeNew) {
-            com.type = typeNew;
-
-            switch (typeRel) {
-                case "a":
-                    values[5] = toRelative ? values[5] - x : values[5] + x;
-                    values[6] = toRelative ? values[6] - y : values[6] + y;
-                    break;
-                case "v":
-                    values[0] = toRelative ? values[0] - y : values[0] + y;
-                    break;
-                case "h":
-                    values[0] = toRelative ? values[0] - x : values[0] + x;
-                    break;
-                case "m":
-                    if (toRelative) {
-                        values[0] -= x;
-                        values[1] -= y;
-                    } else {
-                        values[0] += x;
-                        values[1] += y;
-                    }
-                    mx = toRelative ? values[0] + x : values[0];
-                    my = toRelative ? values[1] + y : values[1];
-                    break;
-                default:
-                    if (values.length) {
-                        for (let v = 0; v < values.length; v++) {
-                            values[v] = toRelative
-                                ? values[v] - (v % 2 ? y : x)
-                                : values[v] + (v % 2 ? y : x);
-                        }
-                    }
-            }
-        }
-
-        switch (typeRel) {
-            case "z":
-                x = mx;
-                y = my;
-                break;
-            case "h":
-                x = toRelative ? x + values[0] : values[0];
-                break;
-            case "v":
-                y = toRelative ? y + values[0] : values[0];
-                break;
-            case "m":
-                mx = values[vLen - 2] + (toRelative ? x : 0);
-                my = values[vLen - 1] + (toRelative ? y : 0);
-            default:
-                x = values[vLen - 2] + (toRelative ? x : 0);
-                y = values[vLen - 1] + (toRelative ? y : 0);
-        }
-
-        if (decimals >= 0) {
-            com.values = com.values.map(val => +val.toFixed(decimals));
-        }
-    }
-    return pathData;
-}
-
-function pathDataToRelative(pathData, decimals = -1) {
-    return pathDataToAbsoluteOrRelative(pathData, true, decimals)
-}
-
-function pathDataToAbsolute(pathData, decimals = -1) {
-    return pathDataToAbsoluteOrRelative(pathData, false, decimals)
-}
-
-/**
- * decompose/convert shorthands to "longhand" commands:
- * H, V, S, T => L, L, C, Q
- * reversed method: pathDataToShorthands()
- */
-
-function pathDataToLonghands(pathData, decimals = -1, test = true) {
-
-    // analyze pathdata – if you're sure your data is already absolute skip it via test=false
-    let hasRel = false;
-
-    if (test) {
-        let commandTokens = pathData.map(com => { return com.type }).join('');
-        let hasShorthands = /[hstv]/gi.test(commandTokens);
-        hasRel = /[astvqmhlc]/g.test(commandTokens);
-
-        if (!hasShorthands) {
-            return pathData;
-        }
-    }
-
-    pathData = test && hasRel ? pathDataToAbsolute(pathData, decimals) : pathData;
-
-    let pathDataLonghand = [];
-    let comPrev = {
-        type: "M",
-        values: pathData[0].values
-    };
-    pathDataLonghand.push(comPrev);
-
-    for (let i = 1, len = pathData.length; i < len; i++) {
-        let com = pathData[i];
-        let { type, values } = com;
-        let valuesL = values.length;
-        let valuesPrev = comPrev.values;
-        let valuesPrevL = valuesPrev.length;
-        let [x, y] = [values[valuesL - 2], values[valuesL - 1]];
-        let cp1X, cp1Y, cpN1X, cpN1Y, cpN2X, cpN2Y, cp2X, cp2Y;
-        let [prevX, prevY] = [
-            valuesPrev[valuesPrevL - 2],
-            valuesPrev[valuesPrevL - 1]
-        ];
-        switch (type) {
-            case "H":
-                comPrev = {
-                    type: "L",
-                    values: [values[0], prevY]
-                };
-                break;
-            case "V":
-                comPrev = {
-                    type: "L",
-                    values: [prevX, values[0]]
-                };
-                break;
-            case "T":
-                [cp1X, cp1Y] = [valuesPrev[0], valuesPrev[1]];
-                [prevX, prevY] = [
-                    valuesPrev[valuesPrevL - 2],
-                    valuesPrev[valuesPrevL - 1]
-                ];
-                // new control point
-                cpN1X = prevX + (prevX - cp1X);
-                cpN1Y = prevY + (prevY - cp1Y);
-                comPrev = {
-                    type: "Q",
-                    values: [cpN1X, cpN1Y, x, y]
-                };
-                break;
-            case "S":
-
-                [cp1X, cp1Y] = [valuesPrev[0], valuesPrev[1]];
-                [prevX, prevY] = [
-                    valuesPrev[valuesPrevL - 2],
-                    valuesPrev[valuesPrevL - 1]
-                ];
-
-                [cp2X, cp2Y] =
-                    valuesPrevL > 2 && comPrev.type !== 'A' ?
-                        [valuesPrev[2], valuesPrev[3]] :
-                        [prevX, prevY];
-
-                // new control points
-                cpN1X = 2 * prevX - cp2X;
-                cpN1Y = 2 * prevY - cp2Y;
-                cpN2X = values[0];
-                cpN2Y = values[1];
-                comPrev = {
-                    type: "C",
-                    values: [cpN1X, cpN1Y, cpN2X, cpN2Y, x, y]
-                };
-
-                break;
-            default:
-                comPrev = {
-                    type: type,
-                    values: values
-                };
-        }
-        // round final longhand values
-        if (decimals > -1) {
-            comPrev.values = comPrev.values.map(val => { return +val.toFixed(decimals) });
-        }
-
-        pathDataLonghand.push(comPrev);
-    }
-    return pathDataLonghand;
-}
-
-/**
- * apply shorthand commands if possible
- * L, L, C, Q => H, V, S, T
- * reversed method: pathDataToLonghands()
- */
-function pathDataToShorthands(pathData, decimals = -1, test = false) {
-
-    /** 
-    * analyze pathdata – if you're sure your data is already absolute skip it via test=false
-    */
-    let hasRel;
-    if (test) {
-        let commandTokens = pathData.map(com => { return com.type }).join('');
-        hasRel = /[astvqmhlc]/g.test(commandTokens);
-    }
-
-    pathData = test && hasRel ? pathDataToAbsoluteOrRelative(pathData) : pathData;
-
-    let len = pathData.length;
-    let pathDataShorts = new Array(len);
-
-    let comShort = pathData[0];
-    pathDataShorts[0] = comShort;
-
-    let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
-    let p = p0;
-
-    for (let i = 1; i < len; i++) {
-
-        let com = pathData[i];
-        comShort = com;
-        let { type, values } = com;
-        let valuesLen = values.length;
-        let valuesLast = [values[valuesLen - 2], values[valuesLen - 1]];
-
-        // previous command
-        let comPrev = pathData[i - 1];
-
-        p = { x: valuesLast[0], y: valuesLast[1] };
-
-        // deltas for h or v
-        let dx = Math.abs(p.x - p0.x);
-        let dy = Math.abs(p.y - p0.y);
-        let maxDist = getDistManhattan(p0, p) * 0.01;
-
-        // first bezier control point for S/T shorthand tests
-        let isShort = false, isHorizontal = false, isVertical = false;
-
-        if ((type === 'C' && comPrev.type === 'C') || (type === 'Q' && comPrev.type === 'Q')) {
-            let cpPrev = comPrev.type === 'C' ? { x: comPrev.values[2], y: comPrev.values[3] } : { x: comPrev.values[0], y: comPrev.values[1] };
-            let cpFirst = { x: values[0], y: values[1] };
-
-            let dx1 = (p0.x - cpPrev.x);
-            let dy1 = (p0.y - cpPrev.y);
-
-            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025;
-
-            // reflected cp
-            let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 };
-            let distCp = getDistManhattan(cpR, cpFirst);
-
-            isShort = distCp < maxDist;
-
-        }
-
-        else if (type === 'L') {
-            isHorizontal = dy === 0 || dy < maxDist;
-            isVertical = dx === 0 || dx < maxDist;
-            isShort = isVertical || isHorizontal;
-        }
-
-        switch (type) {
-            case "L":
-                if (isHorizontal) {
-
-                    comShort = {
-                        type: "H",
-                        values: [values[0]]
-                    };
-                }
-
-                // V
-               if (isVertical) {
-
-                    comShort = {
-                        type: "V",
-                        values: [values[1]]
-                    };
-                } 
-                break;
-
-            case "Q":
-
-                if (isShort) {
-
-                    comShort = {
-                        type: "T",
-                        values: [p.x, p.y]
-                    };
-                }
-
-                break;
-            case "C":
-                if (isShort) {
-
-                    comShort = {
-                        type: "S",
-                        values: [values[2], values[3], p.x, p.y]
-                    };
-                } 
-                break;
-            default:
-                comShort = {
-                    type: type,
-                    values: values
-                };
-        }
-
-        p0 = p;
-        pathDataShorts[i] = comShort;
-    }
-
-    return pathDataShorts;
-}
-
-/**
- * Convert a parametrized SVG arc to cubic Beziers
- * Assumes arc parameters are already resolved
- */
-function arcToBezierResolved({
-
-    // start / end points
-    p0 = { x: 0, y: 0 },
-    p = { x: 0, y: 0 },
-
-    // center
-    centroid = { x: 0, y: 0 },
-
-    // radii
-    rx = 0,
-    ry = 0,
-
-    // SVG-style rotation
-    xAxisRotation = 0,
-    radToDegree = false,
-
-    // optional
-    startAngle = null,
-    endAngle = null,
-    deltaAngle = null
-
-} = {}) {
-
-    if (!rx || !ry) return [];
-
-    // new pathData
-    let pathData = [];
-
-    // maximum delta for cubic approximations: Math.PI / 2 (90deg)
-    const maxSegAngle = 1.5707963267948966;
-
-    // Pomax cubic constant
-    const k = 0.551785;
-
-    // rotation
-    let phi = radToDegree
-        ? xAxisRotation
-        : xAxisRotation * Math.PI / 180;
-
-    let cosphi = Math.cos(phi);
-    let sinphi = Math.sin(phi);
-
-    // derive angles if not provided
-    if (startAngle === null || endAngle === null || deltaAngle === null) {
-        ({ startAngle, endAngle, deltaAngle } = getDeltaAngle(centroid, p0, p));
-    }
-
-    // parametrize for elliptic arcs
-    let startAngleParam = rx !== ry ? toParametricAngle(startAngle, rx, ry) : startAngle;
-
-    let deltaAngleParam = rx !== ry ? toParametricAngle(deltaAngle, rx, ry) : deltaAngle;
-
-    let segments = Math.max(1, Math.ceil(Math.abs(deltaAngleParam) / maxSegAngle));
-    let angStep = deltaAngleParam / segments;
-
-    for (let i = 0; i < segments; i++) {
-
-        const a = Math.abs(angStep) === maxSegAngle ?
-            Math.sign(angStep) * k :
-            (4 / 3) * Math.tan(angStep / 4);
-
-        let cos0 = Math.cos(startAngleParam);
-        let sin0 = Math.sin(startAngleParam);
-        let cos1 = Math.cos(startAngleParam + angStep);
-        let sin1 = Math.sin(startAngleParam + angStep);
-
-        // unit arc → cubic
-        let c1 = { x: cos0 - sin0 * a, y: sin0 + cos0 * a };
-        let c2 = { x: cos1 + sin1 * a, y: sin1 - cos1 * a };
-        let e = { x: cos1, y: sin1 };
-
-        let values = [];
-
-        [c1, c2, e].forEach(pt => {
-            let x = pt.x * rx;
-            let y = pt.y * ry;
-
-            values.push(
-                cosphi * x - sinphi * y + centroid.x,
-                sinphi * x + cosphi * y + centroid.y
-            );
-        });
-
-        pathData.push({
-            type: 'C',
-            values,
-            cp1: { x: values[0], y: values[1] },
-            cp2: { x: values[2], y: values[3] },
-            p: { x: values[4], y: values[5] },
-        });
-
-        startAngleParam += angStep;
-    }
-
-    return pathData;
-}
-
-/** 
- * convert arctocommands to cubic bezier
- * based on puzrin's a2c.js
- * https://github.com/fontello/svgpath/blob/master/lib/a2c.js
- * returns pathData array
-*/
-
-function arcToBezier$1(p0, values, splitSegments = 1) {
-    const TAU = Math.PI * 2;
-    let [rx, ry, rotation, largeArcFlag, sweepFlag, x, y] = values;
-
-    if (rx === 0 || ry === 0) {
-        return []
-    }
-
-    let phi = rotation ? rotation * TAU / 360 : 0;
-    let sinphi = phi ? Math.sin(phi) : 0;
-    let cosphi = phi ? Math.cos(phi) : 1;
-    let pxp = cosphi * (p0.x - x) / 2 + sinphi * (p0.y - y) / 2;
-    let pyp = -sinphi * (p0.x - x) / 2 + cosphi * (p0.y - y) / 2;
-
-    if (pxp === 0 && pyp === 0) {
-        return []
-    }
-    rx = Math.abs(rx);
-    ry = Math.abs(ry);
-    let lambda =
-        pxp * pxp / (rx * rx) +
-        pyp * pyp / (ry * ry);
-    if (lambda > 1) {
-        let lambdaRt = Math.sqrt(lambda);
-        rx *= lambdaRt;
-        ry *= lambdaRt;
-    }
-
-    /** 
-     * parametrize arc to 
-     * get center point start and end angles
-     */
-    let rxsq = rx * rx,
-        rysq = rx === ry ? rxsq : ry * ry;
-
-    let pxpsq = pxp * pxp,
-        pypsq = pyp * pyp;
-    let radicant = (rxsq * rysq) - (rxsq * pypsq) - (rysq * pxpsq);
-
-    if (radicant <= 0) {
-        radicant = 0;
-    } else {
-        radicant /= (rxsq * pypsq) + (rysq * pxpsq);
-        radicant = Math.sqrt(radicant) * (largeArcFlag === sweepFlag ? -1 : 1);
-    }
-
-    let centerxp = radicant ? radicant * rx / ry * pyp : 0;
-    let centeryp = radicant ? radicant * -ry / rx * pxp : 0;
-    let centerx = cosphi * centerxp - sinphi * centeryp + (p0.x + x) / 2;
-    let centery = sinphi * centerxp + cosphi * centeryp + (p0.y + y) / 2;
-
-    let vx1 = (pxp - centerxp) / rx;
-    let vy1 = (pyp - centeryp) / ry;
-    let vx2 = (-pxp - centerxp) / rx;
-    let vy2 = (-pyp - centeryp) / ry;
-
-    // get start and end angle
-    const vectorAngle = (ux, uy, vx, vy) => {
-        let dot = +(ux * vx + uy * vy).toFixed(9);
-        if (dot === 1 || dot === -1) {
-            return dot === 1 ? 0 : Math.PI
-        }
-        dot = dot > 1 ? 1 : (dot < -1 ? -1 : dot);
-        let sign = (ux * vy - uy * vx < 0) ? -1 : 1;
-        return sign * Math.acos(dot);
-    };
-
-    let ang1 = vectorAngle(1, 0, vx1, vy1),
-        ang2 = vectorAngle(vx1, vy1, vx2, vy2);
-
-    if (sweepFlag === 0 && ang2 > 0) {
-        ang2 -= Math.PI * 2;
-    }
-    else if (sweepFlag === 1 && ang2 < 0) {
-        ang2 += Math.PI * 2;
-    }
-
-    let ratio = +(Math.abs(ang2) / (TAU / 4)).toFixed(0) || 1;
-
-    // increase segments for more accureate length calculations
-    let segments = ratio * splitSegments;
-    ang2 /= segments;
-    let pathDataArc = [];
-
-    // If 90 degree circular arc, use a constant
-    // https://pomax.github.io/bezierinfo/#circles_cubic
-    // k=0.551784777779014
-    const angle90 = 1.5707963267948966;
-    const k = 0.551785;
-    let a = ang2 === angle90 ? k :
-        (
-            ang2 === -angle90 ? -k : 4 / 3 * Math.tan(ang2 / 4)
-        );
-
-    let cos2 = ang2 ? Math.cos(ang2) : 1;
-    let sin2 = ang2 ? Math.sin(ang2) : 0;
-    let type = 'C';
-
-    const approxUnitArc = (ang1, ang2, a, cos2, sin2) => {
-        let x1 = ang1 != ang2 ? Math.cos(ang1) : cos2;
-        let y1 = ang1 != ang2 ? Math.sin(ang1) : sin2;
-        let x2 = Math.cos(ang1 + ang2);
-        let y2 = Math.sin(ang1 + ang2);
-
-        return [
-            { x: x1 - y1 * a, y: y1 + x1 * a },
-            { x: x2 + y2 * a, y: y2 - x2 * a },
-            { x: x2, y: y2 }
-        ];
-    };
-
-    for (let i = 0; i < segments; i++) {
-        let com = { type: type, values: [] };
-        let curve = approxUnitArc(ang1, ang2, a, cos2, sin2);
-
-        curve.forEach((pt) => {
-            let x = pt.x * rx;
-            let y = pt.y * ry;
-            com.values.push(cosphi * x - sinphi * y + centerx, sinphi * x + cosphi * y + centery);
-        });
-        pathDataArc.push(com);
-        ang1 += ang2;
-    }
-
-    return pathDataArc;
-}
-
-/**
- * parse normalized
- */
-
-function normalizePathData(pathData = [],
-    {
-        toAbsolute = true,
-        toLonghands = true,
-        quadraticToCubic = false,
-        arcToCubic = false,
-        arcAccuracy = 2,
-
-        // assume we need full normalization
-        hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true, testTypes = false
-
-    } = {}
-) {
-
-    // pathdata properties - test= true adds a manual test 
-    if (testTypes) {
-
-        let commands = Array.from(new Set(pathData.map(com => com.type))).join('');
-        hasRelatives = /[lcqamts]/gi.test(commands);
-        hasQuadratics = /[qt]/gi.test(commands);
-        hasArcs = /[a]/gi.test(commands);
-        hasShorthands = /[vhst]/gi.test(commands);
-        isPoly = /[mlz]/gi.test(commands);
-    }
-
-    /**
-     * normalize:
-     * convert to all absolute
-     * all longhands
-     */
-
-    if ((hasQuadratics && quadraticToCubic) || (hasArcs && arcToCubic)) {
-        toLonghands = true;
-        toAbsolute = true;
-    }
-
-    if (hasRelatives && toAbsolute) pathData = pathDataToAbsoluteOrRelative(pathData, false);
-    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData, -1, false);
-    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData, arcAccuracy);
-    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
-
-    return pathData;
-
-}
-
-function parsePathDataNormalized(d,
-    {
-        // necessary for most calculations
-        toAbsolute = true,
-        toLonghands = true,
-
-        // not necessary unless you need cubics only
-        quadraticToCubic = false,
-
-        // mostly a fallback if arc calculations fail      
-        arcToCubic = false,
-        // arc to cubic precision - adds more segments for better precision     
-        arcAccuracy = 4,
-    } = {}
-) {
-
-    // is already array
-    let isArray = Array.isArray(d);
-
-    // normalize native pathData to regular array
-    let hasConstructor = isArray && typeof d[0] === 'object' && typeof d[0].constructor === 'function';
-    /*
-    if (hasConstructor) {
-        d = d.map(com => { return { type: com.type, values: com.values } })
-        console.log('hasConstructor', hasConstructor, (typeof d[0].constructor), d);
-    }
-    */
-
-    let pathDataObj = isArray ? d : parsePathDataString(d);
-
-    let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
-    let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
-
-    // normalize
-    pathData = normalizePathData(pathData,
-        { toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy,
-        hasRelatives, hasShorthands, hasQuadratics, hasArcs 
-        },
-    );
-
-    return pathData;
 }
 
 const commandSet = new Set([
@@ -3989,17 +3691,1555 @@ function stringifyPathData(pathData) {
     return pathData.map(com => { return `${com.type} ${com.values.join(' ')}` }).join(' ');
 }
 
-function shapeElToPath(el) {
+function parsePathDataNormalized(d,
+    {
+        // necessary for most calculations
+        toAbsolute = true,
+        toLonghands = true,
+
+        // not necessary unless you need cubics only
+        quadraticToCubic = false,
+
+        // mostly a fallback if arc calculations fail      
+        arcToCubic = false,
+        // arc to cubic precision - adds more segments for better precision     
+        arcAccuracy = 4,
+    } = {}
+) {
+
+    // is already array
+    let isArray = Array.isArray(d);
+
+    // normalize native pathData to regular array
+    let hasConstructor = isArray && typeof d[0] === 'object' && typeof d[0].constructor === 'function';
+    /*
+    if (hasConstructor) {
+        d = d.map(com => { return { type: com.type, values: com.values } })
+        console.log('hasConstructor', hasConstructor, (typeof d[0].constructor), d);
+    }
+    */
+
+    let pathDataObj = isArray ? d : parsePathDataString(d);
+
+    let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
+    let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
+
+    // normalize
+    pathData = normalizePathData(pathData,
+        {
+            toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy,
+            hasRelatives, hasShorthands, hasQuadratics, hasArcs
+        },
+    );
+
+    return pathData;
+}
+
+function convertPathData(pathData, {
+    toShorthands = true,
+    toLonghands = false,
+    toRelative = true,
+    toAbsolute = false,
+    decimals = 3,
+    arcToCubic = false,
+    quadraticToCubic = false,
+
+    // assume we need full normalization
+    hasRelatives = true,
+    hasShorthands = true,
+    hasQuadratics = true,
+    hasArcs = true,
+    testTypes = false
+
+} = {}) {
+
+    // pathdata properties - test= true adds a manual test 
+    if (testTypes) {
+
+        let commands = Array.from(new Set(pathData.map(com => com.type))).join('');
+        hasRelatives = /[lcqamts]/gi.test(commands);
+        hasQuadratics = /[qt]/gi.test(commands);
+        hasArcs = /[a]/gi.test(commands);
+        hasShorthands = /[vhst]/gi.test(commands);
+        isPoly = /[mlz]/gi.test(commands);
+    }
+
+    // some params exclude each other
+    toRelative = toAbsolute ? false : toRelative;
+    toShorthands = toLonghands ? false : toShorthands;
+
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
+    if (toShorthands) pathData = pathDataToShorthands(pathData);
+    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
+
+    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
+
+    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
+
+    // pre round - before relative conversion to minimize distortions
+    if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
+    if (toRelative) pathData = pathDataToRelative(pathData);
+    if (decimals > -1) pathData = roundPathData(pathData, decimals);
+
+    return pathData
+}
+
+/**
+ * parse normalized
+ */
+
+function normalizePathData(pathData = [],
+    {
+        toAbsolute = true,
+        toLonghands = true,
+        quadraticToCubic = false,
+        arcToCubic = false,
+        arcAccuracy = 2,
+
+        // assume we need full normalization
+        hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true, testTypes = false
+
+    } = {}
+) {
+
+    return convertPathData(pathData, { toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy, hasRelatives, hasShorthands, hasQuadratics, hasArcs, testTypes, decimals: -1 })
+}
+
+/*
+export function normalizePathData(pathData = [],
+    {
+        toAbsolute = true,
+        toLonghands = true,
+        quadraticToCubic = false,
+        arcToCubic = false,
+        arcAccuracy = 2,
+
+        // assume we need full normalization
+        hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true, testTypes = false
+
+    } = {}
+) {
+
+    // pathdata properties - test= true adds a manual test 
+    if (testTypes) {
+
+        let commands = Array.from(new Set(pathData.map(com => com.type))).join('');
+        hasRelatives = /[lcqamts]/gi.test(commands);
+        hasQuadratics = /[qt]/gi.test(commands);
+        hasArcs = /[a]/gi.test(commands);
+        hasShorthands = /[vhst]/gi.test(commands);
+        isPoly = /[mlz]/gi.test(commands);
+    }
+
+    if ((hasQuadratics && quadraticToCubic) || (hasArcs && arcToCubic)) {
+        toLonghands = true
+        toAbsolute = true
+    }
+
+    if (hasRelatives && toAbsolute) pathData = pathDataToAbsoluteOrRelative(pathData, false);
+    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData, -1, false);
+    if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData, arcAccuracy);
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
+    return pathData;
+
+}
+*/
+
+function revertCubicQuadratic(p0 = {}, cp1 = {}, cp2 = {}, p = {}, tolerance = 1) {
+
+    // test if cubic can be simplified to quadratic
+    let cp1X = interpolate(p0, cp1, 1.5);
+    let cp2X = interpolate(p, cp2, 1.5);
+
+    let dist0 = getDistManhattan(p0, p);
+    let threshold = dist0 * 0.01 * tolerance;
+    let dist1 = getDistManhattan(cp1X, cp2X);
+
+    let cp1_Q = null;
+    let type = 'C';
+    let values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
+    let comN = { type, values };
+
+    if (dist1 < threshold) {
+        cp1_Q = checkLineIntersection(p0, cp1, p, cp2, false, true);
+        if (cp1_Q) {
+
+            comN.type = 'Q';
+            comN.values = [cp1_Q.x, cp1_Q.y, p.x, p.y];
+            comN.p0 = p0;
+            comN.cp1 = cp1_Q;
+            comN.cp2 = null;
+            comN.p = p;
+        }
+    }
+
+    return comN
+
+}
+
+/**
+ * convert cubic circle approximations
+ * to more compact arcs
+ */
+
+function pathDataArcsToCubics(pathData, {
+    arcAccuracy = 1
+} = {}) {
+
+    let pathDataCubic = [pathData[0]];
+    for (let i = 1, len = pathData.length; i < len; i++) {
+
+        let com = pathData[i];
+        let comPrev = pathData[i - 1];
+        let valuesPrev = comPrev.values;
+        let valuesPrevL = valuesPrev.length;
+        let p0 = { x: valuesPrev[valuesPrevL - 2], y: valuesPrev[valuesPrevL - 1] };
+
+        if (com.type === 'A') {
+            // add all C commands instead of Arc
+            let cubicArcs = arcToBezier$1(p0, com.values, arcAccuracy);
+            cubicArcs.forEach((cubicArc) => {
+                pathDataCubic.push(cubicArc);
+            });
+        }
+
+        else {
+            // add command
+            pathDataCubic.push(com);
+        }
+    }
+
+    return pathDataCubic
+
+}
+
+function pathDataQuadraticToCubic(pathData) {
+
+    let pathDataQuadratic = [pathData[0]];
+    for (let i = 1, len = pathData.length; i < len; i++) {
+
+        let com = pathData[i];
+        let comPrev = pathData[i - 1];
+        let valuesPrev = comPrev.values;
+        let valuesPrevL = valuesPrev.length;
+        let p0 = { x: valuesPrev[valuesPrevL - 2], y: valuesPrev[valuesPrevL - 1] };
+
+        if (com.type === 'Q') {
+            pathDataQuadratic.push(quadratic2Cubic(p0, com.values));
+        }
+
+        else {
+            // add command
+            pathDataQuadratic.push(com);
+        }
+    }
+
+    return pathDataQuadratic
+}
+
+/**
+ * convert quadratic commands to cubic
+ */
+function quadratic2Cubic(p0, values) {
+    if (Array.isArray(p0)) {
+        p0 = {
+            x: p0[0],
+            y: p0[1]
+        };
+    }
+    let cp1 = {
+        x: p0.x + 2 / 3 * (values[0] - p0.x),
+        y: p0.y + 2 / 3 * (values[1] - p0.y)
+    };
+    let cp2 = {
+        x: values[2] + 2 / 3 * (values[0] - values[2]),
+        y: values[3] + 2 / 3 * (values[1] - values[3])
+    };
+    return ({ type: "C", values: [cp1.x, cp1.y, cp2.x, cp2.y, values[2], values[3]] });
+}
+
+/**
+ * convert pathData to 
+ * This is just a port of Dmitry Baranovskiy's 
+ * pathToRelative/Absolute methods used in snap.svg
+ * https://github.com/adobe-webplatform/Snap.svg/
+ */
+
+function pathDataToAbsoluteOrRelative(pathData, toRelative = false, decimals = -1) {
+    if (decimals >= 0) {
+        pathData[0].values = pathData[0].values.map(val => +val.toFixed(decimals));
+    }
+
+    let len = pathData.length;
+    let M = pathData[0].values;
+    let x = M[0],
+        y = M[1],
+        mx = x,
+        my = y;
+
+    for (let i = 1; i < len; i++) {
+        let com = pathData[i];
+        let { type, values } = com;
+        let vLen = values.length;
+        let typeRel = type.toLowerCase();
+        let typeAbs = type.toUpperCase();
+        let typeNew = toRelative ? typeRel : typeAbs;
+
+        if (type !== typeNew) {
+            com.type = typeNew;
+
+            switch (typeRel) {
+                case "a":
+                    values[5] = toRelative ? values[5] - x : values[5] + x;
+                    values[6] = toRelative ? values[6] - y : values[6] + y;
+                    break;
+                case "v":
+                    values[0] = toRelative ? values[0] - y : values[0] + y;
+                    break;
+                case "h":
+                    values[0] = toRelative ? values[0] - x : values[0] + x;
+                    break;
+                case "m":
+                    if (toRelative) {
+                        values[0] -= x;
+                        values[1] -= y;
+                    } else {
+                        values[0] += x;
+                        values[1] += y;
+                    }
+                    mx = toRelative ? values[0] + x : values[0];
+                    my = toRelative ? values[1] + y : values[1];
+                    break;
+                default:
+                    if (values.length) {
+                        for (let v = 0; v < values.length; v++) {
+                            values[v] = toRelative
+                                ? values[v] - (v % 2 ? y : x)
+                                : values[v] + (v % 2 ? y : x);
+                        }
+                    }
+            }
+        }
+
+        switch (typeRel) {
+            case "z":
+                x = mx;
+                y = my;
+                break;
+            case "h":
+                x = toRelative ? x + values[0] : values[0];
+                break;
+            case "v":
+                y = toRelative ? y + values[0] : values[0];
+                break;
+            case "m":
+                mx = values[vLen - 2] + (toRelative ? x : 0);
+                my = values[vLen - 1] + (toRelative ? y : 0);
+            default:
+                x = values[vLen - 2] + (toRelative ? x : 0);
+                y = values[vLen - 1] + (toRelative ? y : 0);
+        }
+
+        if (decimals >= 0) {
+            com.values = com.values.map(val => +val.toFixed(decimals));
+        }
+    }
+    return pathData;
+}
+
+function pathDataToRelative(pathData, decimals = -1) {
+    return pathDataToAbsoluteOrRelative(pathData, true, decimals)
+}
+
+function pathDataToAbsolute(pathData, decimals = -1) {
+    return pathDataToAbsoluteOrRelative(pathData, false, decimals)
+}
+
+/**
+ * decompose/convert shorthands to "longhand" commands:
+ * H, V, S, T => L, L, C, Q
+ * reversed method: pathDataToShorthands()
+ */
+
+function pathDataToLonghands(pathData, decimals = -1, test = true) {
+
+    // analyze pathdata – if you're sure your data is already absolute skip it via test=false
+    let hasRel = false;
+
+    if (test) {
+        let commandTokens = pathData.map(com => { return com.type }).join('');
+        let hasShorthands = /[hstv]/gi.test(commandTokens);
+        hasRel = /[astvqmhlc]/g.test(commandTokens);
+
+        if (!hasShorthands) {
+            return pathData;
+        }
+    }
+
+    pathData = test && hasRel ? pathDataToAbsolute(pathData, decimals) : pathData;
+
+    let pathDataLonghand = [];
+    let comPrev = {
+        type: "M",
+        values: pathData[0].values
+    };
+    pathDataLonghand.push(comPrev);
+
+    for (let i = 1, len = pathData.length; i < len; i++) {
+        let com = pathData[i];
+        let { type, values } = com;
+        let valuesL = values.length;
+        let valuesPrev = comPrev.values;
+        let valuesPrevL = valuesPrev.length;
+        let [x, y] = [values[valuesL - 2], values[valuesL - 1]];
+        let cp1X, cp1Y, cpN1X, cpN1Y, cpN2X, cpN2Y, cp2X, cp2Y;
+        let [prevX, prevY] = [
+            valuesPrev[valuesPrevL - 2],
+            valuesPrev[valuesPrevL - 1]
+        ];
+        switch (type) {
+            case "H":
+                comPrev = {
+                    type: "L",
+                    values: [values[0], prevY]
+                };
+                break;
+            case "V":
+                comPrev = {
+                    type: "L",
+                    values: [prevX, values[0]]
+                };
+                break;
+            case "T":
+                [cp1X, cp1Y] = [valuesPrev[0], valuesPrev[1]];
+                [prevX, prevY] = [
+                    valuesPrev[valuesPrevL - 2],
+                    valuesPrev[valuesPrevL - 1]
+                ];
+                // new control point
+                cpN1X = prevX + (prevX - cp1X);
+                cpN1Y = prevY + (prevY - cp1Y);
+                comPrev = {
+                    type: "Q",
+                    values: [cpN1X, cpN1Y, x, y]
+                };
+                break;
+            case "S":
+
+                [cp1X, cp1Y] = [valuesPrev[0], valuesPrev[1]];
+                [prevX, prevY] = [
+                    valuesPrev[valuesPrevL - 2],
+                    valuesPrev[valuesPrevL - 1]
+                ];
+
+                [cp2X, cp2Y] =
+                    valuesPrevL > 2 && comPrev.type !== 'A' ?
+                        [valuesPrev[2], valuesPrev[3]] :
+                        [prevX, prevY];
+
+                // new control points
+                cpN1X = 2 * prevX - cp2X;
+                cpN1Y = 2 * prevY - cp2Y;
+                cpN2X = values[0];
+                cpN2Y = values[1];
+                comPrev = {
+                    type: "C",
+                    values: [cpN1X, cpN1Y, cpN2X, cpN2Y, x, y]
+                };
+
+                break;
+            default:
+                comPrev = {
+                    type: type,
+                    values: values
+                };
+        }
+        // round final longhand values
+        if (decimals > -1) {
+            comPrev.values = comPrev.values.map(val => { return +val.toFixed(decimals) });
+        }
+
+        pathDataLonghand.push(comPrev);
+    }
+    return pathDataLonghand;
+}
+
+/**
+ * apply shorthand commands if possible
+ * L, L, C, Q => H, V, S, T
+ * reversed method: pathDataToLonghands()
+ */
+function pathDataToShorthands(pathData, decimals = -1, test = false) {
+
+    /** 
+    * analyze pathdata – if you're sure your data is already absolute skip it via test=false
+    */
+    let hasRel;
+    if (test) {
+        let commandTokens = pathData.map(com => { return com.type }).join('');
+        hasRel = /[astvqmhlc]/g.test(commandTokens);
+    }
+
+    pathData = test && hasRel ? pathDataToAbsoluteOrRelative(pathData) : pathData;
+
+    let len = pathData.length;
+    let pathDataShorts = new Array(len);
+
+    let comShort = pathData[0];
+    pathDataShorts[0] = comShort;
+
+    let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
+    let p = p0;
+
+    for (let i = 1; i < len; i++) {
+
+        let com = pathData[i];
+        comShort = com;
+        let { type, values } = com;
+        let valuesLen = values.length;
+        let valuesLast = [values[valuesLen - 2], values[valuesLen - 1]];
+
+        // previous command
+        let comPrev = pathData[i - 1];
+
+        p = { x: valuesLast[0], y: valuesLast[1] };
+
+        // deltas for h or v
+        let dx = Math.abs(p.x - p0.x);
+        let dy = Math.abs(p.y - p0.y);
+        let maxDist = getDistManhattan(p0, p) * 0.01;
+
+        // first bezier control point for S/T shorthand tests
+        let isShort = false, isHorizontal = false, isVertical = false;
+
+        if ((type === 'C' && comPrev.type === 'C') || (type === 'Q' && comPrev.type === 'Q')) {
+            let cpPrev = comPrev.type === 'C' ? { x: comPrev.values[2], y: comPrev.values[3] } : { x: comPrev.values[0], y: comPrev.values[1] };
+            let cpFirst = { x: values[0], y: values[1] };
+
+            let dx1 = (p0.x - cpPrev.x);
+            let dy1 = (p0.y - cpPrev.y);
+
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025;
+
+            // reflected cp
+            let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 };
+            let distCp = getDistManhattan(cpR, cpFirst);
+
+            isShort = distCp < maxDist;
+
+        }
+
+        else if (type === 'L') {
+            isHorizontal = dy === 0 || dy < maxDist;
+            isVertical = dx === 0 || dx < maxDist;
+            isShort = isVertical || isHorizontal;
+        }
+
+        switch (type) {
+            case "L":
+                if (isHorizontal) {
+
+                    comShort = {
+                        type: "H",
+                        values: [values[0]]
+                    };
+                }
+
+                // V
+                if (isVertical) {
+
+                    comShort = {
+                        type: "V",
+                        values: [values[1]]
+                    };
+                }
+                break;
+
+            case "Q":
+
+                if (isShort) {
+
+                    comShort = {
+                        type: "T",
+                        values: [p.x, p.y]
+                    };
+                }
+
+                break;
+            case "C":
+                if (isShort) {
+
+                    comShort = {
+                        type: "S",
+                        values: [values[2], values[3], p.x, p.y]
+                    };
+                }
+                break;
+            default:
+                comShort = {
+                    type: type,
+                    values: values
+                };
+        }
+
+        p0 = p;
+        pathDataShorts[i] = comShort;
+    }
+
+    return pathDataShorts;
+}
+
+/**
+ * Convert a parametrized SVG arc to cubic Beziers
+ * Assumes arc parameters are already resolved
+ */
+function arcToBezierResolved({
+
+    // start / end points
+    p0 = { x: 0, y: 0 },
+    p = { x: 0, y: 0 },
+
+    // center
+    centroid = { x: 0, y: 0 },
+
+    // radii
+    rx = 0,
+    ry = 0,
+
+    // SVG-style rotation
+    xAxisRotation = 0,
+    radToDegree = false,
+
+    // optional
+    startAngle = null,
+    endAngle = null,
+    deltaAngle = null
+
+} = {}) {
+
+    if (!rx || !ry) return [];
+
+    // new pathData
+    let pathData = [];
+
+    // maximum delta for cubic approximations: Math.PI / 2 (90deg)
+    const maxSegAngle = 1.5707963267948966;
+
+    // Pomax cubic constant
+    const k = 0.551785;
+
+    // rotation
+    let phi = radToDegree
+        ? xAxisRotation
+        : xAxisRotation * Math.PI / 180;
+
+    let cosphi = Math.cos(phi);
+    let sinphi = Math.sin(phi);
+
+    // derive angles if not provided
+    if (startAngle === null || endAngle === null || deltaAngle === null) {
+        ({ startAngle, endAngle, deltaAngle } = getDeltaAngle(centroid, p0, p));
+    }
+
+    // parametrize for elliptic arcs
+    let startAngleParam = rx !== ry ? toParametricAngle(startAngle, rx, ry) : startAngle;
+
+    let deltaAngleParam = rx !== ry ? toParametricAngle(deltaAngle, rx, ry) : deltaAngle;
+
+    let segments = Math.max(1, Math.ceil(Math.abs(deltaAngleParam) / maxSegAngle));
+    let angStep = deltaAngleParam / segments;
+
+    for (let i = 0; i < segments; i++) {
+
+        const a = Math.abs(angStep) === maxSegAngle ?
+            Math.sign(angStep) * k :
+            (4 / 3) * Math.tan(angStep / 4);
+
+        let cos0 = Math.cos(startAngleParam);
+        let sin0 = Math.sin(startAngleParam);
+        let cos1 = Math.cos(startAngleParam + angStep);
+        let sin1 = Math.sin(startAngleParam + angStep);
+
+        // unit arc → cubic
+        let c1 = { x: cos0 - sin0 * a, y: sin0 + cos0 * a };
+        let c2 = { x: cos1 + sin1 * a, y: sin1 - cos1 * a };
+        let e = { x: cos1, y: sin1 };
+
+        let values = [];
+
+        [c1, c2, e].forEach(pt => {
+            let x = pt.x * rx;
+            let y = pt.y * ry;
+
+            values.push(
+                cosphi * x - sinphi * y + centroid.x,
+                sinphi * x + cosphi * y + centroid.y
+            );
+        });
+
+        pathData.push({
+            type: 'C',
+            values,
+            cp1: { x: values[0], y: values[1] },
+            cp2: { x: values[2], y: values[3] },
+            p: { x: values[4], y: values[5] },
+        });
+
+        startAngleParam += angStep;
+    }
+
+    return pathData;
+}
+
+/** 
+ * convert arctocommands to cubic bezier
+ * based on puzrin's a2c.js
+ * https://github.com/fontello/svgpath/blob/master/lib/a2c.js
+ * returns pathData array
+*/
+
+function arcToBezier$1(p0, values, splitSegments = 1) {
+    const TAU = Math.PI * 2;
+    let [rx, ry, rotation, largeArcFlag, sweepFlag, x, y] = values;
+
+    if (rx === 0 || ry === 0) {
+        return []
+    }
+
+    let phi = rotation ? rotation * TAU / 360 : 0;
+    let sinphi = phi ? Math.sin(phi) : 0;
+    let cosphi = phi ? Math.cos(phi) : 1;
+    let pxp = cosphi * (p0.x - x) / 2 + sinphi * (p0.y - y) / 2;
+    let pyp = -sinphi * (p0.x - x) / 2 + cosphi * (p0.y - y) / 2;
+
+    if (pxp === 0 && pyp === 0) {
+        return []
+    }
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    let lambda =
+        pxp * pxp / (rx * rx) +
+        pyp * pyp / (ry * ry);
+    if (lambda > 1) {
+        let lambdaRt = Math.sqrt(lambda);
+        rx *= lambdaRt;
+        ry *= lambdaRt;
+    }
+
+    /** 
+     * parametrize arc to 
+     * get center point start and end angles
+     */
+    let rxsq = rx * rx,
+        rysq = rx === ry ? rxsq : ry * ry;
+
+    let pxpsq = pxp * pxp,
+        pypsq = pyp * pyp;
+    let radicant = (rxsq * rysq) - (rxsq * pypsq) - (rysq * pxpsq);
+
+    if (radicant <= 0) {
+        radicant = 0;
+    } else {
+        radicant /= (rxsq * pypsq) + (rysq * pxpsq);
+        radicant = Math.sqrt(radicant) * (largeArcFlag === sweepFlag ? -1 : 1);
+    }
+
+    let centerxp = radicant ? radicant * rx / ry * pyp : 0;
+    let centeryp = radicant ? radicant * -ry / rx * pxp : 0;
+    let centerx = cosphi * centerxp - sinphi * centeryp + (p0.x + x) / 2;
+    let centery = sinphi * centerxp + cosphi * centeryp + (p0.y + y) / 2;
+
+    let vx1 = (pxp - centerxp) / rx;
+    let vy1 = (pyp - centeryp) / ry;
+    let vx2 = (-pxp - centerxp) / rx;
+    let vy2 = (-pyp - centeryp) / ry;
+
+    // get start and end angle
+    const vectorAngle = (ux, uy, vx, vy) => {
+        let dot = +(ux * vx + uy * vy).toFixed(9);
+        if (dot === 1 || dot === -1) {
+            return dot === 1 ? 0 : Math.PI
+        }
+        dot = dot > 1 ? 1 : (dot < -1 ? -1 : dot);
+        let sign = (ux * vy - uy * vx < 0) ? -1 : 1;
+        return sign * Math.acos(dot);
+    };
+
+    let ang1 = vectorAngle(1, 0, vx1, vy1),
+        ang2 = vectorAngle(vx1, vy1, vx2, vy2);
+
+    if (sweepFlag === 0 && ang2 > 0) {
+        ang2 -= Math.PI * 2;
+    }
+    else if (sweepFlag === 1 && ang2 < 0) {
+        ang2 += Math.PI * 2;
+    }
+
+    let ratio = +(Math.abs(ang2) / (TAU / 4)).toFixed(0) || 1;
+
+    // increase segments for more accureate length calculations
+    let segments = ratio * splitSegments;
+    ang2 /= segments;
+    let pathDataArc = [];
+
+    // If 90 degree circular arc, use a constant
+    // https://pomax.github.io/bezierinfo/#circles_cubic
+    // k=0.551784777779014
+    const angle90 = 1.5707963267948966;
+    const k = 0.551785;
+    let a = ang2 === angle90 ? k :
+        (
+            ang2 === -angle90 ? -k : 4 / 3 * Math.tan(ang2 / 4)
+        );
+
+    let cos2 = ang2 ? Math.cos(ang2) : 1;
+    let sin2 = ang2 ? Math.sin(ang2) : 0;
+    let type = 'C';
+
+    const approxUnitArc = (ang1, ang2, a, cos2, sin2) => {
+        let x1 = ang1 != ang2 ? Math.cos(ang1) : cos2;
+        let y1 = ang1 != ang2 ? Math.sin(ang1) : sin2;
+        let x2 = Math.cos(ang1 + ang2);
+        let y2 = Math.sin(ang1 + ang2);
+
+        return [
+            { x: x1 - y1 * a, y: y1 + x1 * a },
+            { x: x2 + y2 * a, y: y2 - x2 * a },
+            { x: x2, y: y2 }
+        ];
+    };
+
+    for (let i = 0; i < segments; i++) {
+        let com = { type: type, values: [] };
+        let curve = approxUnitArc(ang1, ang2, a, cos2, sin2);
+
+        curve.forEach((pt) => {
+            let x = pt.x * rx;
+            let y = pt.y * ry;
+            com.values.push(cosphi * x - sinphi * y + centerx, sinphi * x + cosphi * y + centery);
+        });
+        pathDataArc.push(com);
+        ang1 += ang2;
+    }
+
+    return pathDataArc;
+}
+
+function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
+
+    for (let c = 0, l = pathData.length; c < l; c++) {
+        let com = pathData[c];
+        let comN = pathData[c + 1] || null;
+        let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
+
+        if (type === 'C' && comN && comN.type === 'C') {
+            let comA = cubicCommandToArc(p0, cp1, cp2, p, areaThreshold);
+            let comAN = cubicCommandToArc(comN.p0, comN.cp1, comN.cp2, comN.p, areaThreshold);
+
+            if (comA.isArc  && comAN.isArc) {
+
+                let dist = getDistManhattan(p0, comN.p);
+                let maxDist = dist * 0.01;
+                let dx = Math.abs(comN.p.x - p0.x);
+                let dy = Math.abs(comN.p.y - p0.y);
+
+                let horizontal = dy < maxDist && dx > maxDist;
+                let vertical = dx < maxDist && dy > maxDist;
+
+                let { rx, ry } = comA;
+                let area = getPolygonArea([p0, p, comN.p]);
+                let sweep = area < 0 ? 0 : 1;
+
+                if (vertical || horizontal) {
+                    rx = Math.min(rx, comAN.rx);
+                    ry = Math.min(ry, comAN.ry);
+                    pathData[c] = null;
+                    pathData[c + 1].type = 'A';
+                    pathData[c + 1].values = [rx, ry, 0, 0, sweep, comN.p.x, comN.p.y];
+                    continue
+                }
+            }
+        }
+    }
+
+    pathData = pathData.filter(Boolean);
+
+    return pathData
+
+}
+
+function cubicCommandToArc(p0, cp1, cp2, p, tolerance = 7.5) {
+
+    let com = { type: 'C', values: [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y] };
+
+    let arcSegArea = 0, isArc = false;
+
+    // check angles
+    let angle1 = getAngle(p0, cp1, true);
+    let angle2 = getAngle(p, cp2, true);
+    let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
+
+    let angleDiff = Math.abs((deltaAngle % 180) - 90);
+    let isRightAngle = angleDiff < 3;
+
+    let rx = 0;
+    let ry = 0;
+    let ptC;
+
+    if (isRightAngle) {
+        // point between cps
+
+        // center point
+        let cp1_r = rotatePoint(cp1, p0.x, p0.y, (Math.PI * -0.5));
+        let cp2_r = rotatePoint(cp2, p.x, p.y, (Math.PI * 0.5));
+
+        // assumed centroid
+        ptC = checkLineIntersection(p0, cp1_r, p, cp2_r, false);
+
+        let pI = checkLineIntersection(p0, cp1, p, cp2, false);
+
+        if (pI) {
+
+            let r1 = getDistance(p0, pI);
+            let r2 = getDistance(p, pI);
+
+            let rMax = +Math.max(r1, r2).toFixed(8);
+            let rMin = +Math.min(r1, r2).toFixed(8);
+
+            rx = rMin;
+            ry = rMax;
+
+            let arcArea = getPolygonArea([p0, cp1, cp2, p]);
+            let sweep = arcArea < 0 ? 0 : 1;
+
+            let w = Math.abs(p.x - p0.x);
+            let h = Math.abs(p.y - p0.y);
+            let landscape = w > h;
+
+            let circular = (100 / rx * Math.abs(rx - ry)) < 5;
+
+            if (circular) {
+
+                rx = rMax;
+                ry = rx;
+            }
+
+            if (landscape) {
+
+                rx = rMax;
+                ry = rMin;
+            }
+
+            // get original cubic area 
+            let comO = [
+                { type: 'M', values: [p0.x, p0.y] },
+                { type: 'C', values: [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y] }
+            ];
+
+            let comArea = getPathArea(comO);
+
+            // new arc command
+            let comArc = { type: 'A', values: [rx, ry, 0, 0, sweep, p.x, p.y] };
+
+            // calculate arc seg area
+            arcSegArea = (Math.PI * (rx * ry)) / 4;
+
+            // subtract polygon between start, end and center point
+            arcSegArea -= Math.abs(getPolygonArea([p0, p, pI]));
+
+            let areaDiff = getRelativeAreaDiff(comArea, arcSegArea);
+
+            if (areaDiff < tolerance) {
+                isArc = true;
+                com = comArc;
+            }
+
+        }
+    }
+
+    return { com: com, isArc, area: arcSegArea, rx, ry, centroid: ptC }
+
+}
+
+/*
+
+// combine adjacent arcs
+
+export function combineArcs(pathData) {
+
+    let arcSeq = [[]]
+    let ind = 0
+    let arcIndices = [[]];
+    let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] }, p;
+
+    for (let i = 0, len = pathData.length; i < len; i++) {
+        let com = pathData[i];
+        let { type, values } = com;
+
+        if (type === 'A') {
+
+            let comPrev = pathData[i - 1];
+
+            // previous p0 values might not be correct anymore due to cubic simplification
+            let valsL = comPrev.values.slice(-2);
+            p0 = { x: valsL[0], y: valsL[1] };
+
+            let [rx, ry, xAxisRotation, largeArc, sweep, x, y] = values;
+
+            // check if arc is circular
+            let circular = (100 / rx * Math.abs(rx - ry)) < 5;
+
+            p = { x: values[5], y: values[6] }
+            com.p0 = p0;
+            com.p = p;
+            com.circular = circular;
+
+            let comNext = pathData[i + 1];
+
+            if (!arcSeq[ind].length && comNext && comNext.type === 'A') {
+                arcSeq[ind].push(com)
+                arcIndices[ind].push(i)
+            }
+
+            if (comNext && comNext.type === 'A') {
+                let [rx1, ry1, xAxisRotation0, largeArc, sweep, x, y] = comNext.values;
+                let diffRx = rx != rx1 ? 100 / rx * Math.abs(rx - rx1) : 0
+                let diffRy = ry != ry1 ? 100 / ry * Math.abs(ry - ry1) : 0
+
+                p = { x: comNext.values[5], y: comNext.values[6] }
+                comNext.p0 = p0;
+                comNext.p = p;
+
+                // add if radii are almost same
+                if (diffRx < 5 && diffRy < 5) {
+
+                    arcSeq[ind].push(comNext)
+                    arcIndices[ind].push(i + 1)
+                } else {
+
+                    // start new segment
+                    arcSeq.push([])
+                    arcIndices.push([])
+                    ind++
+
+                }
+            }
+
+            else {
+
+                arcSeq.push([])
+                arcIndices.push([])
+                ind++
+            }
+        }
+    }
+
+    if (!arcIndices.length) return pathData;
+
+    arcSeq = arcSeq.filter(item => item.length)
+    arcIndices = arcIndices.filter(item => item.length)
+
+    // Process in reverse to avoid index shifting
+    for (let i = arcSeq.length - 1; i >= 0; i--) {
+        const seq = arcSeq[i];
+        const start = arcIndices[i][0];
+        const len = seq.length;
+
+        // Average radii to prevent distortions
+        let rxA = 0, ryA = 0;
+        seq.forEach(({ values }) => {
+            const [rx, ry] = values;
+            rxA += rx;
+            ryA += ry;
+        });
+        rxA /= len;
+        ryA /= len;
+
+        // Correct near-circular arcs
+
+        // check if arc is circular
+        let circular = (100 / rxA * Math.abs(rxA - ryA)) < 5;
+
+        if (circular) {
+            // average radii
+            rxA = (rxA + ryA) / 2;
+            ryA = rxA;
+        }
+
+        let comPrev = pathData[start - 1]
+        let comPrevVals = comPrev.values.slice(-2)
+        let M = { type: 'M', values: [comPrevVals[0], comPrevVals[1]] }
+
+        if (len === 4) {
+
+            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[1].values;
+            let [, , , , , x2, y2] = seq[3].values;
+
+            let xDiff = Math.abs(x2 - x1);
+            let yDiff = Math.abs(y2 - y1);
+            let horizontal = xDiff > yDiff;
+
+            if (circular) {
+                let adjustY = !horizontal ? rxA * 2 : 0;
+
+                // simplify radii
+                rxA = 1;
+                ryA = 1;
+            }
+
+            let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x1, y1] };
+            let com2 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
+
+            // This now correctly replaces the original 4 arc commands with 2
+            pathData.splice(start, len, com1, com2);
+
+        }
+
+        else if (len === 3) {
+
+            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[0].values;
+            let [rx2, ry2, , , , x2, y2] = seq[2].values;
+
+            // must be large arc
+            largeArc = 1;
+            let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
+
+            // replace
+            pathData.splice(start, len, com1);
+
+        }
+
+        else if (len === 2) {
+
+            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[0].values;
+            let [rx2, ry2, , , , x2, y2] = seq[1].values;
+
+            // if circular or non-elliptic xAxisRotation has no effect
+            if (circular) {
+                rxA = 1;
+                ryA = 1;
+                xAxisRotation = 0;
+            }
+
+            // check if arc is already ideal
+            let { p0, p } = seq[0];
+            let [p0_1, p_1] = [seq[1].p0, seq[1].p];
+
+            if (p0.x !== p_1.x || p0.y !== p_1.y) {
+
+                let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
+
+                // replace
+                pathData.splice(start, len, com1);
+            }
+        }
+
+        else {
+
+        }
+    }
+
+    return pathData
+}
+
+export function combineCubicsToArcs(pathData = [], {
+    threshold = 0,
+} = {}) {
+
+    let l = pathData.length;
+    let pathDataN = [pathData[0]];
+
+    for (let i = 1; i < l; i++) {
+        let com = pathData[i];
+        let { type, cp1 = null, cp2 = null, p0, p } = com;
+        let comP = pathData[i - 1];
+        let comN = pathData[i + 1] ? pathData[i + 1] : null;
+        let comN2 = pathData[i + 2] ? pathData[i + 2] : null;
+
+        if (type === 'C' && comN && comN.type === 'C') {
+
+            let thresh = getDistAv(p0, p) * 0.02;
+
+            let dx1 = Math.abs(p0.x - cp1.x)
+            let dy1 = Math.abs(p0.y - cp1.y)
+
+            let isHorizontal1 = dy1 < thresh;
+            let isVertical1 = dx1 < thresh;
+
+            let dx2 = Math.abs(comN.p0.x - comN.cp1.x)
+            let dy2 = Math.abs(comN.p0.y - comN.cp1.y)
+
+            let isHorizontal2 = dy2 < thresh;
+            let isVertical2 = dx2 < thresh;
+
+            // check angles
+            let angleDiff1 = (isHorizontal1 || isVertical1) ? 0 : Infinity;
+            let angleDiff2 = (isHorizontal2 || isVertical2) ? 0 : Infinity;
+
+            if (!isHorizontal1 && !isVertical1) {
+
+                let angle1 = getAngle(p0, cp1, true);
+                let angle2 = getAngle(p, cp2, true);
+                let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
+                angleDiff1 = Math.abs((deltaAngle % 180) - 90);
+            }
+
+            if (!isHorizontal2 && !isVertical2) {
+
+                let angle1 = getAngle(p0, cp1, true);
+                let angle2 = getAngle(p, cp2, true);
+                let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
+                angleDiff2 = Math.abs((deltaAngle % 180) - 90);
+            }
+
+            let isRightAngle1 = angleDiff1 < 3;
+            let isRightAngle2 = angleDiff2 < 3;
+
+            let centroids = [];
+            let poly = [];
+            let rArr = []
+            let largeArc = 0;
+
+            // final on path point
+            let p_a = p
+
+            // 2  possible candidates - test radius
+            if (isRightAngle1 && isRightAngle2) {
+
+                let pI = checkLineIntersection(p0, cp1, p, cp2, false);
+                let r1 = getDistance(p0, pI);
+                let r2 = getDistance(p, pI);
+                let rDiff1 = Math.abs(r1 - r2)
+
+                rArr.push(r1, r2)
+
+                poly.push(p0, p)
+                p_a = p
+
+                // 2 commands can be combined – similar radii  
+                if (rDiff1 < thresh) {
+
+                    // add to polygon for sweep
+                    poly.push(comN.p)
+
+                    // update final point
+                    p_a = comN.p
+
+                    // approximate/average final center point for final radius
+                    let cp1_r = rotatePoint(cp1, p0.x, p0.y, (Math.PI * -0.5))
+                    let cp2_r = rotatePoint(cp2, p.x, p.y, (Math.PI * 0.5))
+
+                    let cp1_r2 = rotatePoint(comN.cp1, comN.p0.x, comN.p0.y, (Math.PI * -0.5))
+                    let cp2_r2 = rotatePoint(comN.cp2, comN.p.x, comN.p.y, (Math.PI * 0.5))
+
+                    // assumed centroid
+                    let ptC = checkLineIntersection(p0, cp1_r, p, cp2_r, false)
+                    let ptC2 = checkLineIntersection(comN.p0, cp1_r2, comN.p, cp2_r2, false)
+                    let distC = ptC && ptC2 ? getDistAv(ptC, ptC2) : Infinity
+
+                    // 2 commands can definitely be combined 
+                    if (distC < thresh) {
+
+                        // add to centroid array
+                        centroids.push(ptC, ptC2)
+
+                    }
+
+                    if (comN2 && comN2.type === 'C') {
+
+                        let cp1_r3 = rotatePoint(comN2.cp1, comN2.p0.x, comN2.p0.y, (Math.PI * -0.5))
+                        let cp2_r3 = rotatePoint(comN2.cp2, comN2.p.x, comN2.p.y, (Math.PI * 0.5))
+                        let ptC3 = checkLineIntersection(comN2.p0, cp1_r3, comN2.p, cp2_r3, false)
+
+                        let distC2 = ptC && ptC3 ? getDistAv(ptC, ptC3) : Infinity
+
+                        // can be combined with 3rd command
+                        if (distC2 < thresh) {
+
+                            let r3 = getDistance(ptC3, comN2.p)
+                            rArr.push(r3)
+
+                            // update final point
+                            p_a = comN2.p
+                            poly.push(p, comN2.p)
+
+                            largeArc = 1;
+
+                        }
+                    }
+
+                } else {
+                    pathDataN.push(com)
+                    continue
+                }
+
+            }
+
+            // create new arc command
+            if (poly.length > 1) {
+
+                // get average radius
+
+                let rA = Math.max(...rArr)
+                rA = rArr[0]
+
+                let centroidA;
+                let xArr = centroids.map(pt => pt.x)
+                let yArr = centroids.map(pt => pt.y)
+
+                centroidA = {
+                    x: (xArr.reduce((a, b) => a + b, 0)) / centroids.length,
+                    y: (yArr.reduce((a, b) => a + b, 0)) / centroids.length
+                }
+
+                rA = getDistance(p0, centroidA)
+                let rA2 = getDistance(p, centroidA)
+
+                // rA = ((Math.min(...rArr) * 2 + Math.max(...rArr)) ) / 3
+
+                let area = getPolygonArea(poly, false)
+                let sweep = area < 0 ? 0 : 1;
+
+                let comA = { type: 'A', values: [rA, rA, 0, largeArc, sweep, p_a.x, p_a.y], p0, p: p_a }
+
+                console.log('comA', comA);
+
+                pathDataN.push(comA)
+
+                i += rArr.length - 1;
+
+                continue
+
+            }
+
+            // test angles
+        }
+
+        pathDataN.push(com)
+    }
+
+    let d = pathDataToD(pathDataN)
+    console.log(d);
+
+    console.log('pathDataN', pathDataN);
+    return pathDataN
+
+}
+*/
+
+/**
+ * get viewBox 
+ * either from explicit attribute or
+ * width and height attributes
+ */
+
+function getViewBox(svg = null, {
+    autoRoundValues=true,
+    decimals = -1
+}={}) {
+
+    // browser default
+    if (!svg) return false
+
+    let hasWidth = svg.hasAttribute('width');
+    let hasHeight = svg.hasAttribute('height');
+    let hasViewBox = svg.hasAttribute('viewBox');
+
+    let widthAtt = hasWidth ? svg.getAttribute('width') : 0;
+    let heightAtt = hasHeight ? svg.getAttribute('height') : 0;
+
+    let w = widthAtt ? (!widthAtt.includes('%') ? normalizeUnits(widthAtt, {isHorizontal:true}) : 0 ) : 300;
+    let h = heightAtt ? (!heightAtt.includes('%') ? normalizeUnits(heightAtt, {isVertical:true}) : 0 ) : 150;
+
+    let widthUnit = hasWidth ? '' : '';
+    let heightUnit = hasHeight ? '' : '';
+
+    let viewBoxVals =  hasViewBox ? svg.getAttribute('viewBox').split(/,| /).filter(Boolean).map(Number) : [0, 0, w, h];
+
+    // round
+    if (autoRoundValues ) {
+        [w, h] = [w, h].map(val=>autoRound(val));
+        viewBoxVals = viewBoxVals.map(val=>autoRound(val));
+    }
+    else if (!autoRoundValues && decimals>-1) {
+        [w, h] = [w, h].map(val=>+val.toFixed(decimals));
+        viewBoxVals = viewBoxVals.map(val=>+val.toFixed(decimals));
+    }
+
+    let [x=0, y=0, width=0, height=0] = viewBoxVals;
+    if(hasViewBox) {
+        w=width;
+        h=height;
+    }
+
+    let viewBox = { x , y, width, height, w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit };
+
+    return viewBox
+}
+
+function getRootSvg(el) {
+  let svg = el.parentNode.closest('svg');
+  while (svg && svg.parentNode && svg.parentNode.closest) {
+    let parentSvg = svg.parentNode.closest('svg');
+    if (!parentSvg) break;
+    svg = parentSvg;
+  }
+  return svg;
+}
+
+function pathElToShape(el, {
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false
+} = {}) {
+
+    let pathData = parsePathDataNormalized(el.getAttribute('d'));
+    let coms = Array.from(new Set(pathData.map(com => com.type))).join('');
+
+    let hasArcs = (/[a]/gi).test(coms);
+    let hasBeziers = (/[csqt]/gi).test(coms);
+    let hasLines = (/[l]/gi).test(coms);
+    let isPoly = !(/[acqts]/gi).test(coms);
+    let closed = (/[z]/gi).test(coms);
+    let shape = null;
+    let type = null;
+
+    let attributes = getElementAtts(el);
+    let attsNew = {};
+    let decimals = 7;
+
+    if (isPoly) {
+
+        // is line
+        if (pathData.length === 2 && convert_lines) {
+            type = 'line';
+            shape = document.createElementNS(svgNs, type);
+            let [x1, y1, x2, y2] = [...pathData[0].values, ...pathData[1].values].map(val => roundTo(val, decimals));
+            attsNew = { x1, y1, x2, y2 };
+        }
+        // polygon, polyline or rect
+        else {
+
+            let vertices = getPathDataVertices(pathData);
+            let bb = getPolyBBox(vertices);
+            let areaPoly = getPolygonArea(vertices, true);
+            let areaRect = bb.width * bb.height;
+            let areaDiff = Math.abs(1 - areaRect / areaPoly);
+
+            // is rect
+            if (convert_rects && areaDiff < 0.01) {
+                type = 'rect';
+                shape = document.createElementNS(svgNs, type);
+                let { x, y, width, height } = bb;
+                attsNew = { x, y, width, height };
+
+            }
+            // polyline or polygon
+            else if(convert_poly) {
+                type = closed ? 'polygon' : 'polyline';
+                shape = document.createElementNS(svgNs, type);
+                let points = vertices.map(pt => { return [pt.x, pt.y] }).flat().map(val => roundTo(val, decimals)).join(' ');
+                attsNew = { points };
+            }
+        }
+    }
+    // circles or ellipses
+    else if (!hasLines && convert_ellipses) {
+
+        // try to convert cubics to arcs
+        if (!hasArcs && hasBeziers) {
+            pathData = pathDataCubicsToArc(pathData, { areaThreshold: 2.5 });
+            hasArcs = pathData.filter(com => com.type === 'A').length;
+        }
+
+        if (hasArcs) {
+            let pathData2 = getPathDataVerbose(pathData, { addArcParams: true });
+            let arcComs = pathData2.filter(com => com.type === 'A');
+
+            let cxVals = new Set();
+            let cyVals = new Set();
+            let rxVals = new Set();
+            let ryVals = new Set();
+
+            if (arcComs.length > 1) {
+
+                pathData2.forEach(com => {
+                    if (com.type === 'A') {
+
+                        cxVals.add(roundTo(com.cx, decimals));
+                        cyVals.add(roundTo(com.cy, decimals));
+                        rxVals.add(roundTo(com.rx, decimals));
+                        ryVals.add(roundTo(com.ry, decimals));
+                    }
+                });
+            }
+
+            cxVals = Array.from(cxVals);
+            cyVals = Array.from(cyVals);
+            rxVals = Array.from(rxVals);
+            ryVals = Array.from(ryVals);
+
+            if(cxVals.length===1 && cyVals.length===1 && rxVals.length===1 && ryVals.length===1){
+                let [rx, ry, cx, cy] = [rxVals[0], ryVals[0], cxVals[0], cyVals[0]];
+                type = rx===ry ? 'circle' : 'ellipse';
+                shape = document.createElementNS(svgNs, type);
+                attsNew = type==='circle' ? { r:rx, cx, cy } : {rx, ry, cx, cy};
+            }
+        }
+    }
+
+    // if el could be replaced
+    if (shape) {
+        let ignore = ['id', 'class'];
+
+        // set  shape attributes
+        for (let att in attsNew) {
+            shape.setAttribute(att, attsNew[att]);
+        }
+
+        // copy old attributes
+        for (let att in attributes) {
+
+            if (attLookup.atts[att].includes(type) || ignore.includes(att) || att.startsWith('data-')) {
+                shape.setAttribute(att, attributes[att]);
+            }
+        }
+
+        // replace
+        el = shape;
+    }
+
+    return el;
+
+}
+
+function shapeElToPath(el, { width = 0,
+    height = 0,
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false
+
+} = {}) {
 
     let nodeName = el.nodeName.toLowerCase();
-    if (nodeName === 'path') return el;
 
-    let pathData = getPathDataFromEl(el);
+    if (
+        nodeName === 'path' ||
+        nodeName === 'rect' && !convert_rects ||
+        (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
+        (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
+        (nodeName === 'line') && !convert_lines
+    ) return el;
+
+    let pathData = getPathDataFromEl(el, { width, height });
     let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ');
     let attributes = [...el.attributes].map(att => att.name);
 
-    let pathN = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-
+    let pathN = document.createElementNS(svgNs, 'path');
     pathN.setAttribute('d', d);
 
     let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
@@ -4015,118 +5255,34 @@ function shapeElToPath(el) {
     return pathN
 
 }
+/*
+export function copyAttributes(newEl, oldEl){
+
+    let attributes = [...oldEl.attributes].map(att => att.name);
+
+}
+*/
 
 // retrieve pathdata from svg geometry elements
-function getPathDataFromEl(el, stringify = false) {
+function getPathDataFromEl(el, {
+    stringify = false,
+    width = 0,
+    height = 0
+} = {}) {
 
     let pathData = [];
     let type = el.nodeName.toLowerCase();
-    let atts, attNames, d, x, y, width, height, r, rx, ry, cx, cy, x1, x2, y1, y2;
+    let d, x, y, r, rx, ry, cx, cy, x1, x2, y1, y2;
 
-    // convert relative or absolute units 
-    const svgElUnitsToPixel = (el, decimals = 9) => {
+    if (!width || !height) {
+        let svg = getRootSvg(el);
+        let viewBox = getViewBox(svg);
+        width = viewBox.width;
+        height = viewBox.height;
+    }
 
-        const svg = el.nodeName !== "svg" ? el.closest("svg") : el;
-
-        // convert real life units to pixels
-        const translateUnitToPixel = (value) => {
-
-            if (value === null) {
-                return 0
-            }
-
-            let dpi = 96;
-            let unit = value.match(/([a-z]+)/gi);
-            unit = unit ? unit[0] : "";
-            let val = parseFloat(value);
-            let rat;
-
-            // no unit - already pixes/user unit
-            if (!unit) {
-                return val;
-            }
-
-            switch (unit) {
-                case "in":
-                    rat = dpi;
-                    break;
-                case "pt":
-                    rat = (1 / 72) * 96;
-                    break;
-                case "cm":
-                    rat = (1 / 2.54) * 96;
-                    break;
-                case "mm":
-                    rat = ((1 / 2.54) * 96) / 10;
-                    break;
-                // just a default approximation
-                case "em":
-                case "rem":
-                    rat = 16;
-                    break;
-                default:
-                    rat = 1;
-            }
-            let valuePx = val * rat;
-            return +valuePx.toFixed(decimals);
-        };
-
-        // svg width and height attributes
-        let width = svg.getAttribute("width");
-        width = width ? translateUnitToPixel(width) : 300;
-        let height = svg.getAttribute("height");
-        height = width ? translateUnitToPixel(height) : 150;
-
-        let vB = svg.getAttribute("viewBox");
-        vB = vB
-            ? vB
-                .replace(/,/g, " ")
-                .split(" ")
-                .filter(Boolean)
-                .map((val) => {
-                    return +val;
-                })
-            : [];
-
-        let w = vB.length ? vB[2] : width;
-        let h = vB.length ? vB[3] : height;
-        let scaleX = w / 100;
-        let scaleY = h / 100;
-        let scalRoot = Math.sqrt((Math.pow(scaleX, 2) + Math.pow(scaleY, 2)) / 2);
-
-        let attsH = ["x", "width", "x1", "x2", "rx", "cx", "r"];
-        let attsV = ["y", "height", "y1", "y2", "ry", "cy"];
-
-        let atts = el.getAttributeNames();
-        atts.forEach((att) => {
-            let val = el.getAttribute(att);
-            let valAbs = val;
-            if (attsH.includes(att) || attsV.includes(att)) {
-                let scale = attsH.includes(att) ? scaleX : scaleY;
-                scale = att === "r" && w != h ? scalRoot : scale;
-                let unit = val.match(/([a-z|%]+)/gi);
-                unit = unit ? unit[0] : "";
-                if (val.includes("%")) {
-                    valAbs = parseFloat(val) * scale;
-                }
-
-                else {
-                    valAbs = translateUnitToPixel(val);
-                }
-                el.setAttribute(att, +valAbs);
-            }
-        });
-    };
-
-    svgElUnitsToPixel(el);
-
-    const getAtts = (attNames) => {
-        atts = {};
-        attNames.forEach(att => {
-            atts[att] = +el.getAttribute(att);
-        });
-        return atts
-    };
+    // convert relative and physical units to user-units
+    let atts = svgElUnitsToPixel(el, { width, height });
 
     switch (type) {
         case 'path':
@@ -4135,8 +5291,7 @@ function getPathDataFromEl(el, stringify = false) {
             break;
 
         case 'rect':
-            attNames = ['x', 'y', 'width', 'height', 'rx', 'ry'];
-            ({ x, y, width, height, rx, ry } = getAtts(attNames));
+            ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
 
             if (!rx && !ry) {
                 pathData = [
@@ -4148,8 +5303,8 @@ function getPathDataFromEl(el, stringify = false) {
                 ];
             } else {
 
-                rx=rx? rx : ry;
-                ry=ry ? ry : rx;
+                rx = rx ? rx : ry;
+                ry = ry ? ry : rx;
 
                 if (rx > width / 2) {
                     rx = width / 2;
@@ -4174,9 +5329,7 @@ function getPathDataFromEl(el, stringify = false) {
 
         case 'circle':
         case 'ellipse':
-
-            attNames = ['cx', 'cy', 'rx', 'ry', 'r'];
-            ({ cx, cy, r, rx, ry } = getAtts(attNames));
+            ({ cx=0, cy=0, r, rx, ry } = atts);
 
             let isCircle = type === 'circle';
 
@@ -4189,9 +5342,9 @@ function getPathDataFromEl(el, stringify = false) {
                 ry = ry ? ry : r;
             }
 
-            // simplified radii for cirecles
-            let rxS = isCircle && r>=1 ? 1 : rx;
-            let ryS = isCircle && r>=1 ? 1 : rx;
+            // simplified radii for circles
+            let rxS = isCircle && r >= 1 ? 1 : rx;
+            let ryS = isCircle && r >= 1 ? 1 : ry;
 
             pathData = [
                 { type: "M", values: [cx + rx, cy] },
@@ -4201,8 +5354,7 @@ function getPathDataFromEl(el, stringify = false) {
 
             break;
         case 'line':
-            attNames = ['x1', 'y1', 'x2', 'y2'];
-            ({ x1, y1, x2, y2 } = getAtts(attNames));
+            ({ x1, y1, x2, y2 } = atts);
             pathData = [
                 { type: "M", values: [x1, y1] },
                 { type: "L", values: [x2, y2] }
@@ -4211,12 +5363,12 @@ function getPathDataFromEl(el, stringify = false) {
         case 'polygon':
         case 'polyline':
 
-            let points = el.getAttribute('points').replaceAll(',', ' ').split(' ').filter(Boolean);
+            let points = el.getAttribute('points').split(/,| /).filter(Boolean).map(Number);
 
             for (let i = 0; i < points.length; i += 2) {
                 pathData.push({
                     type: (i === 0 ? "M" : "L"),
-                    values: [+points[i], +points[i + 1]]
+                    values: [points[i], points[i + 1]]
                 });
             }
             if (type === 'polygon') {
@@ -5076,341 +6228,6 @@ function getMatrix2D(transformations = [], origin = { x: 0, y: 0 }) {
     return matrix;
 }
 
-/**
- * all SVG attributes
- * mapped to elements
- * used to remove unnecessary attribution
- */
-
-const shapeEls = [
-    "polygon",
-    "polyline",
-    "line",
-    "rect",
-    "circle",
-    "ellipse",
-];
-
-const geometryEls = [
-    "path",
-    ...shapeEls
-];
-
-const textEls = [
-    "textPath",
-    "text",
-    "tspan",
-];
-
-const attLookup = {
-
-    atts: {
-
-        // wildcard
-        id:'*',
-        class:'*',
-
-        // svg
-        viewBox: ["symbol", "svg"],
-        preserveAspectRatio: ["symbol", "svg"],
-        width: ["svg", "rect", "use", "image"],
-        height: ["svg", "rect", "use", "image"],
-
-        // geometry
-        d: ["path"],
-        points: ["polygon", "polyline"],
-
-        x: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
-        y: ["image", "rect", "text", "textPath", "tspan", "use", "mask"],
-        x1: ["line", "linearGradient"],
-        x2: ["line", "linearGradient"],
-        y1: ["line", "linearGradient"],
-        y2: ["line", "linearGradient"],
-
-        r: ["circle", "radialGradient"],
-        rx: ["rect", "ellipse"],
-        ry: ["rect", "ellipse"],
-
-        cx: ["circle", "ellipse", "radialGradient"],
-        cy: ["circle", "ellipse", "radialGradient"],
-
-        refX: ["symbol", "markers"],
-        refY: ["symbol", "markers"],
-
-        // transforms
-        transform: [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        "transform-origin": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        fill: [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "animate",
-            "animateMotion"
-        ],
-
-        "fill-opacity": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        "fill-rule": ["svg", "g", "path", "polygon",  "text", "textPath"],
-
-        opacity: [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        stroke: [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        "stroke-width": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-opacity": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-miterlimit": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-linejoin": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-linecap": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-dashoffset": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "stroke-dasharray": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-            "mask",
-        ],
-
-        "clip-path": [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-
-        "clip-rule": [
-            "path",
-            "polygon",
-        ],
-
-        clipPathUnits: ["clipPath"],
-
-        mask: [
-            "svg",
-            "g",
-            "use",
-            ...geometryEls,
-            ...textEls,
-        ],
-        maskContentUnits: ["mask"],
-        maskUnits: ["mask"],
-
-        // text els
-        "font-family": ["svg", "g", ...textEls],
-        "font-size": ["svg", "g", ...textEls],
-        "font-style": ["svg", "g", ...textEls],
-        "font-weight": ["svg", "g", ...textEls],
-        "font-stretch": ["svg", "g", ...textEls],
-        "dominant-baseline": [...textEls],
-        lengthAdjust: [...textEls],
-        "text-anchor": ["text"],
-        textLength: ["text", "textPath", "tspan"],
-        dx: ["text", "tspan"],
-        dy: ["text", "tspan"],
-        method: ["textPath"],
-
-        spacing: ["textPath"],
-        startOffset: ["textPath"],
-        rotate: ["text", "tspan", "animateMotion"],
-        side: ["textPath"],
-        "white-space": ["svg", "g", ...textEls],
-
-        // actually nonsense but might be used for currentColor
-        "color": ["svg", "g", ...textEls],
-
-        // animate
-        playbackorder: ["svg"],
-        timelinebegin: ["svg"],
-
-        dur: ["animate", "animateTransform", "animateMotion"],
-        end: ["animate", "animateTransform", "animateMotion"],
-        from: ["animate", "animateTransform", "animateMotion"],
-        to: ["animate", "animateTransform", "animateMotion"],
-        type: ["animateTransform"],
-        values: ["animate", "animateTransform", "animateMotion"],
-        accumulate: ["animate", "animateTransform", "animateMotion"],
-        additive: ["animate", "animateTransform", "animateMotion"],
-        attributeName: ["animate", "animateTransform"],
-        begin: ["animate", "animateTransform", "animateMotion"],
-        by: ["animate", "animateTransform", "animateMotion"],
-        calcMode: ["animate", "animateTransform", "animateMotion"],
-        keyPoints: ["animateMotion"],
-        keySplines: ["animate", "animateTransform", "animateMotion"],
-        keyTimes: ["animate", "animateTransform", "animateMotion"],
-        max: ["animate", "animateTransform", "animateMotion"],
-        min: ["animate", "animateTransform", "animateMotion"],
-        origin: ["animateMotion"],
-        repeatCount: ["animate", "animateTransform", "animateMotion"],
-        repeatDur: ["animate", "animateTransform", "animateMotion"],
-        restart: ["animate", "animateTransform", "animateMotion"],
-
-        // gradients
-        gradientUnits: ["linearGradient", "radialGradient"],
-        gradientTransform: ["linearGradient", "radialGradient"],
-        fr: ["radialGradient"],
-        fx: ["radialGradient"],
-        fy: ["radialGradient"],
-        offset: ["stop"],
-        "stop-color": ["stop"],
-        "stop-opacity": ["stop"],
-        spreadMethod: ["linearGradient", "radialGradient"],
-
-        // object references
-        href: [
-            "pattern",
-            "textPath",
-            "linearGradient",
-            "radialGradient",
-            "use",
-            "animate",
-            "animateTransform",
-            "animateMotion",
-            "image"
-        ],
-
-        pathLength: [
-            ...geometryEls
-        ],
-
-    },
-
-    defaults: {
-
-        transform: ["none", "matrix(1, 0, 0, 1, 0, 0)"],
-        "transform-origin": ["0px, 0px", "0 0"],
-        rx: ["0", "0px"],
-        ry: ["0", "0px"],
-        x: ["0", "0px"],
-        y: ["0", "0px"],
-
-        fill: ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
-        "color": ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
-
-        stroke: ["none"],
-        "stroke-width": ["1", "1px"],
-        opacity: ["1"],
-        "fill-opacity": ["1"],
-        "stroke-opacity": ["1"],
-        "stroke-linecap": ["butt"],
-        "stroke-miterlimit": ["4"],
-        "stroke-linejoin": ["miter"],
-        "stroke-dasharray": ["none"],
-        "stroke-dashoffset": ["0", "0px", "none"],
-        "pathLength": ["none"],
-
-        // text
-        "font-family": ["serif"],
-        "font-weight": ["normal", "400"],
-        "font-stretch": ["normal"],
-        "font-width": ["normal"],
-        "letter-spacing": ["auto", "normal", "0"],
-        "lengthAdjust": ["spacing"],
-        "text-anchor": ["start"],
-        "dominant-baseline": ["auto"],
-        spacing: ["auto"],
-        "white-space": ["normal"],
-
-        // gradients
-        "stop-opacity": ["1"],
-
-        gradientUnits: ["objectBoundingBox"],
-        patternUnits: ["objectBoundingBox"],
-
-        // clips and masks
-        "clip-path": ["none"],
-        "clip-rule": ["nonzero"],
-        "fill-rule": ["nonzero"],
-        clipPathUnits: ["userSpaceOnUse"],
-
-        mask: ["none"],
-        maskUnits: ["objectBoundingBox"],
-
-    }
-};
-
 function svgStylesToAttributes(el, {
     removeNameSpaced = true,
     decimals = -1
@@ -5421,9 +6238,11 @@ function svgStylesToAttributes(el, {
     let cssProps = getElStyleProps(el);
 
     // normalize transform attributes
+    /*
     if (attProps['transform']) {
         console.log(`attProps['transform']`, attProps['transform']);
     }
+    */
 
     // merge properties
     let props = {
@@ -5530,6 +6349,131 @@ function getElAttributes(el) {
     return props;
 }
 
+/*
+function roundValue(value = '', decimals = -1) {
+    if (decimals < 0) return value;
+    value = value.replace(/["]/g, '').trim()
+    let valueNum = parseFloat(value);
+    let valueHasNumber = !isNaN(valueNum);
+    if (!valueHasNumber) return value;
+
+    let unit = valueHasNumber ? getUnit(value) : '';
+    if (valueHasNumber) value = `${valueNum.toFixed(decimals)}${unit}`;
+
+    return value;
+}
+*/
+
+function normalizePoly(pts, {
+    toObject = true,
+    toArray = false,
+    flatten = false
+} = {}) {
+
+    // is stringified flat point attribute
+    if(typeof pts === 'string' && !isNaN(pts[0])){
+        pts = toPointArray(pts.split(/,| /).filter(Boolean).map(Number));
+        return pts
+    }
+
+    if (flatten) pts = pts.flat(2);
+    let poly = toArray ? polyPtsToArray(pts) : polyArrayToObject(pts);
+    return poly
+}
+
+function polyArrayToObject(pts) {
+
+    // is point object array
+    if (pts[0].x !== undefined && pts[0].y !== undefined) return pts
+
+    let poly = [];
+
+    // complex poly object array
+    if (Array.isArray(pts[0]) && pts[0][0].x !== undefined && pts[0][0].y !== undefined) {
+        return pts
+    }
+    // complex poly value array
+    else if (Array.isArray(pts[0][0]) && pts[0][0].length === 2) {
+        pts.forEach(sub => {
+            poly.push(sub.map(pt => { return { x: pt[0], y: pt[1] } }));
+        });
+        return poly
+    }
+
+    else if(pts.length>3){
+        pts = toPointArray(pts);
+        return pts
+    }
+
+    return pts.map(pt => { return { x: pt[0], y: pt[1] } })
+}
+
+function polyPtsToArray(pts) {
+
+    // is already coordinate array
+    if (!Array.isArray(pts[0][0]) && pts[0].length === 2) return pts
+
+    let poly = [];
+    if (Array.isArray(pts[0][0]) && pts[0][0].length === 2) {
+        pts.forEach(sub => {
+            poly.push(sub.map(pt => [pt.x, pt.y]));
+        });
+        return poly
+    }
+
+    poly = Array.from(pts).map(pt => [pt.x, pt.y]);
+    return poly
+}
+
+// convert flat point value array to point object array
+function toPointArray(pts) {
+    let ptArr = [];
+    for (let i = 1, l = pts.length; i < l; i += 2) {
+        ptArr.push({ x: pts[i - 1], y: pts[i] });
+    }
+    return ptArr;
+}
+
+function getElBBox(el){
+
+    let type=el.nodeName.toLowerCase();
+    let atts = getElementAtts(el);
+    let bb = {x:0, y:0, width:0, height:0};
+    let pts = [];
+
+    switch(type){
+        case 'path':
+            let pathData = parsePathDataNormalized(atts.d);
+            bb=getPolyBBox(getPathDataPoly(pathData));
+
+        break;
+        case 'rect':
+            bb = {x:atts.x||0, y:atts.y||0, width:atts.width, height:atts.height};
+        break;
+        case 'circle':
+            let diameter = atts.r*2;
+            bb = {x:atts.cx-atts.r, y:atts.cy-atts.r, width:diameter, height:diameter};
+        break;
+        case 'ellipse':
+            bb = {x:atts.cx-atts.rx, y:atts.cy-atts.ry, width:atts.rx*2, height:atts.ry*2};
+        break;
+
+        case 'line':
+            pts = [{x:atts.x1, y:atts.y1}, {x:atts.x2, y:atts.y2}];
+            bb = getPolyBBox(pts);
+        break;
+
+        case 'polyline':
+        case 'polygon':
+            pts = normalizePoly(atts.points);
+            bb = getPolyBBox(pts);
+        break;
+
+    }
+
+    return bb;
+}
+
 function removeEmptySVGEls(svg) {
   let els = svg.querySelectorAll('g, defs');
   els.forEach(el => {
@@ -5538,22 +6482,34 @@ function removeEmptySVGEls(svg) {
 }
 
 function cleanUpSVG(svgMarkup, {
-  returnDom = false,
   removeHidden = true,
-  removeUnused = true,
+
   stylesToAttributes = true,
   removePrologue = true,
   removeIds = false,
   removeClassNames = false,
   removeDimensions = false,
-  fixHref = true,
+  fixHref = false,
+  legacyHref = false,
+  cleanupDefs = true,
+  cleanupClip = true,
+  addViewBox = false,
+  addDimensions = false,
+
   mergePaths = false,
+  removeOffCanvas = true,
   cleanupSVGAtts = true,
   removeNameSpaced = true,
   attributesToGroup = true,
-  shapesToPaths = false,
+
+  shapeConvert = false,
+  convert_rects = false,
+  convert_ellipses = false,
+  convert_poly = false,
+  convert_lines=false,
+
   convertTransforms = false,
-  cleanUpStrokes=true,
+  cleanUpStrokes = true,
   decimals = -1,
   excludedEls = [],
 } = {}) {
@@ -5567,20 +6523,49 @@ function cleanUpSVG(svgMarkup, {
     .parseFromString(svgMarkup, "text/html")
     .querySelector("svg");
 
+  let viewBox = getViewBox(svg);
+  let { x, y, width, height } = viewBox;
+
   if (cleanupSVGAtts) {
 
     let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
     removeExcludedAttribues(svg, allowed);
-
   }
+
+  // add viewBox
+  if (addViewBox) addSvgViewBox(svg, { x, y, width, height });
+  if (addDimensions) {
+    svg.setAttribute('width', width); 
+    svg.setAttribute('height', height);
+  }
+
+  // remove unused defs or optimize order
+  if (cleanupDefs) cleanupSvgDefs(svg, { x, y, width, height, cleanupClip });
+
+  // remove off canvas
+  if (removeOffCanvas) removeOffCanvasEls(svg, { x, y, width, height });
 
   // always remove scripts
   let removeEls = ['metadata', 'script', ...excludedEls];
 
   let els = svg.querySelectorAll('*');
-  let elProps = [];
+
+  // an array of all elements' properties
+  let svgElProps = [];
 
   let geometryElements = ['polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse'];
+
+  /** convert paths to shapes */
+  if(shapeConvert === 'toShapes'){
+    let paths = svg.querySelectorAll('path');
+    paths.forEach(path=>{
+      let shape = pathElToShape(path, {convert_rects, convert_ellipses, convert_poly, convert_lines});
+      path.replaceWith(shape);
+      path = shape;
+
+    });
+
+  }
 
   for (let i = 0; i < els.length; i++) {
     let el = els[i];
@@ -5588,8 +6573,8 @@ function cleanUpSVG(svgMarkup, {
     let name = el.nodeName.toLowerCase();
 
     // convert shapes
-    if (shapesToPaths && name !== 'path' && geometryElements.includes(name)) {
-      let path = shapeElToPath(el);
+    if (shapeConvert === 'toPaths' && name !== 'path' && geometryElements.includes(name)) {
+      let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines });
       el.replaceWith(path);
       name = 'path';
       el = path;
@@ -5605,18 +6590,55 @@ function cleanUpSVG(svgMarkup, {
       continue;
     }
 
+    /**
+     * get all style properties
+     * convert relative or physical units
+     * to user units
+     */
+
+    /*
+    let styleProps = parseStylesProperties(el, {
+      width:viewBox.width,
+      height:viewBox.height
+    })
+      */
+
+    /*
+    let propTest = normalizeUnits('50%',{width:200, height:100, isHorizontal:true})
+    console.log('propTest', propTest);
+    */
+
     // styles to attributes
-    if (stylesToAttributes || attributesToGroup || mergePaths) {
+    if (stylesToAttributes || attributesToGroup || mergePaths || cleanUpStrokes) {
       let propsFiltered = svgStylesToAttributes(el, { removeNameSpaced, decimals });
-      if (name === 'path') {
-        elProps.push({ el, name, idx: i, propsFiltered });
+
+      svgElProps.push({ el, name, idx: i, propsFiltered });
+    }
+
+  }
+
+  // remove stroke properties if no stroke color applied - common inkscape issue
+  if (cleanUpStrokes) {
+
+    for (let item of svgElProps) {
+
+      let { el, propsFiltered } = item;
+      let strokeProps = Object.keys(propsFiltered);
+
+      if (!strokeProps.includes('stroke')) {
+        strokeAtts.forEach(att => {
+          el.removeAttribute(att);
+
+          // delete in property object
+          if (item['propsFiltered'][att] !== undefined) delete item['propsFiltered'][att];
+        });
       }
     }
   }
 
   // group styles
   if (attributesToGroup || mergePaths) {
-    moveAttributesToGroup(elProps, mergePaths);
+    moveAttributesToGroup(svgElProps, mergePaths);
   }
 
   if (removeDimensions) {
@@ -5634,46 +6656,179 @@ function cleanUpSVG(svgMarkup, {
     });
   }
 
-  // remove empty defs
-  let defs = svg.querySelectorAll('defs');
-  defs.forEach(def=>{
-    let children=[...def.children];
-    [...def.attributes];
-    if(!children.length){
-      def.remove();
-    }
-  });
+  /**
+   * refine properties 
+   * such as transforms or properties including units
+   */
 
   /*
-  if(convertTransforms){
-    flattenTransforms(svg)
+  for(let i=0; i<svgElProps.length; i++){
+    let item = svgElProps[i];
+    let {propsFiltered} = item;
+
+    for(let prop in propsFiltered){
+
+      let propOb = parseStyleProperty(prop, propsFiltered[prop])
+
+    }
+
   }
   */
 
-  if (returnDom) return svg
-  let markup = stringifySVG(svg);
+  // remove futile clip-paths
+  if (cleanupClip) removeFutileClipPaths(svg, { x, y, width, height });
 
-  return markup;
+  // replace href attributes with namespace - required by many older applications
+  if (legacyHref) {
+    svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink");
+    let hrefs = svg.querySelectorAll('[href]');
+    hrefs.forEach(el => {
+      let href = el.getAttribute('href');
+      el.setAttribute('xlink:href', href);
+      el.removeAttribute('href');
+    });
+  }
+
+  return { svg, svgElProps }
+
 }
 
-function moveAttributesToGroup(elProps = [], mergePaths = true) {
+function removeOffCanvasEls(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  let els = [...svg.querySelectorAll('path, polygon, polyline, line, rect, circle, ellipse, text')];
+  els = els.filter(el => !el.parentNode.closest('defs') && !el.parentNode.closest('symbol') && !el.parentNode.closest('clipPath') && !el.parentNode.closest('mask') && !el.parentNode.closest('pattern'));
 
-  let combine = [[elProps[0]]];
+  let bb0 = { x, y, width, height };
+  bb0.right = x + width;
+  bb0.bottom = y + height;
+
+  els.forEach(el => {
+    let bb = getElBBox(el);
+    let outside = bb.right < bb0.x || bb.bottom < bb0.y || bb.x > bb0.right || bb.y > bb.bottom;
+    if (outside) el.remove();
+  });
+
+}
+
+function addSvgViewBox(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  if (svg.hasAttribute('viewBox')) return;
+  if (!width || !height) {
+    ({ x, y, width, height } = getViewBox(svg));
+  }
+  svg.setAttribute('viewBox', [x, y, width, height].join(' '));
+}
+
+function cleanupSvgDefs(svg, { x = 0, y = 0, width = 0, height = 0, cleanupClip = true } = {}) {
+  let defs = svg.querySelectorAll('defs');
+  let defEls = svg.querySelectorAll('symbol, pattern, linearGradient, radialGradient, clipPath, mask, marker, filter');
+
+  // no defs to remove/optimize
+  if (!defs.length && !defEls.length) return;
+
+  defs.forEach(def => {
+    // remove empty defs
+    let children = [...def.children];
+    if (!children.length) {
+      def.remove();
+    }
+    // move defs to top
+    else {
+      svg.insertBefore(def, svg.children[0]);
+    }
+  });
+
+  let refIds = new Set([]);
+  defEls.forEach(def => {
+    refIds.add(def.id);
+  });
+
+  Array.from(refIds).forEach(id => {
+    let els = svg.querySelectorAll(`[href="#${id}"], [xlink\\:href="#${id}"], [clip-path="url(#${id})"], [mask="url(#${id})"],  [fill="url(#${id})"], [stroke="url(#${id})"]`);
+
+    if (!els.length) {
+
+      svg.getElementById(id).remove();
+    }
+  });
+
+  // remove futile clip-paths
+
+}
+
+function removeFutileClipPaths(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
+  let clipPaths = svg.querySelectorAll('clipPath');
+
+  if (!clipPaths.length) return
+
+  if (!width || !height) {
+    ({ x, y, width, height } = getViewBox(svg));
+  }
+
+  clipPaths.forEach(clip => {
+    let children = [...clip.children];
+    if (children.length > 1) return;
+
+    let clipEl = children[0];
+    let type = clipEl.nodeName.toLowerCase();
+
+    if (type === 'path' || type === 'rect') {
+      let bb = { x: 0, y: 0, width: 0, height: 0 };
+
+      if (type === 'path') {
+        let pathData = parsePathDataNormalized(clipEl.getAttribute('d'));
+        let coms = Array.from(new Set(pathData.map(com => com.type.toLowerCase()))).join('');
+        let isPolygon = !(/[acqts]/gi).test(coms);
+
+        // path is too complex - unlikely to be a rectangle
+        if (!isPolygon || pathData.length > 5) return
+
+        let vertices = getPathDataVertices(pathData);
+        bb = getPolyBBox(vertices);
+      }
+
+      else if (type === 'rect') {
+        bb = { x: +clipEl.getAttribute('x'), y: +clipEl.getAttribute('y'), width: +clipEl.getAttribute('width'), height: +clipEl.getAttribute('height') };
+      }
+
+      // is futile if clip path's bbox equals the SVG's viewBox
+      if (bb.x === x && bb.y === y && bb.width === width && bb.height === height) {
+        clip.remove();
+        let clippedEls = svg.querySelectorAll(`[clip-path="url(#${clip.id})"]`);
+
+        clippedEls.forEach(clipped => {
+          clipped.removeAttribute('clip-path');
+        });
+      }
+    }
+  });
+
+}
+
+function moveAttributesToGroup(svgElProps = [], mergePaths = true) {
+
+  let combine = [[svgElProps[0]]];
   let idx = 0;
   let lastProps = '';
-  let l = elProps.length;
-  let itemsWithProps = elProps.filter(item => item.propstr);
+  let l = svgElProps.length;
+  let itemsWithProps = svgElProps.filter(item => item.propstr);
   let path0;
 
   // merge paths without properties
+  let dCombined = '';
   if (!itemsWithProps.length && mergePaths) {
-    let item0 = elProps[0];
-    path0 = item0.el;
-    let dCombined = item0.propsFiltered.d;
+    let path0 = null;
 
-    for (let i = 1; i < l; i++) {
-      let item = elProps[i];
+    for (let i = 0; i < l; i++) {
+      let item = svgElProps[i];
+      if (item.name !== 'path') continue;
+      let remove = true;
+
       let path = item.el;
+
+      // set 1st path
+      if (!path0) {
+        path0 = path;
+        remove = false;
+      }
 
       let d = item.propsFiltered.d;
       let isAbs = d.startsWith('M');
@@ -5682,16 +6837,16 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
       dCombined += dAbs;
 
       // delete path el
-      path.remove();
+      if (remove) path.remove();
     }
 
-    path0.setAttribute('d', dCombined);
+    if (path0) path0.setAttribute('d', dCombined);
     return
   }
 
   // add to combine chunks
   for (let i = 0; i < l; i++) {
-    let item = elProps[i];
+    let item = svgElProps[i];
     let props = item.propsFiltered;
     let propstr = [];
     for (let prop in props) {
@@ -5764,6 +6919,8 @@ function moveAttributesToGroup(elProps = [], mergePaths = true) {
 
             let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
 
+            console.log('dAbs', dAbs);
+
             // concat pathdata string
             dCombined += dAbs;
 
@@ -5804,8 +6961,9 @@ function stringifySVG(svg, omitNamespace = false) {
     .replace(/ +/g, ' ')
 
     .replace(/> </g, '><')
-    .trim();
-    
+    .trim()
+     // sanitize linebreaks within pathdata
+    .replaceAll('&#10;', '\n');
 
   return markup
 }
@@ -5825,8 +6983,8 @@ function refineRoundedCorners(pathData, {
 
     let isClosed = pathData[l - 1].type.toLowerCase() === 'z';
     let zIsLineto = isClosed ?
-    (pathData[l-1].p.x === pathData[0].p0.x && pathData[l-1].p.y === pathData[0].p0.y)
-     : false ;
+        (pathData[l - 1].p.x === pathData[0].p0.x && pathData[l - 1].p.y === pathData[0].p0.y)
+        : false;
 
     let lastOff = isClosed ? 2 : 1;
 
@@ -5854,7 +7012,7 @@ function refineRoundedCorners(pathData, {
         if ((type === 'L' && comN && comN.type === 'C') ||
             (type === 'C' && comN && comN.type === 'L')
         ) {
-            let comL0 = type==='L' ? com : null;
+            let comL0 = type === 'L' ? com : null;
             let comL1 = null;
             let comBez = [];
             let offset = 0;
@@ -5867,7 +7025,7 @@ function refineRoundedCorners(pathData, {
 
             }
 
-            if(!comL0) {
+            if (!comL0) {
                 pathDataN.push(com);
                 continue
             }
@@ -5902,8 +7060,6 @@ function refineRoundedCorners(pathData, {
 
                 // bezier
 
-                comBez.length;
-
                 let len3 = getDistManhattan(comL0.p, comL1.p0);
 
                 // check concaveness by area sign change
@@ -5913,44 +7069,74 @@ function refineRoundedCorners(pathData, {
                 let signChange = (area1 < 0 && area2 > 0) || (area1 > 0 && area2 < 0);
 
                 // exclude mid bezier segments that are larger than surrounding linetos
-                let bezThresh = len3*0.5 * tolerance;
-                let isSmall = bezThresh < len1 && bezThresh < len2 ;
+                let bezThresh = len3 * 0.5 * tolerance;
+                let isSmall = bezThresh < len1 && bezThresh < len2;
 
-                if (comBez.length && !signChange &&  isSmall ) {
+                if (comBez.length && !signChange && isSmall) {
 
-                    let isFlatBezier = Math.abs(area2) <= getSquareDistance(comBez[0].p0, comBez[0].p)*0.005;
-                    let ptQ = !isFlatBezier ? checkLineIntersection(comL0.p0, comL0.p, comL1.p0, comL1.p, false) : null;
+                    let isFlatBezier = Math.abs(area2) < getSquareDistance(comBez[0].p0, comBez[0].p) * 0.005;
+                    let ptQ = !isFlatBezier ? checkLineIntersection(comL0.p0, comL0.p, comL1.p, comL1.p0, false, true) : null;
 
-                    if (!isFlatBezier && ptQ) {
+                    if (!ptQ) {
+                        pathDataN.push(com);
+                        continue
+                    }
 
-                        // final check: mid point proximity
-                        let ptM = pointAtT([comL0.p, ptQ, comL1.p0], 0.5);
+                    // check sign change
+                    if (ptQ) {
+                        let area0 = getPolygonArea([comL0.p0, comL0.p, comL1.p0, comL1.p], false);
+                        let area0_abs = Math.abs(area0);
+                        let area1 = getPolygonArea([comL0.p0, comL0.p, ptQ, comL1.p0, comL1.p], false);
+                        let area1_abs = Math.abs(area1);
+                        let areaDiff = Math.abs(area0_abs - area1_abs) / area0_abs;
 
-                        let ptM_bez = comBez.length===1 ? pointAtT( [comBez[0].p0, comBez[0].cp1, comBez[0].cp2, comBez[0].p], 0.5 ) : comBez[0].p ;
+                        /*
+                        renderPoint(markers, comL0.p0, 'green', '0.5%', '0.5')
+                        renderPoint(markers, comL0.p, 'red', '1.5%', '0.5')
+                        renderPoint(markers, comL1.p0, 'blue', '0.5%', '0.5')
+                        renderPoint(markers, comL1.p, 'orange', '0.5%', '0.5')
+                        if(!area0) {
+                            pathDataN.push(com);
+                            continue
+                        }
+                        */
 
-                        let dist1 = getDistManhattan(ptM, ptM_bez) * 0.75;
+                        let signChange = area0 < 0 && area1 > 0 || area0 > 0 && area1 < 0;
 
-                        // not in tolerance – return original command
-                        if(bezThresh && dist1>bezThresh && dist1>len3*0.3){
+                        if (!ptQ || signChange || areaDiff > 0.5) {
 
                             pathDataN.push(com);
-                            continue;
-
-                        } else {
-
-                            let comQ = { type: 'Q', values: [ptQ.x, ptQ.y, comL1.p0.x, comL1.p0.y] };
-                            comQ.p0 = comL0.p;
-                            comQ.cp1 = ptQ;
-                            comQ.p = comL1.p0;
-    
-                            // add quadratic command
-                            pathDataN.push(comL0, comQ);
-                            i += offset;
-
-                            continue;
+                            continue
                         }
 
                     }
+
+                    // final check: mid point proximity
+                    let ptM = pointAtT([comL0.p, ptQ, comL1.p0], 0.5);
+                    let ptM_bez = comBez.length === 1 ? pointAtT([comBez[0].p0, comBez[0].cp1, comBez[0].cp2, comBez[0].p], 0.5) : comBez[0].p;
+
+                    let dist1 = getDistManhattan(ptM, ptM_bez) * 0.75;
+
+                    // not in tolerance – return original command
+                    if (bezThresh && dist1 > bezThresh && dist1 > len3 * 0.3) {
+
+                        pathDataN.push(com);
+                        continue;
+
+                    } else {
+
+                        let comQ = { type: 'Q', values: [ptQ.x, ptQ.y, comL1.p0.x, comL1.p0.y] };
+                        comQ.p0 = comL0.p;
+                        comQ.cp1 = ptQ;
+                        comQ.p = comL1.p0;
+
+                        // add quadratic command
+                        pathDataN.push(comL0, comQ);
+                        i += offset;
+
+                        continue;
+                    }
+
                 }
             }
         }
@@ -5965,7 +7151,7 @@ function refineRoundedCorners(pathData, {
     }
 
     // revert close path normalization
-    if (normalizeClose  || (isClosed && pathDataN[pathDataN.length-1].type!=='Z') ) {
+    if (normalizeClose || (isClosed && pathDataN[pathDataN.length - 1].type !== 'Z')) {
         pathDataN.push({ type: 'Z', values: [] });
     }
 
@@ -6331,47 +7517,6 @@ function scalePathData(pathData, scale = 1) {
   }  return pathDataScaled;
 }
 
-/**
- * get viewBox 
- * either from explicit attribute or
- * width and height attributes
- */
-
-function getViewBox(svg = null, decimals = -1) {
-
-    const getUnit=(val)=>{
-        return val && isNaN(val) ? val.match(/[^\d|.]+/g)[0] : '';
-    };
-
-    // browser default
-    if (!svg) return false
-
-    let hasWidth = svg.hasAttribute('width');
-    let hasHeight = svg.hasAttribute('height');
-    let hasViewBox = svg.hasAttribute('viewBox');
-
-    let widthAtt = hasWidth ? svg.getAttribute('width') : 0;
-    let heightAtt = hasHeight ? svg.getAttribute('height') : 0;
-
-    let widthUnit = hasWidth ? getUnit(widthAtt) : false;
-    let heightUnit = hasHeight ? getUnit(widthAtt) : false;
-
-    let w = widthAtt ? (!widthAtt.includes('%') ? parseFloat(widthAtt) : 0 ) : 300;
-    let h = heightAtt ? (!heightAtt.includes('%') ? parseFloat(heightAtt) : 0 ) : 150;
-
-    let viewBoxVals =  hasViewBox ? svg.getAttribute('viewBox').split(/,| /).filter(Boolean).map(Number) : [0, 0, w, h];
-
-    // round
-    if (decimals>-1) {
-        [w, h] = [w, h].map(val=>+val.toFixed(decimals));
-        viewBoxVals = viewBoxVals.map(val=>+val.toFixed(decimals));
-    }
-
-    let viewBox = { x:viewBoxVals[0] , y:viewBoxVals[1], width:viewBoxVals[2], height:viewBoxVals[3], w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit };
-
-    return viewBox
-}
-
 function pathDataRevertCubicToQuadratic(pathData, tolerance=1) {
 
     for (let c = 1, l = pathData.length; c < l; c++) {
@@ -6391,508 +7536,6 @@ function pathDataRevertCubicToQuadratic(pathData, tolerance=1) {
     }
     return pathData
 }
-
-function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
-
-    for (let c = 0, l = pathData.length; c < l; c++) {
-        let com = pathData[c];
-        let comN = pathData[c + 1] || null;
-        let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
-
-        if (type === 'C' && comN && comN.type === 'C') {
-            let comA = cubicCommandToArc(p0, cp1, cp2, p, areaThreshold);
-            let comAN = cubicCommandToArc(comN.p0, comN.cp1, comN.cp2, comN.p, areaThreshold);
-
-            if (comA.isArc  && comAN.isArc) {
-
-                let dist = getDistManhattan(p0, comN.p);
-                let maxDist = dist * 0.01;
-                let dx = Math.abs(comN.p.x - p0.x);
-                let dy = Math.abs(comN.p.y - p0.y);
-
-                let horizontal = dy < maxDist && dx > maxDist;
-                let vertical = dx < maxDist && dy > maxDist;
-
-                let { rx, ry } = comA;
-                let area = getPolygonArea([p0, p, comN.p]);
-                let sweep = area < 0 ? 0 : 1;
-
-                if (vertical || horizontal) {
-                    rx = Math.min(rx, comAN.rx);
-                    ry = Math.min(ry, comAN.ry);
-                    pathData[c] = null;
-                    pathData[c + 1].type = 'A';
-                    pathData[c + 1].values = [rx, ry, 0, 0, sweep, comN.p.x, comN.p.y];
-                    continue
-                }
-            }
-        }
-    }
-
-    pathData = pathData.filter(Boolean);
-
-    return pathData
-
-}
-
-function cubicCommandToArc(p0, cp1, cp2, p, tolerance = 7.5) {
-
-    let com = { type: 'C', values: [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y] };
-
-    let arcSegArea = 0, isArc = false;
-
-    // check angles
-    let angle1 = getAngle(p0, cp1, true);
-    let angle2 = getAngle(p, cp2, true);
-    let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
-
-    let angleDiff = Math.abs((deltaAngle % 180) - 90);
-    let isRightAngle = angleDiff < 3;
-
-    let rx = 0;
-    let ry = 0;
-    let ptC;
-
-    if (isRightAngle) {
-        // point between cps
-
-        // center point
-        let cp1_r = rotatePoint(cp1, p0.x, p0.y, (Math.PI * -0.5));
-        let cp2_r = rotatePoint(cp2, p.x, p.y, (Math.PI * 0.5));
-
-        // assumed centroid
-        ptC = checkLineIntersection(p0, cp1_r, p, cp2_r, false);
-
-        let pI = checkLineIntersection(p0, cp1, p, cp2, false);
-
-        if (pI) {
-
-            let r1 = getDistance(p0, pI);
-            let r2 = getDistance(p, pI);
-
-            let rMax = +Math.max(r1, r2).toFixed(8);
-            let rMin = +Math.min(r1, r2).toFixed(8);
-
-            rx = rMin;
-            ry = rMax;
-
-            let arcArea = getPolygonArea([p0, cp1, cp2, p]);
-            let sweep = arcArea < 0 ? 0 : 1;
-
-            let w = Math.abs(p.x - p0.x);
-            let h = Math.abs(p.y - p0.y);
-            let landscape = w > h;
-
-            let circular = (100 / rx * Math.abs(rx - ry)) < 5;
-
-            if (circular) {
-
-                rx = rMax;
-                ry = rx;
-            }
-
-            if (landscape) {
-
-                rx = rMax;
-                ry = rMin;
-            }
-
-            // get original cubic area 
-            let comO = [
-                { type: 'M', values: [p0.x, p0.y] },
-                { type: 'C', values: [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y] }
-            ];
-
-            let comArea = getPathArea(comO);
-
-            // new arc command
-            let comArc = { type: 'A', values: [rx, ry, 0, 0, sweep, p.x, p.y] };
-
-            // calculate arc seg area
-            arcSegArea = (Math.PI * (rx * ry)) / 4;
-
-            // subtract polygon between start, end and center point
-            arcSegArea -= Math.abs(getPolygonArea([p0, p, pI]));
-
-            let areaDiff = getRelativeAreaDiff(comArea, arcSegArea);
-
-            if (areaDiff < tolerance) {
-                isArc = true;
-                com = comArc;
-            }
-
-        }
-    }
-
-    return { com: com, isArc, area: arcSegArea, rx, ry, centroid: ptC }
-
-}
-
-/*
-
-// combine adjacent arcs
-
-export function combineArcs(pathData) {
-
-    let arcSeq = [[]]
-    let ind = 0
-    let arcIndices = [[]];
-    let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] }, p;
-
-    for (let i = 0, len = pathData.length; i < len; i++) {
-        let com = pathData[i];
-        let { type, values } = com;
-
-        if (type === 'A') {
-
-            let comPrev = pathData[i - 1];
-
-            // previous p0 values might not be correct anymore due to cubic simplification
-            let valsL = comPrev.values.slice(-2);
-            p0 = { x: valsL[0], y: valsL[1] };
-
-            let [rx, ry, xAxisRotation, largeArc, sweep, x, y] = values;
-
-            // check if arc is circular
-            let circular = (100 / rx * Math.abs(rx - ry)) < 5;
-
-            p = { x: values[5], y: values[6] }
-            com.p0 = p0;
-            com.p = p;
-            com.circular = circular;
-
-            let comNext = pathData[i + 1];
-
-            if (!arcSeq[ind].length && comNext && comNext.type === 'A') {
-                arcSeq[ind].push(com)
-                arcIndices[ind].push(i)
-            }
-
-            if (comNext && comNext.type === 'A') {
-                let [rx1, ry1, xAxisRotation0, largeArc, sweep, x, y] = comNext.values;
-                let diffRx = rx != rx1 ? 100 / rx * Math.abs(rx - rx1) : 0
-                let diffRy = ry != ry1 ? 100 / ry * Math.abs(ry - ry1) : 0
-
-                p = { x: comNext.values[5], y: comNext.values[6] }
-                comNext.p0 = p0;
-                comNext.p = p;
-
-                // add if radii are almost same
-                if (diffRx < 5 && diffRy < 5) {
-
-                    arcSeq[ind].push(comNext)
-                    arcIndices[ind].push(i + 1)
-                } else {
-
-                    // start new segment
-                    arcSeq.push([])
-                    arcIndices.push([])
-                    ind++
-
-                }
-            }
-
-            else {
-
-                arcSeq.push([])
-                arcIndices.push([])
-                ind++
-            }
-        }
-    }
-
-    if (!arcIndices.length) return pathData;
-
-    arcSeq = arcSeq.filter(item => item.length)
-    arcIndices = arcIndices.filter(item => item.length)
-
-    // Process in reverse to avoid index shifting
-    for (let i = arcSeq.length - 1; i >= 0; i--) {
-        const seq = arcSeq[i];
-        const start = arcIndices[i][0];
-        const len = seq.length;
-
-        // Average radii to prevent distortions
-        let rxA = 0, ryA = 0;
-        seq.forEach(({ values }) => {
-            const [rx, ry] = values;
-            rxA += rx;
-            ryA += ry;
-        });
-        rxA /= len;
-        ryA /= len;
-
-        // Correct near-circular arcs
-
-        // check if arc is circular
-        let circular = (100 / rxA * Math.abs(rxA - ryA)) < 5;
-
-        if (circular) {
-            // average radii
-            rxA = (rxA + ryA) / 2;
-            ryA = rxA;
-        }
-
-        let comPrev = pathData[start - 1]
-        let comPrevVals = comPrev.values.slice(-2)
-        let M = { type: 'M', values: [comPrevVals[0], comPrevVals[1]] }
-
-        if (len === 4) {
-
-            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[1].values;
-            let [, , , , , x2, y2] = seq[3].values;
-
-            let xDiff = Math.abs(x2 - x1);
-            let yDiff = Math.abs(y2 - y1);
-            let horizontal = xDiff > yDiff;
-
-            if (circular) {
-                let adjustY = !horizontal ? rxA * 2 : 0;
-
-                // simplify radii
-                rxA = 1;
-                ryA = 1;
-            }
-
-            let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x1, y1] };
-            let com2 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
-
-            // This now correctly replaces the original 4 arc commands with 2
-            pathData.splice(start, len, com1, com2);
-
-        }
-
-        else if (len === 3) {
-
-            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[0].values;
-            let [rx2, ry2, , , , x2, y2] = seq[2].values;
-
-            // must be large arc
-            largeArc = 1;
-            let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
-
-            // replace
-            pathData.splice(start, len, com1);
-
-        }
-
-        else if (len === 2) {
-
-            let [rx, ry, xAxisRotation, largeArc, sweep, x1, y1] = seq[0].values;
-            let [rx2, ry2, , , , x2, y2] = seq[1].values;
-
-            // if circular or non-elliptic xAxisRotation has no effect
-            if (circular) {
-                rxA = 1;
-                ryA = 1;
-                xAxisRotation = 0;
-            }
-
-            // check if arc is already ideal
-            let { p0, p } = seq[0];
-            let [p0_1, p_1] = [seq[1].p0, seq[1].p];
-
-            if (p0.x !== p_1.x || p0.y !== p_1.y) {
-
-                let com1 = { type: 'A', values: [rxA, ryA, xAxisRotation, largeArc, sweep, x2, y2] };
-
-                // replace
-                pathData.splice(start, len, com1);
-            }
-        }
-
-        else {
-
-        }
-    }
-
-    return pathData
-}
-
-export function combineCubicsToArcs(pathData = [], {
-    threshold = 0,
-} = {}) {
-
-    let l = pathData.length;
-    let pathDataN = [pathData[0]];
-
-    for (let i = 1; i < l; i++) {
-        let com = pathData[i];
-        let { type, cp1 = null, cp2 = null, p0, p } = com;
-        let comP = pathData[i - 1];
-        let comN = pathData[i + 1] ? pathData[i + 1] : null;
-        let comN2 = pathData[i + 2] ? pathData[i + 2] : null;
-
-        if (type === 'C' && comN && comN.type === 'C') {
-
-            let thresh = getDistAv(p0, p) * 0.02;
-
-            let dx1 = Math.abs(p0.x - cp1.x)
-            let dy1 = Math.abs(p0.y - cp1.y)
-
-            let isHorizontal1 = dy1 < thresh;
-            let isVertical1 = dx1 < thresh;
-
-            let dx2 = Math.abs(comN.p0.x - comN.cp1.x)
-            let dy2 = Math.abs(comN.p0.y - comN.cp1.y)
-
-            let isHorizontal2 = dy2 < thresh;
-            let isVertical2 = dx2 < thresh;
-
-            // check angles
-            let angleDiff1 = (isHorizontal1 || isVertical1) ? 0 : Infinity;
-            let angleDiff2 = (isHorizontal2 || isVertical2) ? 0 : Infinity;
-
-            if (!isHorizontal1 && !isVertical1) {
-
-                let angle1 = getAngle(p0, cp1, true);
-                let angle2 = getAngle(p, cp2, true);
-                let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
-                angleDiff1 = Math.abs((deltaAngle % 180) - 90);
-            }
-
-            if (!isHorizontal2 && !isVertical2) {
-
-                let angle1 = getAngle(p0, cp1, true);
-                let angle2 = getAngle(p, cp2, true);
-                let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
-                angleDiff2 = Math.abs((deltaAngle % 180) - 90);
-            }
-
-            let isRightAngle1 = angleDiff1 < 3;
-            let isRightAngle2 = angleDiff2 < 3;
-
-            let centroids = [];
-            let poly = [];
-            let rArr = []
-            let largeArc = 0;
-
-            // final on path point
-            let p_a = p
-
-            // 2  possible candidates - test radius
-            if (isRightAngle1 && isRightAngle2) {
-
-                let pI = checkLineIntersection(p0, cp1, p, cp2, false);
-                let r1 = getDistance(p0, pI);
-                let r2 = getDistance(p, pI);
-                let rDiff1 = Math.abs(r1 - r2)
-
-                rArr.push(r1, r2)
-
-                poly.push(p0, p)
-                p_a = p
-
-                // 2 commands can be combined – similar radii  
-                if (rDiff1 < thresh) {
-
-                    // add to polygon for sweep
-                    poly.push(comN.p)
-
-                    // update final point
-                    p_a = comN.p
-
-                    // approximate/average final center point for final radius
-                    let cp1_r = rotatePoint(cp1, p0.x, p0.y, (Math.PI * -0.5))
-                    let cp2_r = rotatePoint(cp2, p.x, p.y, (Math.PI * 0.5))
-
-                    let cp1_r2 = rotatePoint(comN.cp1, comN.p0.x, comN.p0.y, (Math.PI * -0.5))
-                    let cp2_r2 = rotatePoint(comN.cp2, comN.p.x, comN.p.y, (Math.PI * 0.5))
-
-                    // assumed centroid
-                    let ptC = checkLineIntersection(p0, cp1_r, p, cp2_r, false)
-                    let ptC2 = checkLineIntersection(comN.p0, cp1_r2, comN.p, cp2_r2, false)
-                    let distC = ptC && ptC2 ? getDistAv(ptC, ptC2) : Infinity
-
-                    // 2 commands can definitely be combined 
-                    if (distC < thresh) {
-
-                        // add to centroid array
-                        centroids.push(ptC, ptC2)
-
-                    }
-
-                    if (comN2 && comN2.type === 'C') {
-
-                        let cp1_r3 = rotatePoint(comN2.cp1, comN2.p0.x, comN2.p0.y, (Math.PI * -0.5))
-                        let cp2_r3 = rotatePoint(comN2.cp2, comN2.p.x, comN2.p.y, (Math.PI * 0.5))
-                        let ptC3 = checkLineIntersection(comN2.p0, cp1_r3, comN2.p, cp2_r3, false)
-
-                        let distC2 = ptC && ptC3 ? getDistAv(ptC, ptC3) : Infinity
-
-                        // can be combined with 3rd command
-                        if (distC2 < thresh) {
-
-                            let r3 = getDistance(ptC3, comN2.p)
-                            rArr.push(r3)
-
-                            // update final point
-                            p_a = comN2.p
-                            poly.push(p, comN2.p)
-
-                            largeArc = 1;
-
-                        }
-                    }
-
-                } else {
-                    pathDataN.push(com)
-                    continue
-                }
-
-            }
-
-            // create new arc command
-            if (poly.length > 1) {
-
-                // get average radius
-
-                let rA = Math.max(...rArr)
-                rA = rArr[0]
-
-                let centroidA;
-                let xArr = centroids.map(pt => pt.x)
-                let yArr = centroids.map(pt => pt.y)
-
-                centroidA = {
-                    x: (xArr.reduce((a, b) => a + b, 0)) / centroids.length,
-                    y: (yArr.reduce((a, b) => a + b, 0)) / centroids.length
-                }
-
-                rA = getDistance(p0, centroidA)
-                let rA2 = getDistance(p, centroidA)
-
-                // rA = ((Math.min(...rArr) * 2 + Math.max(...rArr)) ) / 3
-
-                let area = getPolygonArea(poly, false)
-                let sweep = area < 0 ? 0 : 1;
-
-                let comA = { type: 'A', values: [rA, rA, 0, largeArc, sweep, p_a.x, p_a.y], p0, p: p_a }
-
-                console.log('comA', comA);
-
-                pathDataN.push(comA)
-
-                i += rArr.length - 1;
-
-                continue
-
-            }
-
-            // test angles
-        }
-
-        pathDataN.push(com)
-    }
-
-    let d = pathDataToD(pathDataN)
-    console.log(d);
-
-    console.log('pathDataN', pathDataN);
-    return pathDataN
-
-}
-*/
 
 function harmonizeCubicCptsThird(pathData = [], t = 0.666) {
 
@@ -8326,56 +8969,6 @@ function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
 
 }
 
-function normalizePoly(pts, {
-    toObject = true,
-    toArray = false,
-    flatten = false
-} = {}) {
-
-    if (flatten) pts = pts.flat(2);
-    let poly = toArray ? polyPtsToArray(pts) : polyArrayToObject(pts);
-    return poly
-}
-
-function polyArrayToObject(pts) {
-
-    // is point object array
-    if (pts[0].x !== undefined && pts[0].y !== undefined) return pts
-
-    let poly = [];
-
-    // complex poly object array
-    if (Array.isArray(pts[0]) && pts[0][0].x !== undefined && pts[0][0].y !== undefined) {
-        return pts
-    }
-    // complex poly value array
-    else if (Array.isArray(pts[0][0]) && pts[0][0].length === 2) {
-        pts.forEach(sub => {
-            poly.push(sub.map(pt => { return { x: pt[0], y: pt[1] } }));
-        });
-        return poly
-    }
-
-    return pts.map(pt => { return { x: pt[0], y: pt[1] } })
-}
-
-function polyPtsToArray(pts) {
-
-    // is already coordinate array
-    if (!Array.isArray(pts[0][0]) && pts[0].length === 2) return pts
-
-    let poly = [];
-    if (Array.isArray(pts[0][0]) && pts[0][0].length === 2) {
-        pts.forEach(sub => {
-            poly.push(sub.map(pt => [pt.x, pt.y]));
-        });
-        return poly
-    }
-
-    poly = Array.from(pts).map(pt => [pt.x, pt.y]);
-    return poly
-}
-
 function svgPathSimplify(input = '', {
 
     // return svg markup or object
@@ -8435,27 +9028,46 @@ function svgPathSimplify(input = '', {
     scaleTo = 0,
     crop = false,
     alignToOrigin = false,
-    convertTransforms=false,
+    convertTransforms = false,
 
     decimals = 3,
     autoAccuracy = true,
+
+    // experimental
 
     minifyD = 0,
     tolerance = 1,
     reversePath = false,
 
-    cleanupSVGAtts = true,
     removePrologue = true,
-    stylesToAttributes = true,
-    fixHref = true,
-    removeNameSpaced = true,
-    attributesToGroup = false,
-    mergePaths = false,
     removeHidden = true,
     removeUnused = true,
+    cleanupDefs = true,
+    cleanupClip = true,
+    cleanupSVGAtts = true,
+    
+    stylesToAttributes = false,
+    fixHref = false,
+    legacyHref = false,
+    removeNameSpaced = true,
+    attributesToGroup = false,
+    removeOffCanvas = false,
+
+    mergePaths = false,
+
+    // shape conversions
     shapesToPaths = false,
+
+    shapeConvert = 0,
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false,
+
     lineToCubic = false,
     cleanUpStrokes = true,
+    addViewBox = false,
+    addDimensions = false,
 
 } = {}) {
 
@@ -8498,6 +9110,7 @@ function svgPathSimplify(input = '', {
 
     arcToCubic = toPolygon ? true : arcToCubic;
     autoClose = false;
+    let accuracyArr = [];
 
     // single path or polys
     if (inputType !== 'svgMarkup') {
@@ -8534,18 +9147,13 @@ function svgPathSimplify(input = '', {
     // mode:1 – process complete svg DOM
     else {
 
-        let returnDom = true;
-        svg = cleanUpSVG(input, { removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, returnDom, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, shapesToPaths, convertTransforms }
-        );
+        let svgPropObject = cleanUpSVG(input, {
+            removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
+            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines
 
-        if (shapesToPaths) {
-            let shapes = svg.querySelectorAll('polygon, polyline, line, rect, circle, ellipse');
-            shapes.forEach(shape => {
-                let path = shapeElToPath(shape);
-
-                shape.replaceWith(path);
-            });
         }
+        );
+        svg = svgPropObject.svg;
 
         // collect paths
         let pathEls = svg.querySelectorAll('path');
@@ -8753,7 +9361,7 @@ function svgPathSimplify(input = '', {
             }
 
             // cubic to arcs
-            if (cubicToArc) pathData = pathDataCubicsToArc(pathData, { areaThreshold: 2.5 });
+            if (!arcToCubic && cubicToArc) pathData = pathDataCubicsToArc(pathData, { areaThreshold: 2.5 });
 
             // post processing: remove flat beziers
             if (removeColinear && flatBezierToLinetos) {
@@ -8777,6 +9385,16 @@ function svgPathSimplify(input = '', {
 
             // optimize close path
             if (optimizeOrder) pathData = optimizeClosePath(pathData, { autoClose });
+
+            // sub path rounding
+            if (autoAccuracy) {
+
+                let decimalsSub = detectAccuracy(pathData);
+                accuracyArr.push(decimalsSub);
+
+                // pre round sub path
+
+            }
 
             // update
             pathDataPlusArr.push({ pathData, bb });
@@ -8813,12 +9431,15 @@ function svgPathSimplify(input = '', {
         });
 
         if (autoAccuracy) {
-            decimals = detectAccuracy(pathData);
+            accuracyArr = accuracyArr.sort().reverse();
+            let decimalsMid = accuracyArr[Math.floor(accuracyArr.length*0.5)];
+            decimals = Math.floor( (accuracyArr[0] + decimalsMid) * 0.5  );
+
             pathOptions.decimals = decimals;
         }
 
         // collect for merged svg paths 
-
+        mergePaths = false;
         if (el && mergePaths) {
             pathData_merged.push(...pathData);
         }
@@ -8826,7 +9447,8 @@ function svgPathSimplify(input = '', {
         else {
 
             // clone pathdata 
-            pathData = pathData.map(com => ({type:com.type, values:[...com.values]}));
+
+            pathData = JSON.parse(JSON.stringify(pathData));
 
             // optimize path data
             pathData = convertPathData(pathData, pathOptions);
@@ -8958,39 +9580,19 @@ function svgPathSimplify(input = '', {
         polys = polys[0];
     }
 
-    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr:pathDataPlusArr_global, inputType };
+    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr: pathDataPlusArr_global, inputType };
 
 }
 
 // just for visual debugging
 
-/*
-import {simplifyPolySchneider} from './svgii/poly_smooth_schneider';
-export {simplifyPolySchneider as simplifyPolySchneider }
-*/
-
-/*
-import {parsePathDataFontello} from './svgii/pathData_parse_fontello';
-export {parsePathDataFontello as parsePathDataFontello};
-import {parsePathDataString} from './svgii/pathData_parse';
-export {parsePathDataString as parsePathDataString}
-import { fitCurveN } from './poly-fit-curve-schneider';
-export {fitCurveN as fitCurveN}
-*/
-
-/*
-
-import {parsePathDataString_plus} from './svgii/pathData_parse2';
-export {parsePathDataString_plus as parsePathDataString_plus}
-
-import {getPathDataFromEl} from './svgii/pathData_parse_els';
-export{getPathDataFromEl as getPathDataFromEl};
-*/
-
 // IIFE 
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
+    window.getElementTransform = getElementTransform;
+
+    window.getViewBox = getViewBox;
 
 }
 
-export { PI$1 as PI, abs$1 as abs, acos$1 as acos, asin$1 as asin, atan$1 as atan, atan2$1 as atan2, ceil$1 as ceil, cos$1 as cos, exp$1 as exp, floor$1 as floor, hypot, log$1 as log, max$1 as max, min$1 as min, pow$1 as pow, random$1 as random, round$1 as round, sin$1 as sin, sqrt$1 as sqrt, svgPathSimplify, tan$1 as tan };
+export { PI$1 as PI, abs$1 as abs, acos$1 as acos, asin$1 as asin, atan$1 as atan, atan2$1 as atan2, ceil$1 as ceil, cos$1 as cos, exp$1 as exp, floor$1 as floor, getElementTransform, getViewBox, hypot, log$1 as log, max$1 as max, min$1 as min, pow$1 as pow, random$1 as random, round$1 as round, sin$1 as sin, sqrt$1 as sqrt, svgPathSimplify, tan$1 as tan };

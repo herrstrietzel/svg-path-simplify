@@ -68,25 +68,21 @@
 
 
     <!-- UI helpers -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@latest/dist/enhanceInputs.min.css"
-        as="style" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.css" as="style" />
 
-
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@latest/dist/enhanceInputs.min.css">
-        <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@latest/dist/enhanceInputs.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.js" defer></script>
     <!-- 
-        
-    <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
-    <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
-        -->
-
+            <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
+            <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
+            -->
 
 
     <!-- 
         <script src="https://cdn.jsdelivr.net/npm/svg-path-simplify@0.1.2/dist/svg-path-simplify.min.js" defer></script>
     -->
 
-    <script src="dist/svg-path-simplify.min.js" defer></script>
+    <script src="dist/svg-path-simplify.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
     <script src="demo/lib/elzoomo/elzoomo.min.js" defer></script>
@@ -112,8 +108,6 @@
 
             <!--toolbars-->
             <aside class="aside aside-1 hgh-100 aside scrollbar scroll-content-ld scroll-track   pdd-1em pos-rlt">
-
-
 
 
                 <p class="txt-cnt mrg-0">
@@ -143,9 +137,11 @@
 
                     <h3>Sharing and editing</h3>
                     <ul>
-                        <li>Codepen – sends your current data to <a href="https://codepen.io">codepen.io</a> and creates a new pen
+                        <li>Codepen – sends your current data to <a href="https://codepen.io">codepen.io</a> and creates
+                            a new pen
                             for testing purposes</li>
-                        <li>Edit – sends data to <a href="https://yqnn.github.io/svg-path-editor">svg-path-editor</a> for further
+                        <li>Edit – sends data to <a href="https://yqnn.github.io/svg-path-editor">svg-path-editor</a>
+                            for further
                             path node editing</li>
                     </ul>
 
@@ -153,17 +149,19 @@
                     <p>The webapp loads these external scripts from jsdelivr</p>
                     <ul>
                         <li><a href="https://github.com/WebReflection/linkedom">linkedom</a>
-                             – used for web worker based multi file
+                            – used for web worker based multi file
                             processing</li>
                         <li><a href="https://github.com/photopea/UZIP.js">UZIP</a>
-                             – for multifile zip exports</li>
+                            – for multifile zip exports</li>
                         <li><a href="https://github.com/herrstrietzel/enhance-inputs">enhance-inputs</a>
                             – used for GUI input
                             styling and updating logic</li>
                     </ul>
 
                     <h3>Local Storage</h3>
-                    <p>Your current settings as well as your input SVG data is stored in local Storage. This provides to apply the same settings to multiple files after reloads. You can delete this settings cache via the reset settings button.</p>
+                    <p>Your current settings as well as your input SVG data is stored in local Storage. This provides to
+                        apply the same settings to multiple files after reloads. You can delete this settings cache via
+                        the reset settings button.</p>
                     <p>You image data is never transferred to the github server.</p>
 
                 </details>
@@ -198,18 +196,42 @@
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeNameSpaced"
                                 checked>removeNameSpaced</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupSVGAtts" checked data-info="remove SVG non-essential attributes">cleanupSVGAtts</label>
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanUpStrokes" checked data-info="removes stroke attributes when stroke color is missing">cleanUpStrokes</label>
-
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="fixHref" checked
-                                data-info="replaces xlibnk:href with href">fixHref</label>
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="removeHidden"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeHidden" data-info="Graphic applications usually don't exclude hidden layers – enable it to remove them to remove undesired bloat"
                                 checked>removeHidden</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupDefs"
+                                data-info="Removes empty defs and moves all defs to the top of the SVG markup – many environments struggle with footer placements (figma problem)"
+                                checked>cleanupDefs</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupClip" checked
+                                data-info="Removes unnecessary clip-paths – spanning the entire viewBox (e.g typical for figma)">cleanupClip</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupSVGAtts" 
+                                data-info="remove SVG non-essential attributes" checked>cleanupSVGAtts</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanUpStrokes" checked
+                                data-info="removes stroke attributes when stroke color is missing">cleanUpStrokes</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="fixHref"
+                                data-info="replaces xlink:href with href – many applications still rely on xlink:href notation!"
+                                >fixHref</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="legacyHref"
+                                data-info="Since many (non-browser) applications still depend on xlink:href notation you may convert href to xlink:href">legacyHref</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeOffCanvas"
+                                data-info="Removes elements beyond viewBox/outside viewport">removeOffCanvas</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="addViewBox" checked
+                                data-info="adds a viewBox attribute if missing – counter-productive if your SVG layout is fluid">addViewBox</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="addDimensions"
+                                data-info="Many graphic applications won't translate viewBox correctly to artboard/document size">addDimensions</label>
 
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
@@ -217,8 +239,6 @@
 
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="mergePaths">mergePaths</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="shapesToPaths"
-                                data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch"
                                 name="removeDimensions">removeDimensions</label>
@@ -228,13 +248,69 @@
                         <label><input type="checkbox" data-type="checkbox-switch" name="omitNamespace"
                                 data-info="Removes xmlns attribute - only recommended when embedding svg in DOM">omitNamespace</label>
 
-
                         <!-- 
                                 
                                 <label><input type="checkbox" class="dsp-debug" name="convertTransforms">convertTransforms</label>
                                 -->
 
                     </p>
+                </details>
+
+                <details open>
+                    <summary class="h3">
+                        SVG shape &lt;&minus;&gt; path conversion
+                    </summary>
+
+                    <!-- 
+                        <p>
+                            <label><input type="checkbox" data-type="checkbox-switch" name="shapesToPaths"
+                                    data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
+                        </p>
+                    -->
+
+
+                    <p>
+                        <label>
+                            <input type="radio" name="shapeConvert" value="0" checked>keep
+                        </label>
+                        <label>
+                            <input type="radio" name="shapeConvert" value="toPaths">shapesToPaths
+                        </label>
+                        <label>
+                            <input type="radio" name="shapeConvert" value="toShapes">pathsToShapes
+                        </label>
+                    </p>
+
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convert_rects"
+                                data-info="convert paths to rects if applicable">rects</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convert_ellipses"
+                                data-info="convert paths to circles or ellipses if applicable – ellipses/circles are usually more compact than paths – unless you merge paths">ellipses/circles</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convert_poly"
+                                data-info="convert paths to polys if applicable – polylines are quite inefficient as they are all absolute">polygons/polylines</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convert_lines"
+                                data-info="convert paths to lines if applicable">lines</label>
+                    </p>
+
+
+                    <details class="mrg-1em mrg-btt">
+                        <summary data-summary='{"icon":"question"}' class="h4">Path vs. Shape?</summary>
+                        <p>SVG shapes <em>can</em> often be more concise if they fall into the category of »primitives«
+                            – so all significant geometrical parameters are described by a discrete number of
+                            parameters. Elements of this class are <code>&lt;circle&gt;</code>,
+                            <code>&lt;ellipse&gt;</code>, <code>&lt;ellipse&gt;</code> and <code>&lt;line&gt;</code>.
+                            The <code>&lt;polygon&gt;</code> and <code>&lt;polyline&gt;</code> don't fall into this
+                            category as the most significant attribute <code>&lt;points&gt;</code> (specifying the
+                            vertices) allows an arbitrary array of point. These poly elements can always be expressed
+                            more concisely with a <code>&lt;path&gt;</code> element as paths support advanced
+                            minifications such as relative commands and shorthands for horizontal or vertical segments.
+                        </p>
+                    </details>
+
+
                 </details>
 
                 <details>
@@ -273,15 +349,14 @@
                                 checked>refineClosing</label>
 
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="removeColinear" checked>remove
-                            colinear linetos</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeColinear"
+                                checked>removeColinear</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="flatBezierToLinetos"
-                                checked>flat beziers to linetos</label>
+                                checked>flatBezierToLinetos</label>
 
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="optimizeOrder" checked>optimize
-                            path order</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="optimizeOrder"
+                                checked>optimizeOrder</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="keepExtremes"
                                 checked>keepExtremes</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="keepCorners"
@@ -388,6 +463,16 @@
                                 data-info="takes an estimated suitable floating point accuracy based on smallest segment"
                                 checked>autoAccuracy</label>
                     </p>
+
+                    <!-- 
+                        <p>
+                            <label><input type="checkbox" data-type="checkbox-switch" name="roundSub"
+                                    data-info="takes an estimated suitable floating point accuracy based on smallest segment"
+                                    >roundSub</label>
+                        </p>
+                    -->
+
+
 
                     <p>
                         <label class="wdt-100">decimals <input type="number" name="decimals" min="0" value="1"
