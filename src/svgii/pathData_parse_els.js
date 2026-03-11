@@ -1,20 +1,176 @@
 //import { pathDataToAbsoluteOrRelative, pathDataToLonghands, cubicToArc } from './pathData_convert.js';
-import { parsePathDataString, parsePathDataNormalized, stringifyPathData } from './pathData_parse.js';
+import { svgNs } from '../constants.js';
+import { pathDataCubicsToArc } from '../pathData_simplify_cubicsToArcs.js';
+import { getElementAtts } from '../svg-getAttributes.js';
+import { getViewBox } from '../svg_getViewbox.js';
+import { getRootSvg } from '../svg_rootSVG.js';
+import { svgElUnitsToPixel } from './convert_units.js';
+import { getPathDataVertices } from './geometry.js';
+import { getPolygonArea } from './geometry_area.js';
+import { getPolyBBox } from './geometry_bbox.js';
+import { getPathDataVerbose } from './pathData_analyze.js';
+import { parsePathDataNormalized } from './pathData_convert.js';
+import { parsePathDataString, stringifyPathData } from './pathData_parse.js';
+import { autoRound, roundTo } from './rounding.js';
+import { attLookup } from './svg-styles-to-attributes-const.js';
 
-export function shapeElToPath(el) {
+
+export function pathElToShape(el, {
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false
+} = {}) {
+
+    //console.log('pathElToShape', convert_rects, convert_ellipses, convert_lines );
+
+    let pathData = parsePathDataNormalized(el.getAttribute('d'));
+    let coms = Array.from(new Set(pathData.map(com => com.type))).join('')
+
+    let hasArcs = (/[a]/gi).test(coms)
+    let hasBeziers = (/[csqt]/gi).test(coms)
+    let hasLines = (/[l]/gi).test(coms)
+    let isPoly = !(/[acqts]/gi).test(coms)
+    let closed = (/[z]/gi).test(coms)
+    let shape = null;
+    let type = null
+
+    let attributes = getElementAtts(el)
+    let attsNew = {}
+    let decimals = 7;
+
+    if (isPoly) {
+
+        // is line
+        if (pathData.length === 2 && convert_lines) {
+            type = 'line'
+            shape = document.createElementNS(svgNs, type)
+            let [x1, y1, x2, y2] = [...pathData[0].values, ...pathData[1].values].map(val => roundTo(val, decimals))
+            attsNew = { x1, y1, x2, y2 }
+        }
+        // polygon, polyline or rect
+        else {
+
+            let vertices = getPathDataVertices(pathData);
+            let bb = getPolyBBox(vertices)
+            let areaPoly = getPolygonArea(vertices, true)
+            let areaRect = bb.width * bb.height;
+            let areaDiff = Math.abs(1 - areaRect / areaPoly);
+
+            // is rect
+            if (convert_rects && areaDiff < 0.01) {
+                type = 'rect'
+                shape = document.createElementNS(svgNs, type)
+                let { x, y, width, height } = bb
+                attsNew = { x, y, width, height }
+
+            }
+            // polyline or polygon
+            else if(convert_poly) {
+                type = closed ? 'polygon' : 'polyline';
+                shape = document.createElementNS(svgNs, type)
+                let points = vertices.map(pt => { return [pt.x, pt.y] }).flat().map(val => roundTo(val, decimals)).join(' ')
+                attsNew = { points }
+            }
+        }
+    }
+    // circles or ellipses
+    else if (!hasLines && convert_ellipses) {
+
+        // try to convert cubics to arcs
+        if (!hasArcs && hasBeziers) {
+            pathData = pathDataCubicsToArc(pathData, { areaThreshold: 2.5 })
+            hasArcs = pathData.filter(com => com.type === 'A').length;
+        }
+
+
+        if (hasArcs) {
+            let pathData2 = getPathDataVerbose(pathData, { addArcParams: true })
+            let arcComs = pathData2.filter(com => com.type === 'A')
+
+            let cxVals = new Set();
+            let cyVals = new Set();
+            let rxVals = new Set();
+            let ryVals = new Set();
+
+            if (arcComs.length > 1) {
+                //console.log('!!!arcComs', arcComs);
+                pathData2.forEach(com => {
+                    if (com.type === 'A') {
+                        //console.log('params', com, com.cx, com.cy, com.rx, com.ry);
+                        cxVals.add(roundTo(com.cx, decimals))
+                        cyVals.add(roundTo(com.cy, decimals))
+                        rxVals.add(roundTo(com.rx, decimals))
+                        ryVals.add(roundTo(com.ry, decimals))
+                    }
+                })
+            }
+
+            cxVals = Array.from(cxVals)
+            cyVals = Array.from(cyVals)
+            rxVals = Array.from(rxVals)
+            ryVals = Array.from(ryVals)
+
+            if(cxVals.length===1 && cyVals.length===1 && rxVals.length===1 && ryVals.length===1){
+                let [rx, ry, cx, cy] = [rxVals[0], ryVals[0], cxVals[0], cyVals[0]]
+                type = rx===ry ? 'circle' : 'ellipse';
+                shape = document.createElementNS(svgNs, type)
+                attsNew = type==='circle' ? { r:rx, cx, cy } : {rx, ry, cx, cy}
+            }
+        }
+    }
+
+
+    // if el could be replaced
+    if (shape) {
+        let ignore = ['id', 'class']
+
+        // set  shape attributes
+        for (let att in attsNew) {
+            shape.setAttribute(att, attsNew[att])
+        }
+
+        // copy old attributes
+        for (let att in attributes) {
+            //console.log(attributes);
+            if (attLookup.atts[att].includes(type) || ignore.includes(att) || att.startsWith('data-')) {
+                shape.setAttribute(att, attributes[att])
+            }
+        }
+
+        // replace
+        el = shape;
+    }
+
+    return el;
+
+}
+
+export function shapeElToPath(el, { width = 0,
+    height = 0,
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false
+
+} = {}) {
 
     let nodeName = el.nodeName.toLowerCase();
-    if (nodeName === 'path') return el;
 
-    let pathData = getPathDataFromEl(el);
+    if (
+        nodeName === 'path' ||
+        nodeName === 'rect' && !convert_rects ||
+        (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
+        (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
+        (nodeName === 'line') && !convert_lines
+    ) return el;
+
+    let pathData = getPathDataFromEl(el, { width, height });
     let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ')
     let attributes = [...el.attributes].map(att => att.name);
 
-    //console.log(d);
-    //return []
 
-    let pathN = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    //let pathN = document.createElement('path');
+    let pathN = document.createElementNS(svgNs, 'path');
     pathN.setAttribute('d', d);
 
     let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
@@ -31,121 +187,37 @@ export function shapeElToPath(el) {
     return pathN
 
 }
+/*
+export function copyAttributes(newEl, oldEl){
+
+    let attributes = [...oldEl.attributes].map(att => att.name);
+
+
+}
+*/
 
 
 // retrieve pathdata from svg geometry elements
-export function getPathDataFromEl(el, stringify = false) {
+export function getPathDataFromEl(el, {
+    stringify = false,
+    width = 0,
+    height = 0
+} = {}) {
 
     let pathData = [];
     let type = el.nodeName.toLowerCase();
-    let atts, attNames, d, x, y, width, height, r, rx, ry, cx, cy, x1, x2, y1, y2;
+    let attNames, d, x, y, r, rx, ry, cx, cy, x1, x2, y1, y2;
 
-    // convert relative or absolute units 
-    const svgElUnitsToPixel = (el, decimals = 9) => {
-        //console.log(this);
-        const svg = el.nodeName !== "svg" ? el.closest("svg") : el;
-
-        // convert real life units to pixels
-        const translateUnitToPixel = (value) => {
-
-            if (value === null) {
-                return 0
-            }
-            //default dpi = 96
-            let dpi = 96;
-            let unit = value.match(/([a-z]+)/gi);
-            unit = unit ? unit[0] : "";
-            let val = parseFloat(value);
-            let rat;
-
-            // no unit - already pixes/user unit
-            if (!unit) {
-                return val;
-            }
-
-            switch (unit) {
-                case "in":
-                    rat = dpi;
-                    break;
-                case "pt":
-                    rat = (1 / 72) * 96;
-                    break;
-                case "cm":
-                    rat = (1 / 2.54) * 96;
-                    break;
-                case "mm":
-                    rat = ((1 / 2.54) * 96) / 10;
-                    break;
-                // just a default approximation
-                case "em":
-                case "rem":
-                    rat = 16;
-                    break;
-                default:
-                    rat = 1;
-            }
-            let valuePx = val * rat;
-            return +valuePx.toFixed(decimals);
-        };
-
-        // svg width and height attributes
-        let width = svg.getAttribute("width");
-        width = width ? translateUnitToPixel(width) : 300;
-        let height = svg.getAttribute("height");
-        height = width ? translateUnitToPixel(height) : 150;
-
-        //prefer viewBox values
-        let vB = svg.getAttribute("viewBox");
-        vB = vB
-            ? vB
-                .replace(/,/g, " ")
-                .split(" ")
-                .filter(Boolean)
-                .map((val) => {
-                    return +val;
-                })
-            : [];
-
-        let w = vB.length ? vB[2] : width;
-        let h = vB.length ? vB[3] : height;
-        let scaleX = w / 100;
-        let scaleY = h / 100;
-        let scalRoot = Math.sqrt((Math.pow(scaleX, 2) + Math.pow(scaleY, 2)) / 2);
-
-        let attsH = ["x", "width", "x1", "x2", "rx", "cx", "r"];
-        let attsV = ["y", "height", "y1", "y2", "ry", "cy"];
-
-
-        let atts = el.getAttributeNames();
-        atts.forEach((att) => {
-            let val = el.getAttribute(att);
-            let valAbs = val;
-            if (attsH.includes(att) || attsV.includes(att)) {
-                let scale = attsH.includes(att) ? scaleX : scaleY;
-                scale = att === "r" && w != h ? scalRoot : scale;
-                let unit = val.match(/([a-z|%]+)/gi);
-                unit = unit ? unit[0] : "";
-                if (val.includes("%")) {
-                    valAbs = parseFloat(val) * scale;
-                }
-                //absolute units
-                else {
-                    valAbs = translateUnitToPixel(val);
-                }
-                el.setAttribute(att, +valAbs);
-            }
-        });
+    if (!width || !height) {
+        let svg = getRootSvg(el);
+        let viewBox = getViewBox(svg)
+        width = viewBox.width;
+        height = viewBox.height;
     }
 
-    svgElUnitsToPixel(el)
-
-    const getAtts = (attNames) => {
-        atts = {}
-        attNames.forEach(att => {
-            atts[att] = +el.getAttribute(att)
-        })
-        return atts
-    }
+    // convert relative and physical units to user-units
+    let atts = svgElUnitsToPixel(el, { width, height })
+    //console.log('atts', atts);
 
     switch (type) {
         case 'path':
@@ -155,8 +227,7 @@ export function getPathDataFromEl(el, stringify = false) {
 
         case 'rect':
             attNames = ['x', 'y', 'width', 'height', 'rx', 'ry'];
-            ({ x, y, width, height, rx, ry } = getAtts(attNames));
-
+            ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
 
             if (!rx && !ry) {
                 pathData = [
@@ -168,8 +239,8 @@ export function getPathDataFromEl(el, stringify = false) {
                 ];
             } else {
 
-                rx=rx? rx : ry;
-                ry=ry ? ry : rx;
+                rx = rx ? rx : ry;
+                ry = ry ? ry : rx;
 
                 if (rx > width / 2) {
                     rx = width / 2;
@@ -196,7 +267,7 @@ export function getPathDataFromEl(el, stringify = false) {
         case 'ellipse':
 
             attNames = ['cx', 'cy', 'rx', 'ry', 'r'];
-            ({ cx, cy, r, rx, ry } = getAtts(attNames));
+            ({ cx=0, cy=0, r, rx, ry } = atts);
 
             let isCircle = type === 'circle';
 
@@ -209,9 +280,11 @@ export function getPathDataFromEl(el, stringify = false) {
                 ry = ry ? ry : r;
             }
 
-            // simplified radii for cirecles
-            let rxS = isCircle && r>=1 ? 1 : rx;
-            let ryS = isCircle && r>=1 ? 1 : rx;
+
+            // simplified radii for circles
+            let rxS = isCircle && r >= 1 ? 1 : rx;
+            let ryS = isCircle && r >= 1 ? 1 : ry;
+
 
             pathData = [
                 { type: "M", values: [cx + rx, cy] },
@@ -222,7 +295,7 @@ export function getPathDataFromEl(el, stringify = false) {
             break;
         case 'line':
             attNames = ['x1', 'y1', 'x2', 'y2'];
-            ({ x1, y1, x2, y2 } = getAtts(attNames));
+            ({ x1, y1, x2, y2 } = atts);
             pathData = [
                 { type: "M", values: [x1, y1] },
                 { type: "L", values: [x2, y2] }
@@ -231,12 +304,12 @@ export function getPathDataFromEl(el, stringify = false) {
         case 'polygon':
         case 'polyline':
 
-            let points = el.getAttribute('points').replaceAll(',', ' ').split(' ').filter(Boolean)
+            let points = el.getAttribute('points').split(/,| /).filter(Boolean).map(Number)
 
             for (let i = 0; i < points.length; i += 2) {
                 pathData.push({
                     type: (i === 0 ? "M" : "L"),
-                    values: [+points[i], +points[i + 1]]
+                    values: [points[i], points[i + 1]]
                 });
             }
             if (type === 'polygon') {
