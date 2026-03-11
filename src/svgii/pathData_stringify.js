@@ -15,16 +15,18 @@ export function pathDataToD(pathData, optimize = 0) {
 
 
     let d = '';
+    let valsString = pathData[0].values.join(" ");
     let separator_command = beautify ? `\n` : (minify ? '' : ' ');
-    let separator_type =  !minify ? ' ' : '';
+    let separator_type = !minify ? ' ' : '';
 
-    d = `${pathData[0].type}${separator_type}${pathData[0].values.join(" ")}${separator_command}`;
+    d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
 
 
     for (let i = 1; i < len; i++) {
         let com0 = pathData[i - 1];
         let com = pathData[i];
         let { type, values } = com;
+        valsString = '';
 
         // Minify Arc commands (A/a) – actually sucks!
         if (minify && (type === 'A' || type === 'a')) {
@@ -36,7 +38,7 @@ export function pathDataToD(pathData, optimize = 0) {
         }
 
         // Omit type for repeated commands
-        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm' )
+        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm')
             ? " "
             : (minify && com0.type === "M" && com.type === "L"
                 ? " "
@@ -46,9 +48,7 @@ export function pathDataToD(pathData, optimize = 0) {
         // concatenate subsequent floating point values
         if (minify) {
 
-            //console.log(optimize, beautify, minify);
 
-            let valsString = '';
             let prevWasFloat = false;
 
             for (let v = 0, l = values.length; v < l; v++) {
@@ -85,6 +85,7 @@ export function pathDataToD(pathData, optimize = 0) {
 
     if (minify) {
         d = d
+            .replace(/[A-Za-z]0(?=\.)/g, m => m[0])
             .replace(/ 0\./g, " .") // Space before small decimals
             .replace(/ -/g, "-")     // Remove space before negatives
             .replace(/-0\./g, "-.")  // Remove leading zero from negative decimals
