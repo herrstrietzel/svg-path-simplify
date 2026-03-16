@@ -15,24 +15,56 @@ While this library reduces SVG markup sizes significantly by removing commands i
 Unlike most existing approaches (e.g in graphic applications), it checks where simplifications are suitable and stops simplification at the right »point« (literally).
 
 ![simplification](./demo/img/splash.png)    
-*Fira Sans (based on truetype/glyph quadratic commands) converted to cubic Bèziers. Right:Original; Left:optimized*
+*Fira Sans (based on truetype/glyph quadratic commands) converted to cubic Béziers. Right:Original; Left:optimized*
 
-## Features – what it does
-* reduces the number of SVG commands (both Bèziers and lines) by converting/combining adjacent:  
+## Features 
+### Path simplification
+* reduces the number of SVG commands (both Béziers and lines) by converting/combining adjacent:  
   * Béziers (`C`, `Q`)
   * flat Béziers to Linetos
   * colinear lines (`L`)
+  * converts cubic Béziers which can be expressed as more compact quadratic
 
 * reorders path starting points to replace unnecessary closing linetos by `Z` commands
 * optimizes SVG file size by contextually converting to:  
   * shorthand commands (`C` => `S`, `Q` => `T`, `L`=>`H` or `V`)
   * cubics to quadratic Béziers  (only 1 control point)
-  * cubic arc-like segments to `A` (elliptic arc)
+  * cubic arc-like segments to `A` (elliptic arc) and `rx`, `ry` radii optimization for semi-circle segments
 
+### Coordinate rounding
 * adaptive coordinate rounding: small or large details can be auto-detected to find a suitable floating point accuracy without guessing the decimal value (3 decimals may not be the silver bullet=)
+
+### SVG optimization
+Cleanup for:  
+* meta data
+* namespaced attributes or elements 
+* convert `xlink:href` to `href` and vice-versa 
+* move `defs` to the top 
+* remove futile `<clipPath>` defs spanning across the entire viewBox
+* convert styles to presentation attributes
+
+### Shape conversions
+* convert shapes such as `<circle>`, `<ellipse>`, `<rect>` etc. to `<path>` – supports relative `%` or physical units like `mm`
+* convert paths to shapes – if applicable
+
+### Polygons
+* convert paths to polygons
+* reduce poly vertices
+* convert/smooth polygons to curved path data
+
+### Transforms
+* convert transforms to hard-coded path data
+* scale SVGs to desired output size
+
+### Path directions
+* reverse path drawing directions
+* auto-fix compound path directions to comply with non-zero fill rules
+
+### Additional features
 * split segments at extremes – only useful for manual editing
 * optimize either path data strings or SVG markup code
 * create curves from polylines (curve-fitting)
+
 
 
 ## TOC

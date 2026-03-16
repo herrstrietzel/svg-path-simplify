@@ -310,7 +310,7 @@ export const attLookup = {
 
     defaults: {
 
-        transform: ["none", "matrix(1, 0, 0, 1, 0, 0)"],
+        transform: ["none", "matrix(1, 0, 0, 1, 0, 0)", "matrix(1 0 0 1 0 0)"],
         "transform-origin": ["0px, 0px", "0 0"],
         rx: ["0", "0px"],
         ry: ["0", "0px"],

@@ -214,12 +214,13 @@ export function cleanUpSVG(svgMarkup, {
       ...inheritedProps,
       ...styleProps
     }
-
     //console.log('inheritedProps', inheritedProps, name);
-
 
     // add combined transforms
     addTransFormProps(styleProps, transFormInherited);
+
+    //console.log('transFormInherited', transFormInherited);
+    //console.log('styleProps', styleProps);
 
 
     let { remove, matrix, transComponents } = styleProps;

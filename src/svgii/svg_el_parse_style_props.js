@@ -392,7 +392,7 @@ export function parseStylesProperties(el, {
 * consolidate transforms to matrix
 */
 export function addTransFormProps(propsObj = {}, transformArr = []) {
-    if (propsObj.transformArr === undefined && !transformArr.length) return;
+    if (propsObj.transformArr === undefined || !transformArr.length) return;
 
     // take existing array or custom
     transformArr = transformArr.length ? transformArr : propsObj.transformArr;
@@ -429,13 +429,17 @@ export function filterSvgElProps(elNodename = '', props = {}, {
     //console.log('noStrokeColor', elNodename, 'cleanUpStrokes', cleanUpStrokes);
 
     for (let prop in props) {
-        let value = props[prop][0];
-        //console.log(prop);
+        let values = props[prop]
+        let value = Array.isArray(values) ? values[0] : values;
+        //console.log(prop, Array.isArray(values));
 
         // filter out useless
         let isValid = removeInvalid ?
             (attLookup.atts[prop] ? attLookup.atts[prop].includes(elNodename) : false) :
             false;
+
+        // remove null transforms
+        if(prop==='transform' && value==='matrix(1 0 0 1 0 0)') isValid = false;
 
         // allow data attributes
         let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;

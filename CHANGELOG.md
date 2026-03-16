@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-03-16
+### Fixed
+- null transform removal matrix(1 0 0 1 0 0)
+
+
 ## [0.4.0] - 2026-03-16
 ### Added
 - convert transforms to hard coded geometry 

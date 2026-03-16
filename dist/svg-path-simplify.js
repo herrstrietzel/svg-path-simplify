@@ -2007,7 +2007,7 @@
 
       defaults: {
 
-          transform: ["none", "matrix(1, 0, 0, 1, 0, 0)"],
+          transform: ["none", "matrix(1, 0, 0, 1, 0, 0)", "matrix(1 0 0 1 0 0)"],
           "transform-origin": ["0px, 0px", "0 0"],
           rx: ["0", "0px"],
           ry: ["0", "0px"],
@@ -7126,7 +7126,7 @@
   * consolidate transforms to matrix
   */
   function addTransFormProps(propsObj = {}, transformArr = []) {
-      if (propsObj.transformArr === undefined && !transformArr.length) return;
+      if (propsObj.transformArr === undefined || !transformArr.length) return;
 
       // take existing array or custom
       transformArr = transformArr.length ? transformArr : propsObj.transformArr;
@@ -7161,12 +7161,16 @@
       let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined) : false;
 
       for (let prop in props) {
-          let value = props[prop][0];
+          let values = props[prop];
+          let value = Array.isArray(values) ? values[0] : values;
 
           // filter out useless
           let isValid = removeInvalid ?
               (attLookup.atts[prop] ? attLookup.atts[prop].includes(elNodename) : false) :
               false;
+
+          // remove null transforms
+          if(prop==='transform' && value==='matrix(1 0 0 1 0 0)') isValid = false;
 
           // allow data attributes
           let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;
