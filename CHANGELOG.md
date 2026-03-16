@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.7] - 2026-03-16
+## [0.4.0] - 2026-03-16
 ### Added
 - convert transforms to hard coded geometry 
 - new style-to-attribute conversion
