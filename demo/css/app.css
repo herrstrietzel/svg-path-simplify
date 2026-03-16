@@ -88,6 +88,8 @@ body {
 }
 
 
+
+
 .h1,
 .h2,
 .h3,
@@ -563,7 +565,7 @@ canvas {
     .wrp-zoom svg {
         max-height: 90vh;
         overflow: visible;
-        padding: 1em;
+        /* padding: 1em; */
     }
 
     .svgO .pathO {
@@ -585,17 +587,32 @@ canvas {
 
     .pathO {
         stroke: #ccc;
-        stroke-width: calc(var(--strokeWidthPrev, 0.3%) * 4 / var(--zoomScale));
+        stroke-width: calc(var(--strokeWidthPrev, 0.2%) * 4 / var(--zoomScale));
     }
 
 
     .pathS {
         fill: #ccc;
         stroke: var(--color-focus);
-        stroke-width: calc(var(--strokeWidthPrev, 0.3%) / var(--zoomScale));
+        stroke-width: calc(var(--strokeWidthPrev, 0.2%) / var(--zoomScale));
     }
 
 }
+
+.svgWrap {
+    font-size: 16px;
+    /*
+    & svg {
+        font-size: inherit;
+    }
+    */
+}
+
+/*
+:where(.svgWrap svg) {
+    font-size: inherit;
+}
+*/
 
 .showMarkers {
     /*
@@ -790,6 +807,22 @@ canvas {
     }
 
 }
+
+.elzoomo-el {
+    position: absolute;
+    inset: 0;
+    left:0;
+    right:0;
+    width:100%;
+    height: 100%
+}
+
+
+/*
+.elzoomo-el{
+    translate:0 5vh;
+}
+*/
 
 
 
@@ -1010,3 +1043,8 @@ dialog {
     transform: translateY(0.05em);
 }
 */
+
+
+.li-bll, :where(.enhanceInputs,[data-enhance-inputs]) ul {
+    padding-left: 1.1em;
+}

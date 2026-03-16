@@ -2455,6 +2455,10 @@ function analyzePathData(pathData = [], {
     let pathDataProps = [pathData[0]];
     let len = pathData.length;
 
+    // threshold for corner angles: 10 deg
+
+    // define angle threshold for semi extremes
+
     for (let c = 2; len && c <= len; c++) {
 
         let com = pathData[c - 1];
@@ -2474,7 +2478,7 @@ function analyzePathData(pathData = [], {
             (type === 'C' ? [p0, cp1, cp2, p] : [p0, cp1, p]) :
             ([p0, p]);
         let thresholdLength = dimA * 0.1;
-        let threshold = thresholdLength*0.01;
+        let threshold = thresholdLength * 0.01;
 
         // bezier types
         let isBezier = type === 'Q' || type === 'C';
@@ -2491,14 +2495,22 @@ function analyzePathData(pathData = [], {
             let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x);
             let dy = type === 'C' ? Math.abs(com.cp2.y - com.p.y) : Math.abs(com.cp1.y - com.p.y);
 
-            let horizontal = (dy === 0 || dy<threshold ) && dx > 0;
-            let vertical = (dx === 0 || dx<threshold ) && dy > 0;
+            let horizontal = (dy === 0 || dy <= threshold) && dx > 0;
+            let vertical = (dx === 0 || dx <= threshold) && dy > 0;
 
             if (horizontal || vertical) {
                 hasExtremes = true;
             }
 
             // is extreme relative to bounding box 
+
+            // (cp1.x===p0.x && cp1.y!==p0.y  ) ||
+            if ((cp1.x === p0.x && cp1.y !== p0.y) || (cp1.y === p0.y && cp1.x !== p0.x)) {
+
+                pathDataProps[pathDataProps.length - 1].extreme = true;
+
+            }
+
             if ((p.x === left || p.y === top || p.x === right || p.y === bottom)) {
                 hasExtremes = true;
             }
@@ -2508,6 +2520,7 @@ function analyzePathData(pathData = [], {
                 let couldHaveExtremes = bezierhasExtreme(null, commandPts);
                 if (couldHaveExtremes) {
                     let tArr = getTatAngles(commandPts);
+
                     if (tArr.length && (tArr[0] > 0.2)) {
                         hasExtremes = true;
                     }
@@ -2562,21 +2575,23 @@ function analyzePathData(pathData = [], {
 
                 let signChange2 = (areaCpt < 0 && com.cptArea > 0) || (areaCpt > 0 && com.cptArea < 0) ? true : false;
 
-                let isCorner=!isFlat && signChange2;
+                let isCorner = !isFlat && signChange2;
                 if (isCorner) com.corner = true;
             }
         }
 
-        if (debug) {
+        pathDataProps.push(com);
+
+    }
+
+    
+    if (debug) {
+        pathDataProps.forEach(com=>{
 
             if (com.directionChange) renderPoint(markers, com.p, 'orange', '1.5%', '0.5');
             if (com.corner) renderPoint(markers, com.p, 'magenta', '1.5%', '0.5');
             if (com.extreme) renderPoint(markers, com.p, 'cyan', '1%', '0.5');
-
-        }
-
-        pathDataProps.push(com);
-
+        });
     }
 
     let dimA = (width + height) / 2;
@@ -3123,6 +3138,7 @@ function convertPathData(pathData, {
     hasShorthands = true,
     hasQuadratics = true,
     hasArcs = true,
+    optimizeArcs = true,
     testTypes = false
 
 } = {}) {
@@ -3142,21 +3158,66 @@ function convertPathData(pathData, {
     toRelative = toAbsolute ? false : toRelative;
     toShorthands = toLonghands ? false : toShorthands;
 
-    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
-
-    if (toShorthands) pathData = pathDataToShorthands(pathData);
+    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
     if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
 
-    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
+    // minify semicircle radii
+    if (optimizeArcs) pathData = optimizeArcPathData(pathData);
+
+    if (toShorthands) pathData = pathDataToShorthands(pathData);
 
     if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
 
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
+
     if (toRelative) pathData = pathDataToRelative(pathData);
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
     return pathData
+}
+
+/**
+ * 
+ * @param {*} pathData 
+ * @returns 
+ */
+
+function optimizeArcPathData(pathData = []) {
+    pathData.forEach((com, i) => {
+        let { type, values } = com;
+        if (type === 'A') {
+            let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
+            let comPrev = pathData[i - 1];
+            let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
+            let M = { x: x0, y: y0 };
+            let p = { x, y };
+
+            // rx and ry are large enough
+            if (rx >= 1 && (x === x0 || y === y0)) {
+                let diff = Math.abs(rx - ry) / rx;
+
+                // rx~==ry 
+                if (diff < 0.01) {
+
+                    // test radius against mid point
+                    let pMid = interpolate(M, p, 0.5);                    
+                    let distM = getDistance(pMid, M);
+                    let rDiff = Math.abs(distM - rx) / rx;
+
+                    // half distance between mid and start point should be ~ equal
+                    if(rDiff<0.01){
+                        pathData[i].values[0] = 1;
+                        pathData[i].values[1] = 1;
+                        pathData[i].values[2] = 0;
+                    }
+                }
+            }
+        }
+    });
+    return pathData;
 }
 
 /**
@@ -3595,7 +3656,7 @@ function pathDataToShorthands(pathData, decimals = -1, test = false) {
             let dx1 = (p0.x - cpPrev.x);
             let dy1 = (p0.y - cpPrev.y);
 
-            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025;
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.01;
 
             // reflected cp
             let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 };

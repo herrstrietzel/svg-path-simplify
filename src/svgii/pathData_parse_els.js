@@ -11,8 +11,10 @@ import { getPolyBBox } from './geometry_bbox.js';
 import { getPathDataVerbose } from './pathData_analyze.js';
 import { parsePathDataNormalized } from './pathData_convert.js';
 import { parsePathDataString, stringifyPathData } from './pathData_parse.js';
+import { transformPathData } from './pathData_transform.js';
 import { autoRound, roundTo } from './rounding.js';
 import { attLookup } from './svg-styles-to-attributes-const.js';
+import { qrDecomposeMatrix } from './transform_qr_decompose.js';
 
 
 export function pathElToShape(el, {
@@ -151,39 +153,53 @@ export function shapeElToPath(el, { width = 0,
     convert_rects = false,
     convert_ellipses = false,
     convert_poly = false,
-    convert_lines = false
+    convert_lines = false,
+    //matrix={a:1, b:0, c:0, d:1, e:0, f:0},
+    matrix=null
 
 } = {}) {
 
     let nodeName = el.nodeName.toLowerCase();
+    //console.log('shapeElToPath', nodeName);
+
 
     if (
-        nodeName === 'path' ||
+        nodeName === 'path' && !matrix ||
         nodeName === 'rect' && !convert_rects ||
         (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
         (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
         (nodeName === 'line') && !convert_lines
     ) return el;
 
+
     let pathData = getPathDataFromEl(el, { width, height });
+
+    // shape attributes – obsolete for path els
+    let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
+
+    // transform pathData
+    if(matrix && Object.values(matrix).join('')!=='100100'){
+        pathData = transformPathData(pathData, matrix)
+        exclude.push('transform', 'transform-origin')
+    }
+
     let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ')
     let attributes = [...el.attributes].map(att => att.name);
-
 
     let pathN = document.createElementNS(svgNs, 'path');
     pathN.setAttribute('d', d);
 
-    let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
 
+    // copy attributes
     attributes.forEach(att => {
         if (!exclude.includes(att)) {
-            //console.log(att, attributes, exclude);
             let val = el.getAttribute(att);
             pathN.setAttribute(att, val)
         }
     })
 
     //el.replaceWith(pathN)
+    //console.log(pathN.outerHTML, d);
     return pathN
 
 }

@@ -12,7 +12,7 @@ import { optimizeClosePath, pathDataToTopLeft } from './svgii/pathData_reorder';
 import { reversePathData } from './svgii/pathData_reverse';
 import { addExtremePoints, splitSubpaths } from './svgii/pathData_split';
 import { pathDataToD } from './svgii/pathData_stringify';
-import { detectAccuracy, roundPathData} from './svgii/rounding';
+import { detectAccuracy, roundPathData } from './svgii/rounding';
 import { refineAdjacentExtremes } from './svgii/pathData_simplify_refineExtremes';
 import { cleanUpSVG, removeEmptySVGEls, stringifySVG } from './svgii/svg_cleanup';
 import { refineRoundedCorners } from './svgii/pathData_simplify_refineCorners';
@@ -99,7 +99,10 @@ export function svgPathSimplify(input = '', {
     scaleTo = 0,
     crop = false,
     alignToOrigin = false,
+
+    // flatten transforms
     convertTransforms = false,
+
 
 
     //svg path optimizations
@@ -114,24 +117,28 @@ export function svgPathSimplify(input = '', {
     reversePath = false,
 
     //svg cleanup options
+    minifyRgbColors = false,
     removePrologue = true,
     removeHidden = true,
     removeUnused = true,
     cleanupDefs = true,
     cleanupClip = true,
     cleanupSVGAtts = true,
-    
+
     stylesToAttributes = false,
     fixHref = false,
     legacyHref = false,
     removeNameSpaced = true,
-    attributesToGroup = false,
-    removeOffCanvas = false,
 
+    //attributesToGroup = false,
+    removeOffCanvas = false,
+    unGroup = false,
     mergePaths = false,
 
     // shape conversions
     shapesToPaths = false,
+
+
     //toPaths || toShapes
     shapeConvert = 0,
     convert_rects = false,
@@ -145,6 +152,8 @@ export function svgPathSimplify(input = '', {
     cleanUpStrokes = true,
     addViewBox = false,
     addDimensions = false,
+
+    removeComments = true,
 
 } = {}) {
 
@@ -230,12 +239,19 @@ export function svgPathSimplify(input = '', {
     // mode:1 – process complete svg DOM
     else {
 
+        // convert all shapes to paths
+        if (shapesToPaths) {
+            shapeConvert = true
+            convert_rects = true
+            convert_ellipses = true
+            convert_poly = true
+            convert_lines = true
+        }
 
         //sanitize
         let svgPropObject = cleanUpSVG(input, {
             removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
-            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines
-
+            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms
         }
         );
 
@@ -580,8 +596,8 @@ export function svgPathSimplify(input = '', {
 
         if (autoAccuracy) {
             accuracyArr = accuracyArr.sort().reverse();
-            let decimalsMid = accuracyArr[Math.floor(accuracyArr.length*0.5)]
-            decimals = Math.floor( (accuracyArr[0] + decimalsMid) * 0.5  )
+            let decimalsMid = accuracyArr[Math.floor(accuracyArr.length * 0.5)]
+            decimals = Math.floor((accuracyArr[0] + decimalsMid) * 0.5)
             //decimals = detectAccuracy(pathData)
             //console.log('decimals', decimals, 'decimalsMid', decimalsMid, accuracyArr);
             pathOptions.decimals = decimals
@@ -711,7 +727,7 @@ export function svgPathSimplify(input = '', {
         }
 
 
-        svg = stringifySVG(svg, omitNamespace);
+        svg = stringifySVG(svg, { omitNamespace, removeComments });
 
 
         //svgSizeOpt = new Blob([svg]).size

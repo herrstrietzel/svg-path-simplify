@@ -15,19 +15,34 @@ export const shapeEls = [
 
 export const horizontalProps = ['x', 'cx', 'rx', 'dx', 'width', 'translateX'];
 export const verticalProps = ['y', 'cy', 'ry', 'dy', 'height', 'translateY'];
+export const transHorizontal = ['scaleX', 'translateX', 'skewX'];
+export const transVertical = ['scaleY', 'translateY', 'skewY'];
+
+export const colorProps = ['fill', 'stroke', 'stop-color'];
+
 
 export const geometryEls = [
     "path",
     ...shapeEls
-]
+];
+
+export const renderedEls = [
+    "text",
+    "textPath",
+    "tspan",
+    ...geometryEls
+];
 
 export const textEls = [
     "textPath",
     "text",
     "tspan",
-]
+];
+
+
 
 export const strokeAtts = ['stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin','stroke-linecap', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit', 'stroke-opacity' ];
+
 
 export const attLookup = {
 
@@ -306,9 +321,9 @@ export const attLookup = {
         "color": ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
 
         stroke: ["none"],
-        "stroke-width": ["1", "1px"],
         opacity: ["1"],
         "fill-opacity": ["1"],
+        "stroke-width": ["1", "1px"],
         "stroke-opacity": ["1"],
         "stroke-linecap": ["butt"],
         "stroke-miterlimit": ["4"],

@@ -1,5 +1,5 @@
 import { parseCSSTransform, parseTransform } from "./svgii/svg-styles-getTransforms";
-import { getElAttributes, getElementProps, getElStyleProps } from "./svgii/svg-styles-to-attributes";
+import { getElAttributes, getElementProps, getElStyleProps } from "../__back/svg-styles-to-attributes";
 
 export function flattenTransforms(svg) {
 

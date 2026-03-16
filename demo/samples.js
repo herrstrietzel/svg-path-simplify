@@ -987,9 +987,15 @@ Z    `,
  </g>
  </svg>`,
 
+	dasharray__relative: `<svg viewBox="0 0 200 100">
+  <circle cx="50%" cy="50%" r="25%" stroke="#ccc" fill="none" />
+  <circle cx="50%" cy="50%" r="50" stroke="red" fill="none" stroke-dasharray="25% 500%"/>
+</svg>`
+
 
 
 	}
+
 
 
 

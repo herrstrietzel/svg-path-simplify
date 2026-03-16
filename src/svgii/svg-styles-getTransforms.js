@@ -3,6 +3,8 @@
  * transform property object
  */
 
+import { deg2rad } from "../constants";
+
 export function parseTransform(transformString, transformOrigin = { x: 0, y: 0 }) {
 
     //let regex = /(\w+)\(([^)]+)\)/g;
@@ -18,12 +20,12 @@ export function parseTransform(transformString, transformOrigin = { x: 0, y: 0 }
         console.log('trans', prop, vals);
 
         // rotate has origin
-        if(prop==='rotate' && vals.length===3){
-            transforms.push({prop:'translate', values:[vals[1], vals[2]]})
-            transforms.push({prop:'rotate', values:[vals[0]]})
-            transforms.push({prop:'translate', values:[-vals[1], -vals[2]]})
-        }else{
-            transforms.push({prop, values:[vals[0]]})
+        if (prop === 'rotate' && vals.length === 3) {
+            transforms.push({ prop: 'translate', values: [vals[1], vals[2]] })
+            transforms.push({ prop: 'rotate', values: [vals[0]] })
+            transforms.push({ prop: 'translate', values: [-vals[1], -vals[2]] })
+        } else {
+            transforms.push({ prop, values: [vals[0]] })
         }
     })
 
@@ -89,8 +91,7 @@ export function parseCSSTransform(transformString, transformOrigin = { x: 0, y: 
                 break;
 
             case 'rotate':
-
-                console.log('rotate', values);
+                //console.log('rotate', values);
 
                 transformOptions.transforms.push({ rotate: [0, 0, values[0] || 0] });
                 break;
@@ -136,6 +137,116 @@ export function getMatrix({
     //console.log('is3d', is3d,force3D , matrix);
     return matrix
 }
+
+
+
+
+export function getMatrixFromTransform(transformations = []) {
+
+    //console.log('getMatrix2D', transformations, origin);
+    // Helper function to multiply two 2D matrices
+
+    const multiply = (m1, m2) => {
+        let mtxN = {
+            a: m1.a * m2.a + m1.c * m2.b,
+            b: m1.b * m2.a + m1.d * m2.b,
+            c: m1.a * m2.c + m1.c * m2.d,
+            d: m1.b * m2.c + m1.d * m2.d,
+            e: m1.a * m2.e + m1.c * m2.f + m1.e,
+            f: m1.b * m2.e + m1.d * m2.f + m1.f
+        }
+
+        //console.log('m1', m1, 'm2', m2, 'mtxN', mtxN);
+        return mtxN;
+    };
+
+
+    // Helper function to create a translation matrix
+    const translationMatrix = (x, y) => {
+        let mtx ={a: 1, b: 0, c: 0, d: 1, e: x, f: y}
+        return mtx
+    };
+
+    // Helper function to create a scaling matrix
+    const scalingMatrix = (x, y) => ({
+        a: x, b: 0, c: 0, d: y, e: 0, f: 0
+    });
+
+
+    // get skew or rotation axis matrix
+    const angleMatrix = (angles, type) => {
+        //const toRad = (angle) => angle * Math.PI / 180;
+        let [angleX, angleY=0] = angles.map(ang => ang*deg2rad)
+        let m = {}
+        //console.log('angles', angles);
+
+        if (type === 'rot') {
+            let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+            m = { a: cosX, b: sinX, c: -sinX, d: cosX, e: 0, f: 0 }
+        } else if (type === 'skew') {
+            let tanX = Math.tan(angleX), tanY = Math.tan(angleY);
+            m = {
+                a: 1, b: tanY, c: tanX, d: 1, e: 0, f: 0
+            };
+        }
+        return m
+    };
+
+
+    // Start with an identity matrix
+    let matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+
+    // Process transformations in the provided order (right-to-left)
+    for (let i = 0; i < transformations.length; i++) {
+
+        let transform = transformations[i];
+
+        // Get the transformation type (e.g., "translate")
+        let type = Object.keys(transform)[0];
+
+        let values = transform[type];
+        //console.log('transform', transform, type, values);
+
+        let [x, y] = values
+
+
+        switch (type) {
+            case "matrix":
+                let keys = ['a', 'b', 'c', 'd', 'e', 'f'];
+                let obj = Object.fromEntries(keys.map((key, i) => [key, values[i]]));
+                //console.log('mtx',obj );
+                matrix = multiply(matrix, obj);
+                break;
+            case "translate":
+                matrix = multiply(matrix, translationMatrix(x, y));
+                break;
+            case "skew":
+                matrix = multiply(matrix, angleMatrix([x, y], 'skew'));
+                break;
+            case "rotate":
+                matrix = multiply(matrix, angleMatrix([x], 'rot'));
+                //console.log('rot', matrix);
+                break;
+            case "scale":
+                matrix = multiply(matrix, scalingMatrix(x, y));
+                break;
+
+            default:
+                throw new Error(`Unknown transformation type: ${type}`);
+        }
+
+
+        //let mtxTmp = JSON.parse(JSON.stringify(matrix))
+        //console.log('??? mtxTmp', type,  mtxTmp, 'transform', transform);
+    }
+
+
+    //console.log('matrix2D', matrix);
+    return matrix;
+}
+
+
 
 
 

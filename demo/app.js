@@ -62,9 +62,9 @@ function updateConfig(settings = {}) {
 
     let {omitDefaults} = settings || false
 
-    let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults']
-    let configs = {}
+    let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults', 'detailsOpen']
 
+    let configs = {}
     let defaults = settings.defaults;
 
     for (let prop in settings) {
@@ -77,6 +77,8 @@ function updateConfig(settings = {}) {
     }
     let configJson = 'const options='+JSON.stringify(configs, null, ' ').replaceAll('"', '')
     textConfig.value = configJson
+
+    return configs;
 
 }
 
@@ -271,12 +273,20 @@ function updateSVG(settings = {}, processed = false) {
     if (!dInput && !samples) return
 
 
-    let exclude = ['defaults', 'storageName', 'showNav', 'getObject', 'dOutput', 'showMarkers']
+    let exclude = ['defaults', 'storageName', 'showNav', 'getObject', 'dOutput', 'showMarkers'];
+
 
     // remove defaults from query
     let settingsShare = {};
-    for (let prop in settings) {
-        let value = settings[prop];
+    
+    // add sample
+    if(settings['samples']) settingsShare['samples'] = settings['samples'];
+
+    let settingsFiltered = updateConfig(settings)
+
+
+    for (let prop in settingsFiltered) {
+        let value = settingsFiltered[prop];
         if (defaults[prop] === value || exclude.includes(prop)) {
             //console.log('is default', prop);
             continue
@@ -289,10 +299,10 @@ function updateSVG(settings = {}, processed = false) {
                 .replace(/ +/g, ' ')
                 .trim()
         }
-
         settingsShare[prop] = value;
-
     }
+
+
 
     let query = settingsToQueryString(settingsShare, exclude)
     let baseUrl = window.location.href.split('?')[0]
@@ -325,9 +335,17 @@ function updateSVG(settings = {}, processed = false) {
 
     let { original, decimals = null } = report;
 
+    /*
+    if(polys.length && settings.polyFormat==='d'){
+        polyOut.value = d
+    }
+    */
+
     if(polys.length){
+        //console.log(polys);
         polyOut.value=JSON.stringify(polys).replaceAll('"', '')
     }
+
 
 
     //lastFileName
@@ -465,7 +483,8 @@ function updateSVG(settings = {}, processed = false) {
         title: `svg-path-simplify`,
         description: `svg-path-simplify`,
         html: svgExport,
-        css:`body{background:#ccc} svg{display:block; outline: 1px solid #ccc; overflow:visible}`
+        css:`body{background: repeating-conic-gradient(hsl(55, 10%, 85%) 0% 25%, transparent 25% 50%);
+        background-size: 1em 1em;} svg{display:block; outline: 1px solid red; overflow:visible}`
     }
 
     let dataCodepen = JSON.stringify(obj_codepen)

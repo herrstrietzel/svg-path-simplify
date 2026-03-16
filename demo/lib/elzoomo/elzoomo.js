@@ -4,6 +4,7 @@ window.addEventListener("DOMContentLoaded", (e) => {
 
 function initZoomEls() {
     let els = document.querySelectorAll("[data-zoom]");
+
     els.forEach((el) => {
 
         addElZoomoStyles();
@@ -12,9 +13,39 @@ function initZoomEls() {
         let options = JSON.parse(el.dataset.zoom);
         initZoomEl(el, options);
 
+        let bb0 = el.closest("[data-zoom]").getBoundingClientRect()
+
         let child = el.children[0]
-        let rect = child.getBoundingClientRect();
-        let mtx0 = { a: 1, b: 0, c: 0, d: 1, e: 0, f: rect.top };
+        let bb = child.getBoundingClientRect();
+
+
+        let { x, y, width, height } = bb;
+
+        let offsetY = bb0.height - height;
+        //let offY = y+height*0.5 - height * scale * 0.5
+        //let offY = y + bb.height * scale * 0.5
+        //let dimMax = Math.max()
+        let scale = bb.width / bb0.width
+
+        /*
+        let offX = x - offsetX*0.5
+         offX = width*scale*0.25
+         offX = x - offsetX * 1;
+         offX= x*1 - offsetX + (x+offsetX)*0.5
+        */
+        let diffW = (bb0.width - bb.width) * scale;
+        let offX = diffW * 0.5
+       // offX = bb.x * scale * 0.5
+        offX=0
+        //offX=diffW
+
+       // console.log(bb0, bb, 'diffW', diffW, 'scale', scale, 'offX', offX);
+
+
+        let offY = y + offsetY * 0.5
+
+        //let mtx0 = { a: 1, b: 0, c: 0, d: 1, e: offX, f: offY };
+        let mtx0 = { a: scale, b: 0, c: 0, d: scale, e: offX, f: offY };
         el.style.transform = `matrix(${Object.values(mtx0).join(', ')})`
         el.style.setProperty('--zoomScale', mtx0.a)
 
@@ -131,8 +162,6 @@ function initZoomEl(el, options) {
         container.insertAdjacentHTML("beforeend", toolbar);
 
         btnZoomIn = container.querySelector(".elzoomo-btn-zoomin")
-
-
         btnZoomOut = container.querySelector(".elzoomo-btn-zoomout")
 
     } else {

@@ -305,11 +305,3 @@ export function findSplitT(com1, com2) {
 
     return l1 / l3
 }
-
-
-
-
-
-
-
-

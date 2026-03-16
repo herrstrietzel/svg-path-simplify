@@ -66,16 +66,23 @@
     -->
     <script src="demo/samples.js" defer></script>
 
+    <!-- Md parser -->
+    <script src="https://cdn.jsdelivr.net/gh/UmemotoCtrl/mdpjs@0.1.4/js/mdp.min.js" defer></script>
+
 
     <!-- UI helpers -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.css" as="style" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.css"
+        as="style" />
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.6/dist/enhanceInputs.min.js" defer></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.7/dist/enhanceInputs.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.7/dist/enhanceInputs.min.js" defer></script>
+
     <!-- 
+
+
             <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
             <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
-            -->
+    -->
 
 
     <!-- 
@@ -85,7 +92,7 @@
     <script src="dist/svg-path-simplify.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
-    <script src="demo/lib/elzoomo/elzoomo.min.js" defer></script>
+    <script src="demo/lib/elzoomo/elzoomo.js" defer></script>
     <script src="demo/app.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/uzip@0.20201231.0/UZIP.min.js" defer></script>
 
@@ -109,7 +116,6 @@
             <!--toolbars-->
             <aside class="aside aside-1 hgh-100 aside scrollbar scroll-content-ld scroll-track   pdd-1em pos-rlt">
 
-
                 <p class="txt-cnt mrg-0">
                     <img class="icn-logo " width="100" height="100"
                         src="https://herrstrietzel.github.io/svg-path-simplify/favicon.svg" alt="svg-path-simplify">
@@ -118,12 +124,6 @@
                 <h1 class="txt-cnt h1">Simplify SVG files and path data</h1>
                 <h2 class="p txt-cnt">Optimizes SVG data by removing excessive commands and applying markup
                     minifications such as coordinate rounding, relative and applicable shorthand commands</h2>
-
-                <!-- 
-                    <h1 class="h1 --txt-cnt"><img class="icn-svg icn-svg-logo dsp-inl-blc fnt-siz-1em" width="100" height="100" src="./favicon.svg" alt="svg-path-simplify">Simplify SVG files and path data</h1>
-    <p>Enter your SVG pathData or complete file markup or upload SVG files</p>
-                -->
-
 
                 <p class="--btn-neg" data-ui="reset"></p>
 
@@ -183,77 +183,117 @@
                 </label>
 
                 <details open>
-                    <summary class="h3">SVG input normalization</summary>
+                    <summary class="h3">SVG cleanup</summary>
                     <p>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="arcToCubic">arcToCubic</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="quadraticToCubic"
-                                checked>quadraticToCubic</label>
-
                         <!-- 
-
                         <label><input type="checkbox" name="removePrologue" checked>removePrologue</label>
                     -->
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeNameSpaced"
+                                aria-description="Graphic applications often add a lot of propriatary/custom attributes – not required for browser or exchange format usage"
                                 checked>removeNameSpaced</label>
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="removeHidden" data-info="Graphic applications usually don't exclude hidden layers – enable it to remove them to remove undesired bloat"
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeComments"
+                                aria-description="Remove custom comments – disable it if you placed explanatory comments yourself"
+                                checked>removeComments</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeHidden"
+                                aria-description="Graphic applications usually don't exclude hidden layers – enable it to remove them to remove undesired bloat"
                                 checked>removeHidden</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="cleanupDefs"
-                                data-info="Removes empty defs and moves all defs to the top of the SVG markup – many environments struggle with footer placements (figma problem)"
+                                aria-description="Removes empty defs and moves all defs to the top of the SVG markup – many environments struggle with footer placements (figma problem)"
                                 checked>cleanupDefs</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="cleanupClip" checked
-                                data-info="Removes unnecessary clip-paths – spanning the entire viewBox (e.g typical for figma)">cleanupClip</label>
+                                aria-description="Removes unnecessary clip-paths – spanning the entire viewBox (e.g typical for figma)">cleanupClip</label>
 
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupSVGAtts" 
-                                data-info="remove SVG non-essential attributes" checked>cleanupSVGAtts</label>
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanUpStrokes" checked
-                                data-info="removes stroke attributes when stroke color is missing">cleanUpStrokes</label>
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="fixHref"
-                                data-info="replaces xlink:href with href – many applications still rely on xlink:href notation!"
-                                >fixHref</label>
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="legacyHref"
-                                data-info="Since many (non-browser) applications still depend on xlink:href notation you may convert href to xlink:href">legacyHref</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanupSVGAtts"
+                                aria-description="Remove SVG non-presentational attributes from the root SVG"
+                                checked>cleanupSVGAtts</label>
 
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeOffCanvas"
-                                data-info="Removes elements beyond viewBox/outside viewport">removeOffCanvas</label>
+                                aria-description="Removes elements beyond viewBox/outside viewport">removeOffCanvas</label>
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="addViewBox" checked
-                                data-info="adds a viewBox attribute if missing – counter-productive if your SVG layout is fluid">addViewBox</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="unGroup"
+                                aria-description="Applications often add too many nest groups – removing also converts any styles to elements">unGroup</label>
 
-                        <label><input type="checkbox" data-type="checkbox-switch" name="addDimensions"
-                                data-info="Many graphic applications won't translate viewBox correctly to artboard/document size">addDimensions</label>
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
-                                data-info="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
-
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="mergePaths">mergePaths</label>
-
-                        <label><input type="checkbox" data-type="checkbox-switch"
-                                name="removeDimensions">removeDimensions</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="removeIds">removeIds</label>
-                        <label><input type="checkbox" data-type="checkbox-switch"
-                                name="removeClassNames">removeClassNames</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="omitNamespace"
-                                data-info="Removes xmlns attribute - only recommended when embedding svg in DOM">omitNamespace</label>
 
                         <!-- 
                                 
                                 <label><input type="checkbox" class="dsp-debug" name="convertTransforms">convertTransforms</label>
                                 -->
+                    </p>
+                </details>
+
+                <details open>
+                    <summary class="h3">SVG style optimization</summary>
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="cleanUpStrokes" checked
+                                aria-description="removes stroke attributes when stroke color is missing">cleanUpStrokes</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
+                                aria-description="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="minifyRgbColors"
+                                aria-description="Minifies RGB colors e.g for fill, stroke or stop-color">minifyRgbColors</label>
+
 
                     </p>
+
+                </details>
+
+
+                <details open>
+                    <summary class="h3">SVG advanced conversions</summary>
+
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="addViewBox" checked
+                                aria-description="Adds a viewBox attribute if missing – counter-productive if your SVG layout is fluid">addViewBox</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="addDimensions"
+                                aria-description="Many graphic applications won't translate viewBox correctly to artboard/document size">addDimensions</label>
+
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="mergePaths"
+                                aria-description="Merge adjacent paths – can minify file size but won't allow you to select individual paths">mergePaths</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                name="removeDimensions">removeDimensions</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="removeIds"
+                                aria-description="Graphic applications usually add unsemantic generic IDs for each layer – remove them unless you need them for JS selection (e.g event bindings)">removeIds</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="Graphic applications often add un semantic class names – remove these unless you have specified them on your own or these are required for CSS styling (e.g icon assets)"
+                                name="removeClassNames">removeClassNames</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="omitNamespace"
+                                aria-description="Removes xmlns attribute - only recommended when embedding svg in DOM">omitNamespace</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="fixHref"
+                                aria-description="Replaces xlink:href with href – many applications still rely on xlink:href notation!">fixHref</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="legacyHref"
+                                aria-description="Since many (non-browser) applications still depend on xlink:href notation you may convert href to xlink:href">legacyHref</label>
+
+                    </p>
+
+                </details>
+
+
+                <details open>
+                    <summary class="h3">SVG pathdata conversions</summary>
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="arcToCubic"
+                                aria-description="Arc commands are usually more compact than Béziers at least for semicircles – keep it enabled unless you hate arcs with a passion (... I feel you!)">arcToCubic</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="quadraticToCubic"
+                                aria-description="Quadratic Béziers are highly efficient but rarely allow any simplification – keep it enabled unless you want to optimize your quadratic segments"
+                                checked>quadraticToCubic</label>
+                    </p>
+
                 </details>
 
                 <details open>
@@ -261,38 +301,36 @@
                         SVG shape &lt;&minus;&gt; path conversion
                     </summary>
 
-                    <!-- 
-                        <p>
-                            <label><input type="checkbox" data-type="checkbox-switch" name="shapesToPaths"
-                                    data-info="convert shapes like circles, rects to path elements">shapesToPaths</label>
-                        </p>
-                    -->
-
 
                     <p>
                         <label>
-                            <input type="radio" name="shapeConvert" value="0" checked>keep
+                            <input type="radio" name="shapeConvert" aria-description="No conversion" value="0"
+                                checked>keep
                         </label>
                         <label>
-                            <input type="radio" name="shapeConvert" value="toPaths">shapesToPaths
+                            <input type="radio" name="shapeConvert"
+                                aria-description="Convert shapes to paths – shapes are usually very compact. Exceptions are polygon and polyline. Most importantly primitives such as circle, ellipse, rect and line support relative units – not available for paths or polys. But merged shape-paths usually decrease file size."
+                                value="toPaths">shapesToPaths
                         </label>
                         <label>
-                            <input type="radio" name="shapeConvert" value="toShapes">pathsToShapes
+                            <input type="radio" name="shapeConvert"
+                                aria-description="Convert paths to shapes – if applicable"
+                                value="toShapes">pathsToShapes
                         </label>
                     </p>
 
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="convert_rects"
-                                data-info="convert paths to rects if applicable">rects</label>
+                                aria-description="convert paths to rects if applicable">rects</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="convert_ellipses"
-                                data-info="convert paths to circles or ellipses if applicable – ellipses/circles are usually more compact than paths – unless you merge paths">ellipses/circles</label>
+                                aria-description="convert paths to circles or ellipses if applicable – ellipses/circles are usually more compact than paths – unless you merge paths">ellipses/circles</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="convert_poly"
-                                data-info="convert paths to polys if applicable – polylines are quite inefficient as they are all absolute">polygons/polylines</label>
+                                aria-description="convert paths to polys if applicable – polylines are quite inefficient as they are all absolute">polygons/polylines</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="convert_lines"
-                                data-info="convert paths to lines if applicable">lines</label>
+                                aria-description="convert paths to lines if applicable">lines</label>
                     </p>
 
 
@@ -302,6 +340,7 @@
                             – so all significant geometrical parameters are described by a discrete number of
                             parameters. Elements of this class are <code>&lt;circle&gt;</code>,
                             <code>&lt;ellipse&gt;</code>, <code>&lt;ellipse&gt;</code> and <code>&lt;line&gt;</code>.
+                            Besides, rimitives support relative percentages as units – handy for fluid layouts.
                             The <code>&lt;polygon&gt;</code> and <code>&lt;polyline&gt;</code> don't fall into this
                             category as the most significant attribute <code>&lt;points&gt;</code> (specifying the
                             vertices) allows an arbitrary array of point. These poly elements can always be expressed
@@ -314,7 +353,14 @@
                 </details>
 
                 <details>
-                    <summary class="h3">SVG/path scaling</summary>
+                    <summary class="h3">SVG/path transform</summary>
+
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convertTransforms"
+                                aria-description="Converts transforms to hard-coded geometry properties">convertTransforms</label>
+
+                    </p>
+
                     <p>
                         <label>Scale <input type="number" value="1" min="0.00001" max="10000" name="scale"
                                 step="0.1"></label>
@@ -324,9 +370,9 @@
                     </p>
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="crop"
-                                data-info="crops svgs to tight bbox">crop</label>
+                                aria-description="crops svgs to tight bbox">crop</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="alignToOrigin"
-                                data-info="aligns path to x/y 0 origin">alignToOrigin</label>
+                                aria-description="aligns path to x/y 0 origin">alignToOrigin</label>
 
                     </p>
 
@@ -339,61 +385,64 @@
 
                 <details open>
                     <summary class="h3">Simplification</summary>
+
+                    <p>
+                        <label>tolerance<input type="number" name="tolerance" min="0.1" max="10" step="0.1" value="1"
+                                aria-description="Higher tolerance = sloppier approximations and more distortions – default 1"></label>
+                    </p>
+
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="simplifyBezier"
+                                aria-description="Tries to combine adjacent Bézier commands"
                                 checked>simplifyBezier</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeZeroLength"
+                                aria-description="Removes zero length segments – often accidentally added by apps"
                                 checked>removeZeroLength</label>
 
+                        <label><input type="checkbox" data-type="checkbox-switch" name="optimizeOrder"
+                                aria-description="Optimizes command order preferring top-left sorting and avoiding start points between adjacent Bézier segments"
+                                checked>optimizeOrder</label>
+
                         <label><input type="checkbox" data-type="checkbox-switch" name="refineClosing"
+                                aria-description="Tries to replace a closing lineto with a Z command – ideally we can ditch one command"
                                 checked>refineClosing</label>
 
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeColinear"
+                                aria-description="Removes excessive colinear lineto commands – mostly affects line sequences or polygon inputs"
                                 checked>removeColinear</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="flatBezierToLinetos"
+                                aria-description="Converts flat Bézier commands to simpler linetos"
                                 checked>flatBezierToLinetos</label>
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="optimizeOrder"
-                                checked>optimizeOrder</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="keepExtremes"
-                                checked>keepExtremes</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="keepCorners"
-                                checked>keepCorners</label>
-
-                        <label><input type="checkbox" data-type="checkbox-switch" name="keepInflections"
-                                data-info="retain inflections e.g spine of an S shape">keepInflections</label>
 
                         <!-- 
                         <label><input type="checkbox" name="extrapolateDominant"
-                                data-info="extrapolates dominant bezier segment – rather sloppy">extrapolateDominant</label>
+                                aria-description="extrapolates dominant bezier segment – rather sloppy">extrapolateDominant</label>
                     -->
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="revertToQuadratics"
-                                data-info="Reverts cubic to quadratic Béziers if applicable"
+                                aria-description="Reverts cubic to quadratic Béziers if applicable"
                                 checked>revertToQuadratics</label>
 
-                        <!-- 
-                                <label><input type="checkbox" name="reverse">try with reversed drawing direction</label>
-            
-                                <label><input type="checkbox" name="multipass"
-                                        data-info="takes better simplification – slower">multipass</label>
-                            -->
-
                     </p>
                 </details>
 
 
-                <details open>
-                    <summary class="h3">Quality</summary>
+                <details>
+                    <summary class="h3">Limit simplification</summary>
                     <p>
-                        <label>tolerance<input type="number" name="tolerance" min="0.1" max="10" step="0.1" value="1"
-                                data-info="higher tolerance = sloppier approximations – default 1"></label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepExtremes"
+                                aria-description="Extremes (tangent angle is horizontal or vertical) are visually significant – disable it only if you know what you're doing"
+                                checked>keepExtremes</label>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepCorners"
+                                aria-description="Corners (adjacent tangent angle are rather »sharp«) are visually significant – disable it only if you know what you're doing"
+                                checked>keepCorners</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="keepInflections"
+                                aria-description="Retain inflections e.g spine of an S shape – mainly useful for design/editing purposes">keepInflections</label>
                     </p>
-
                 </details>
-
 
 
                 <details>
@@ -401,22 +450,25 @@
                     <p>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="cubicToArc"
-                                data-info="Reverts cubic to arcs if applicable">cubicToArc</label>
+                                aria-description="Replaces Bézier segments by elliptic arc A commands where applicable – can reduce complexity for semi- or full circles">cubicToArc</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeOrphanSubpaths"
-                                data-info="remove orphaned M commands not connecting to lines or curve segments"
-                                checked>removeOrphanSubpaths</label>
+                                aria-description="Remove orphaned M commands not connecting to lines or curve segments">removeOrphanSubpaths</label>
                         <label><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="Tries to combine commands close to an adjacent x/y extreme segment"
                                 name="refineExtremes">refineExtremes</label>
                         <label><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="replaces Bézier segments enclosed by linetos with single quadratic commands – handy to reduce overly complex tiny corner roundings"
                                 name="simplifyCorners">simplifyCorners</label>
                         <label><input type="checkbox" data-type="checkbox-switch"
                                 name="simplifyRound">simplifyRound</label>
-                        <label><input type="checkbox" data-type="checkbox-switch" name="addExtremes">addExtremes</label>
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="Adds commands at x/y extrema – adds complexity but may help for editing in a graphic application – when using this option enable refineExtremes as well to avoid tiny adjacent segments"
+                                name="addExtremes">addExtremes</label>
 
                         <!-- 
                         <label><input type="checkbox" name="redraw"
-                                data-info="try to redraw messed up paths based on extremes, semiextermes and corners">redraw</label>
+                                aria-description="try to redraw messed up paths based on extremes, semiextermes and corners">redraw</label>
 
 
                                 <label class="dsp-debug"><input type="checkbox" data-type="checkbox-switch"
@@ -434,101 +486,113 @@
                     <summary class="h3">Path directions</summary>
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="reversePath"
-                                data-info="Reverses path drawing direction">reversePath</label>
+                                aria-description="Reverses path drawing direction - sometimes handy for line animations">reversePath</label>
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="fixDirections"
-                                data-info="Fixes sub path drawing directions to make fill rules obsolete">fixDirections</label>
+                                aria-description="Alternates sub path directions to fulfill non-zero rule. Makes fill-rule attribute obsolete and render correct in other environments e.g when converting to fonts">fixDirections</label>
                     </p>
                 </details>
 
-                <details open>
+
+                <details>
+                    <summary class="h3">Polygon</summary>
+                    <p>
+                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch" name="smoothPoly"
+                                aria-description="Converts a polygon to smooth cubic beziers using the Philip J. Schneider curve fitting algorithm">smoothPoly</label>
+
+                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="Converts a path to polygon at specified precision"
+                                name="toPolygon">toPolygon</label>
+                    </p>
+                    <p>
+                        <label>precisionPoly<input type="number" name="precisionPoly" min="0.1" max="100" step="0.1"
+                                value="1"
+                                aria-description="Precision for polygon approximation – higher values add more vertices"></label>
+                    </p>
+
+                    <p class="h4">Polygon simplification</p>
+                    <p>
+                        <label class="">simplifyRDP<input type="number" min="0" max="500" step="0.1" value="0"
+                                name="simplifyRDP" aria-description="Reduce vertices via Ramer-Douglas-Peucker"></label>
+                    </p>
+                    <p>
+                        <label class="">simplifyRD<input type="number" min="0" max="500" step="0.1" value="0"
+                                name="simplifyRD" aria-description="Reduce vertices via radial distance"></label>
+                    </p>
+
+                    <p>
+                        <label class=""><input type="radio" name="polyFormat" value="object" checked>object</label>
+                        <label class=""><input type="radio" name="polyFormat" value="array">array</label>
+                        <label class=""><input type="radio" name="polyFormat" value="string">string</label>
+                        <!-- 
+                            <label class=""><input type="radio" name="polyFormat" value="d">pathdata</label>
+                        -->
+                    </p>
+
+                </details>
+
+
+              <details open>
                     <summary class="h3">SVG output settings</summary>
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="toRelative"
+                                aria-description="Converts all commands to relative – reduces file size"
                                 checked>toRelative</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="toShorthands"
+                                aria-description="Converts all commands to shorthand when applicable – reduces file size"
                                 checked>toShorthands</label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="lineToCubic"
-                                data-info="converts lines to cubics – helpful for morphing animations">lineToCubic</label>
+                                aria-description="converts lines to cubics – helpful for morphing animations">lineToCubic</label>
 
                     </p>
 
-                    <p class="h4">SVG string optimization</p>
+                    <details>
+                        <summary class="h4" data-summary='{"icon":"question"}'>SVG string optimization</summary>
+                        <ul class="ul-bll">
+                            <li><strong>Minify</strong> = maximum string minification – my lead to problems in older
+                                applications!</li>
+                            <li><strong>Verbose</strong> = don't omit command type tokens</li>
+                            <li><strong>Beautify</strong>strong> = don't omit command type tokens and separate commands
+                                by new lines – handy for educational usage</li>
+                        </ul>
+                    </details>
+
                     <p><label><input type="radio" name="minifyD" value="0" checked>minify</label>
                         <label><input type="radio" name="minifyD" value="1">verbose</label>
                         <label><input type="radio" name="minifyD" value="2">beautify</label>
                     </p>
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="autoAccuracy"
-                                data-info="takes an estimated suitable floating point accuracy based on smallest segment"
+                                aria-description="Calculates a suitable floating point precision for coordinate rounding. Slightly conservative – decreasing by one decimal may work without significant distortions"
                                 checked>autoAccuracy</label>
                     </p>
 
-                    <!-- 
-                        <p>
-                            <label><input type="checkbox" data-type="checkbox-switch" name="roundSub"
-                                    data-info="takes an estimated suitable floating point accuracy based on smallest segment"
-                                    >roundSub</label>
-                        </p>
-                    -->
-
-
-
                     <p>
                         <label class="wdt-100">decimals <input type="number" name="decimals" min="0" value="1"
-                                data-info="reduces floating point precision: reduces filesize significantly!"></label>
+                                aria-description="Manual floating point rounding precision – overriden when autoAccuracy is enabled"></label>
                     </p>
                 </details>
 
-                <p>
-                    <label>Output SVG
-                        <textarea class="outputSvg code" name="dOutput" id="outputSvg" data-tools="size copy"
-                            data-file="simple.svg"></textarea>
-                    </label>
-                </p>
 
-                <details>
-                    <summary class="h3">Polygon</summary>
-                    <p>
-                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch" name="smoothPoly"
-                                data-info="Converts a polygon to smooth cubic beziers using the Philip J. Schneider curve fitting algorithm">smoothPoly</label>
-
-                        <label class="--dsp-debug"><input type="checkbox" data-type="checkbox-switch"
-                                name="toPolygon">toPolygon</label>
-                    </p>
-
+                <details open>
+                    <summary class="h3">Output</summary>
 
                     <p>
-                        <label>precisionPoly<input type="number" name="precisionPoly" min="0.1" max="100" step="0.1"
-                                value="1"
-                                data-info="Precision for polygon approximation – higher values add more vertices"></label>
+                        <label>Output SVG
+                            <textarea class="outputSvg code" name="dOutput" id="outputSvg" data-tools="size copy"
+                                data-file="simple.svg"></textarea>
+                        </label>
                     </p>
 
-
-                    <p class="h4">Polygon simplification</p>
-                    <p>
-                        <label class="">simplifyRDP<input type="number" min="0" max="500" step="1" value="0"
-                                name="simplifyRDP" data-info="reduce vertices via Ramer-Douglas-Peucker"></label>
-                    </p>
-                    <p>
-                        <label class="">simplifyRD<input type="number" min="0" max="500" step="1" value="0"
-                                name="simplifyRD" data-info="reduce vertices via radial distance"></label>
-                    </p>
-
-
-                    <p>
-                        <label class=""><input type="radio" name="polyFormat" value="object" checked>object</label>
-                        <label class=""><input type="radio" name="polyFormat" value="array">array</label>
-                        <label class=""><input type="radio" name="polyFormat" value="string">string</label>
-                    </p>
                     <p>
                         <label>Output Polygon
                             <textarea class="outputPoly code" name="polyOut" id="polyOut" data-tools="size copy"
                                 data-ignore="true" readonly data-file="polygon.txt"></textarea>
                         </label>
                     </p>
-
                 </details>
+
+
 
                 <details>
                     <summary class="h3">Settings</summary>
@@ -538,7 +602,8 @@
                                 readonly></textarea>
                         </label>
                         <label><input type="checkbox" data-type="checkbox-switch" name="omitDefaults"
-                                data-info="only include settings that are not defaults" checked>omitDefaults</label>
+                                aria-description="only include settings that are not defaults"
+                                checked>omitDefaults</label>
 
                     </p>
                 </details>
@@ -713,136 +778,8 @@
 
 
     <dialog class="--dialog sr-only" id="about">
-
-        <h3 class="" dir="auto">Simplification parameters</h3>
-        <p>These params control shich simplifications are applied. The default settings aim at a safe or balanced
-            performance-to-minification ratio. However if your main goal is to get the most compact result you can
-            enable additional options which also require more processing time.</p>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>parameter</th>
-                    <th>effect</th>
-                    <th>type</th>
-                    <th>default</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>simplifyBezier</td>
-                    <td>main Bézier simplification. When disabled you get the common optimization similar to SVGO
-                        (rounding, to all relative and shorthand conversions)</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>tolerance</td>
-                    <td>increase or decrease tolerance: higher values allow more distortions, lower ones more shape
-                        fidelity</td>
-                    <td>Number</td>
-                    <td>1</td>
-                </tr>
-                <tr>
-                    <td>optimizeOrder</td>
-                    <td>reorders commands to get more adjacent simplification candidates. Improves optimization
-                        efficiency</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>removeColinear</td>
-                    <td>removes unnecessary zero-length or colinear lineto commands</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>flatBezierToLinetos</td>
-                    <td>replaces flat Béziers with linetos which also can be stripped via previous colinear removal</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>revertToQuadratics</td>
-                    <td>replaces cubic Béziers with quadratic (more compact) ones when applicable</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>keepExtremes</td>
-                    <td>skips simplification accross x/y extrema – improves shape fidelity</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>keepCorners</td>
-                    <td>skips simplification corners – improves shape fidelity</td>
-                    <td>Boolean</td>
-                    <td>true</td>
-                </tr>
-                <tr>
-                    <td>keepInflections</td>
-                    <td>retains commands introducing direction changes – adds complexity but may help for editing in a
-                        graphic application</td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <h3>Advanced simplifications</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>parameter</th>
-                    <th>effect</th>
-                    <th>type</th>
-                    <th>default</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>refineExtremes</td>
-                    <td>tries to combine commands close to an adjacent x/y extreme segment</td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-                <tr>
-                    <td>addExtremes</td>
-                    <td>adds commands at x/y extrema – adds complexity but may help for editing in a graphic application
-                        – when using this option enable <code>refineExtremes</code> as well to avoid tiny adjacent
-                        segments</td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-                <tr>
-                    <td>simplifyCorners</td>
-                    <td>replaces Bézier segments enclosed by linetos with single quadratic commands – handy to reduce
-                        overly complex tiny corner roundings. See example in <a
-                            href="https://herrstrietzel.github.io/svg-path-simplify?samples=fontawesome_gears&amp;refineExtremes=true&amp;simplifyCorners=true"
-                            rel="nofollow">webapp</a></td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-                <tr>
-                    <td>cubicToArc</td>
-                    <td>replaces Bézier segments by elliptic arc <code>A</code> commands where applicable – can reduce
-                        complexity for semi- or full circles</td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-                <tr>
-                    <td>simplifyRound</td>
-                    <td>replaces small round segments encloses by linetos – helps to simplify shapes like gears/cogs
-                    </td>
-                    <td>Boolean</td>
-                    <td>false</td>
-                </tr>
-            </tbody>
-        </table>
-
-
-
+        <div class="md-cnt" data-md="./docs/api.md">
+        </div>
     </dialog>
 
     <!-- 

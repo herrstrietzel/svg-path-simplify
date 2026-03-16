@@ -123,8 +123,15 @@
   } = Math;
 
   const rad2Deg = 180/Math.PI;  
+  const deg2rad = Math.PI/180;
   const root2 = 1.4142135623730951;
   const svgNs = 'http://www.w3.org/2000/svg';
+
+  // 1/2.54
+  const inch2cm =  0.39370078;
+
+  // 1/72
+  const inch2pt =  0.01388889;
 
   /*
   import {abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
@@ -1472,6 +1479,118 @@
       return segmentPoints;
   }
 
+  function parseColor(str) {
+      let type = str.startsWith('#') ? 'rgbHex' : (str.includes('(') ? 'fn' : typeof str);
+      let col = {};
+      let mode = null;
+      let colObj = { mode: null, values: [] };
+      if (type === 'rgbHex') {
+          col = hex2Rgb(str);
+          mode = 'rgba';
+      }
+      else if (type === 'fn') {
+          let colVals = str.split(/\(|\)/).filter(Boolean);
+          if (colVals.length < 2) return str;
+
+          mode = colVals[0];
+          let colorComponents = colVals[1].split(/,| /).filter(Boolean).map(Number);
+
+          let keys = mode.split('');
+          keys.forEach((k, i) => {
+              let val = colorComponents[i];
+              if (mode === 'rgba' && k === 'a') {
+                  val = Math.floor(val * 255);
+              }
+              col[k] = val;
+          });
+      }
+      else if (type === 'string') {
+          colObj.mode = 'keyword';
+          colObj.values = [str];
+          return colObj
+      }
+
+      if (mode === 'rgba' || mode === 'rgb') {
+          col.a = !col.a ? 255 : col.a;
+      }
+
+      colObj.mode = mode;
+      colObj.values = Object.values(col);
+
+      return colObj;
+  }
+
+  function hex2Rgb(hex = '') {
+      // Remove # if present
+      if (hex.startsWith('#')) hex = hex.substring(1);
+
+      // normalize short notation (e.g., 'fff' or 'ffff')
+      if (hex.length === 3) {
+          hex = hex.split('').map(char => char + char).join('');
+      } else if (hex.length === 4) {
+          // Handle short notation with alpha (e.g., 'ffff')
+          hex = hex.split('').map(char => char + char).join('');
+      }
+
+      let r = 0, g = 0, b = 0, a = 0;
+
+      // invalid
+      if (hex.length < 6 || hex.length > 8) {
+          console.warn('Invalid hex format');
+          return { r, g, b, a };
+      }
+
+      let isRgba = hex.length === 8;
+
+      let numericValue = parseInt(hex, 16);
+      r = isRgba ? parseInt(hex.substring(0, 2), 16) : numericValue >> 16 & 0xFF;
+      g = isRgba ? parseInt(hex.substring(2, 4), 16) : numericValue >> 8 & 0xFF;
+      b = isRgba ? parseInt(hex.substring(4, 6), 16) : numericValue & 0xFF;
+      a = isRgba ? parseInt(hex.substring(6, 8), 16) : 255;
+
+      return { r, g, b, a };
+
+  }
+
+  function rgba2Hex({ r = 0, g = 0, b = 0, a = 255, values = [] }) {
+      // Helper function to convert number to 2-digit hex
+      const toHex = (num) => {
+          const hex = Math.min(255, Math.max(0, Math.round(num))).toString(16);
+          return hex.length === 1 ? '0' + hex : hex;
+      };
+
+      // convert from number array input
+      if (!r && !g && !b && values.length) {
+          [r, g, b, a = 255] = values;
+      }
+
+      // Get hex values
+      let rHex = toHex(r);
+      let gHex = toHex(g);
+      let bHex = toHex(b);
+      let aHex = a < 255 ? toHex(a) : 0;
+
+      let allowsShort = rHex[0] === rHex[1] && gHex[0] === gHex[1] && bHex[0] === bHex[1];
+
+      // Check for 3-character RGB short notation (e.g., #fff)
+      if (!aHex && allowsShort) {
+          return `#${rHex[0]}${gHex[0]}${bHex[0]}`;
+      }
+
+      // Check for 4-character RGBA short notation (e.g., #ffff)
+      if (aHex && allowsShort) {
+          return `#${rHex[0]}${gHex[0]}${bHex[0]}${aHex[0]}`;
+      }
+
+      // Return 6-character RGB if no alpha
+      if (!aHex) {
+          return `#${rHex}${gHex}${bHex}`;
+      }
+
+      // Return 8-character RGBA
+      return `#${rHex}${gHex}${bHex}${aHex}`;
+  }
+
   function detectAccuracyPoly(pts) {
       let dims = [];
 
@@ -1606,10 +1725,21 @@
 
   const horizontalProps = ['x', 'cx', 'rx', 'dx', 'width', 'translateX'];
   const verticalProps = ['y', 'cy', 'ry', 'dy', 'height', 'translateY'];
+  const transHorizontal = ['scaleX', 'translateX', 'skewX'];
+  const transVertical = ['scaleY', 'translateY', 'skewY'];
+
+  const colorProps = ['fill', 'stroke', 'stop-color'];
 
   const geometryEls = [
       "path",
       ...shapeEls
+  ];
+
+  const renderedEls = [
+      "text",
+      "textPath",
+      "tspan",
+      ...geometryEls
   ];
 
   const textEls = [
@@ -1888,9 +2018,9 @@
           "color": ["black", "rgb(0, 0, 0)", "rgba(0, 0, 0, 0)", "#000", "#000000"],
 
           stroke: ["none"],
-          "stroke-width": ["1", "1px"],
           opacity: ["1"],
           "fill-opacity": ["1"],
+          "stroke-width": ["1", "1px"],
           "stroke-opacity": ["1"],
           "stroke-linecap": ["butt"],
           "stroke-miterlimit": ["4"],
@@ -1978,20 +2108,21 @@
       // only required for circle r normalization when height!=width
       normalizedDiagonal = width === height ? false : normalizedDiagonal;
 
+      let type = typeof value;
       if (!value) return value;
 
       // check if value is string
-      let isArray = value.split(/,| /).length>1;
-      let isFunction = value.includes('(');
+      let isNum = type === 'number' ? true : isNumericValue(value);
+      let isArray = type === 'string' ? value.split(/,| /).length > 1 : false;
+      let isFunction = type === 'string' ? value.includes('(') : false;
 
-      let isNum = isNumericValue(value);
       if (!isNum || isArray || isFunction) return value
 
       // check unit if not specified
       unit = !unit ? getUnit(value) : unit;
 
       let val = parseFloat(value);
-      let scale=1;
+      let scale = 1;
       let scaleRoot = Math.sqrt(width * width + height * height) / root2;
 
       // no unit - already pixes/user unit
@@ -2022,15 +2153,31 @@
           case "in":
               scale = dpi;
               break;
+
           case "pt":
-              scale = (1 / 72) * dpi;
+              // 1/72
+              scale = dpi * inch2pt;
               break;
+
+          case "pc":
+              // 1/6
+              scale = dpi * 0.16666667;
+              break;
+
           case "cm":
-              scale = (1 / 2.54) * dpi;
+              // 1/2.54
+              scale = inch2cm * dpi;
               break;
           case "mm":
-              scale = ((1 / 2.54) * dpi) / 10;
+
+              scale = inch2cm * dpi * 0.1;
               break;
+
+          // has anyone ever used it?
+          case "Q":
+              scale = inch2cm * dpi * 0.025;
+              break;
+
           // just a default approximation
           case "em":
           case "rem":
@@ -3080,6 +3227,10 @@
       let pathDataProps = [pathData[0]];
       let len = pathData.length;
 
+      // threshold for corner angles: 10 deg
+
+      // define angle threshold for semi extremes
+
       for (let c = 2; len && c <= len; c++) {
 
           let com = pathData[c - 1];
@@ -3099,7 +3250,7 @@
               (type === 'C' ? [p0, cp1, cp2, p] : [p0, cp1, p]) :
               ([p0, p]);
           let thresholdLength = dimA * 0.1;
-          let threshold = thresholdLength*0.01;
+          let threshold = thresholdLength * 0.01;
 
           // bezier types
           let isBezier = type === 'Q' || type === 'C';
@@ -3116,14 +3267,22 @@
               let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x);
               let dy = type === 'C' ? Math.abs(com.cp2.y - com.p.y) : Math.abs(com.cp1.y - com.p.y);
 
-              let horizontal = (dy === 0 || dy<threshold ) && dx > 0;
-              let vertical = (dx === 0 || dx<threshold ) && dy > 0;
+              let horizontal = (dy === 0 || dy <= threshold) && dx > 0;
+              let vertical = (dx === 0 || dx <= threshold) && dy > 0;
 
               if (horizontal || vertical) {
                   hasExtremes = true;
               }
 
               // is extreme relative to bounding box 
+
+              // (cp1.x===p0.x && cp1.y!==p0.y  ) ||
+              if ((cp1.x === p0.x && cp1.y !== p0.y) || (cp1.y === p0.y && cp1.x !== p0.x)) {
+
+                  pathDataProps[pathDataProps.length - 1].extreme = true;
+
+              }
+
               if ((p.x === left || p.y === top || p.x === right || p.y === bottom)) {
                   hasExtremes = true;
               }
@@ -3133,6 +3292,7 @@
                   let couldHaveExtremes = bezierhasExtreme(null, commandPts);
                   if (couldHaveExtremes) {
                       let tArr = getTatAngles(commandPts);
+
                       if (tArr.length && (tArr[0] > 0.2)) {
                           hasExtremes = true;
                       }
@@ -3187,21 +3347,23 @@
 
                   let signChange2 = (areaCpt < 0 && com.cptArea > 0) || (areaCpt > 0 && com.cptArea < 0) ? true : false;
 
-                  let isCorner=!isFlat && signChange2;
+                  let isCorner = !isFlat && signChange2;
                   if (isCorner) com.corner = true;
               }
           }
 
-          if (debug) {
+          pathDataProps.push(com);
+
+      }
+
+      
+      if (debug) {
+          pathDataProps.forEach(com=>{
 
               if (com.directionChange) renderPoint(markers, com.p, 'orange', '1.5%', '0.5');
               if (com.corner) renderPoint(markers, com.p, 'magenta', '1.5%', '0.5');
               if (com.extreme) renderPoint(markers, com.p, 'cyan', '1%', '0.5');
-
-          }
-
-          pathDataProps.push(com);
-
+          });
       }
 
       let dimA = (width + height) / 2;
@@ -3752,6 +3914,7 @@
       hasShorthands = true,
       hasQuadratics = true,
       hasArcs = true,
+      optimizeArcs = true,
       testTypes = false
 
   } = {}) {
@@ -3771,21 +3934,66 @@
       toRelative = toAbsolute ? false : toRelative;
       toShorthands = toLonghands ? false : toShorthands;
 
-      if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
-
-      if (toShorthands) pathData = pathDataToShorthands(pathData);
+      if (toAbsolute) pathData = pathDataToAbsolute(pathData);
       if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
 
-      if (toAbsolute) pathData = pathDataToAbsolute(pathData);
+      // minify semicircle radii
+      if (optimizeArcs) pathData = optimizeArcPathData(pathData);
+
+      if (toShorthands) pathData = pathDataToShorthands(pathData);
 
       if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData);
 
+      if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
       // pre round - before relative conversion to minimize distortions
       if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
+
       if (toRelative) pathData = pathDataToRelative(pathData);
       if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
       return pathData
+  }
+
+  /**
+   * 
+   * @param {*} pathData 
+   * @returns 
+   */
+
+  function optimizeArcPathData(pathData = []) {
+      pathData.forEach((com, i) => {
+          let { type, values } = com;
+          if (type === 'A') {
+              let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
+              let comPrev = pathData[i - 1];
+              let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
+              let M = { x: x0, y: y0 };
+              let p = { x, y };
+
+              // rx and ry are large enough
+              if (rx >= 1 && (x === x0 || y === y0)) {
+                  let diff = Math.abs(rx - ry) / rx;
+
+                  // rx~==ry 
+                  if (diff < 0.01) {
+
+                      // test radius against mid point
+                      let pMid = interpolate(M, p, 0.5);                    
+                      let distM = getDistance(pMid, M);
+                      let rDiff = Math.abs(distM - rx) / rx;
+
+                      // half distance between mid and start point should be ~ equal
+                      if(rDiff<0.01){
+                          pathData[i].values[0] = 1;
+                          pathData[i].values[1] = 1;
+                          pathData[i].values[2] = 0;
+                      }
+                  }
+              }
+          }
+      });
+      return pathData;
   }
 
   /**
@@ -4224,7 +4432,7 @@
               let dx1 = (p0.x - cpPrev.x);
               let dy1 = (p0.y - cpPrev.y);
 
-              maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025;
+              maxDist = getDistManhattan(cpPrev, cpFirst) * 0.01;
 
               // reflected cp
               let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 };
@@ -5092,6 +5300,324 @@
     return svg;
   }
 
+  /**
+   * scale pathData
+   */
+  function transformPathData(pathData, matrix) {
+
+      // new pathdata
+      let pathDataTrans = [];
+
+      // transform point by 2d matrix
+      const transformPoint = (pt, matrix) => {
+          let { a, b, c, d, e, f } = matrix;
+          let { x, y } = pt;
+          return { x: a * x + c * y + e, y: b * x + d * y + f };
+      };
+
+      const normalizeMatrix = (matrix) => {
+          matrix =
+              typeof matrix === "string"
+                  ? (matrix = matrix
+                      .replace(/^matrix\(|\)$/g, "")
+                      .split(",")
+                      .map(Number))
+                  : matrix;
+          matrix = !Array.isArray(matrix)
+              ? {
+                  a: matrix.a,
+                  b: matrix.b,
+                  c: matrix.c,
+                  d: matrix.d,
+                  e: matrix.e,
+                  f: matrix.f
+              }
+              : {
+                  a: matrix[0],
+                  b: matrix[1],
+                  c: matrix[2],
+                  d: matrix[3],
+                  e: matrix[4],
+                  f: matrix[5]
+              };
+          return matrix;
+      };
+
+      const transformArc = (p0, values, matrix) => {
+          let [rx, ry, angle, largeArc, sweep, x, y] = values;
+
+          /**
+          * parametrize arc command 
+          * to get the actual arc params
+          */
+          let arcData = svgArcToCenterParam(
+              p0.x,
+              p0.y,
+              values[0],
+              values[1],
+              angle,
+              largeArc,
+              sweep,
+              x,
+              y
+          );
+          ({ rx, ry } = arcData);
+          let { a, b, c, d, e, f } = matrix;
+
+          let ellipsetr = transformEllipse(rx, ry, angle, matrix);
+          let p = transformPoint({ x: x, y: y }, matrix);
+
+          // adjust sweep if flipped
+          let denom = a * a + b * b;
+          let scaleX = Math.sqrt(denom);
+          let scaleY = (a * d - c * b) / scaleX;
+
+          let flipX = scaleX < 0 ? true : false;
+          let flipY = scaleY < 0 ? true : false;
+
+          // adjust sweep
+          if (flipX || flipY) {
+              sweep = sweep === 0 ? 1 : 0;
+          }
+
+          return {
+              type: 'A',
+              values: [
+                  ellipsetr.rx,
+                  ellipsetr.ry,
+                  ellipsetr.ax,
+                  largeArc,
+                  sweep,
+                  p.x,
+                  p.y]
+          };
+      };
+
+      // normalize matrix input
+      matrix = normalizeMatrix(matrix);
+
+      let matrixStr = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]
+          .map((val) => {
+              return +val.toFixed(1);
+          })
+          .join("");
+
+      // no transform: quit
+      if (matrixStr === "100100") {
+
+          return pathData;
+      }
+
+      pathData.forEach((com, i) => {
+          let { type, values } = com;
+          let typeRel = type.toLowerCase();
+          let comPrev = i > 0 ? pathData[i - 1] : pathData[i];
+          let comPrevValues = comPrev.values;
+          let comPrevValuesL = comPrevValues.length;
+          let p0 = {
+              x: comPrevValues[comPrevValuesL - 2],
+              y: comPrevValues[comPrevValuesL - 1]
+          };
+          ({ x: values[values.length - 2], y: values[values.length - 1] });
+          let comT = { type: type, values: [] };
+
+          switch (typeRel) {
+              case "a":
+                  comT = transformArc(p0, values, matrix);
+                  break;
+
+              default:
+                  // all other point based commands
+                  if (values.length) {
+                      for (let i = 0; i < values.length; i += 2) {
+                          let ptTrans = transformPoint(
+                              { x: com.values[i], y: com.values[i + 1] },
+                              matrix
+                          );
+
+                          comT.values[i] = ptTrans.x;
+                          comT.values[i + 1] = ptTrans.y;
+                      }
+                  }
+          }
+
+          pathDataTrans.push(comT);
+      });
+
+      return pathDataTrans;
+  }
+
+  /**
+   * Based on: https://github.com/fontello/svgpath/blob/master/lib/ellipse.js
+   * and fork: https://github.com/kpym/SVGPathy/blob/master/lib/ellipse.js
+   */
+
+  function transformEllipse(rx, ry, ax, matrix) {
+      const torad = Math.PI / 180;
+      const epsilon = 1e-7;
+
+      matrix = !Array.isArray(matrix)
+          ? matrix
+          : {
+              a: matrix[0],
+              b: matrix[1],
+              c: matrix[2],
+              d: matrix[3],
+              e: matrix[4],
+              f: matrix[5]
+          };
+
+      // We consider the current ellipse as image of the unit circle
+      // by first scale(rx,ry) and then rotate(ax) ...
+      // So we apply ma =  m x rotate(ax) x scale(rx,ry) to the unit circle.
+      let  c = Math.cos(ax * torad),
+          s = Math.sin(ax * torad);
+      let  ma = [
+          rx * (matrix.a * c + matrix.c * s),
+          rx * (matrix.b * c + matrix.d * s),
+          ry * (-matrix.a * s + matrix.c * c),
+          ry * (-matrix.b * s + matrix.d * c)
+      ];
+
+      // ma * transpose(ma) = [ J L ]
+      //                      [ L K ]
+      // L is calculated later (if the image is not a circle)
+      let  J = ma[0] * ma[0] + ma[2] * ma[2],
+          K = ma[1] * ma[1] + ma[3] * ma[3];
+
+      // the sqrt of the discriminant of the characteristic polynomial of ma * transpose(ma)
+      // this is also the geometric mean of the eigenvalues
+      let  D = Math.sqrt(
+          ((ma[0] - ma[3]) * (ma[0] - ma[3]) + (ma[2] + ma[1]) * (ma[2] + ma[1])) *
+          ((ma[0] + ma[3]) * (ma[0] + ma[3]) + (ma[2] - ma[1]) * (ma[2] - ma[1]))
+      );
+
+      // the arithmetic mean of the eigenvalues
+      let  JK = (J + K) / 2;
+
+      // check if the image is (almost) a circle
+      if (D <= epsilon) {
+          rx = ry = Math.sqrt(JK);
+          ax = 0;
+          return { rx: rx, ry: ry, ax: ax };
+      }
+
+      // check if ma * transpose(ma) is (almost) diagonal
+      if (Math.abs(D - Math.abs(J - K)) <= epsilon) {
+          rx = Math.sqrt(J);
+          ry = Math.sqrt(K);
+          ax = 0;
+          return { rx: rx, ry: ry, ax: ax };
+      }
+
+      // if it is not a circle, nor diagonal
+      let  L = ma[0] * ma[1] + ma[2] * ma[3];
+
+      // {l1,l2} = the two eigen values of ma * transpose(ma)
+      let  l1 = JK + D / 2,
+          l2 = JK - D / 2;
+
+      // the x - axis - rotation angle is the argument of the l1 - eigenvector
+      if (Math.abs(L) <= epsilon && Math.abs(l1 - K) <= epsilon) {
+          // if (ax == 90) => ax = 0 and exchange axes
+          ax = 0;
+          rx = Math.sqrt(l2);
+          ry = Math.sqrt(l1);
+          return { rx: rx, ry: ry, ax: ax };
+      }
+
+      ax =
+          Math.atan(Math.abs(L) > Math.abs(l1 - K) ? (l1 - J) / L : L / (l1 - K)) /
+          torad; // the angle in degree
+
+      // if ax > 0 => rx = sqrt(l1), ry = sqrt(l2), else exchange axes and ax += 90
+      if (ax >= 0) {
+          // if ax in [0,90]
+          rx = Math.sqrt(l1);
+          ry = Math.sqrt(l2);
+      } else {
+          // if ax in ]-90,0[ => exchange axes
+          ax += 90;
+          rx = Math.sqrt(l2);
+          ry = Math.sqrt(l1);
+      }
+
+      return { rx: rx, ry: ry, ax: ax };
+  }
+
+  /**
+   *  Decompose matrix to readable transform properties 
+   *  translate() rotate() scale() etc.
+   *  based on @AndreaBogazzi's answer
+   *  https://stackoverflow.com/questions/5107134/find-the-rotation-and-skew-of-a-matrix-transformation#32125700
+   *  return object with seperate transform properties 
+   *  and ready to use css or svg attribute strings
+   */
+  function qrDecomposeMatrix(matrix, precision = 4) {
+      let { a, b, c, d, e, f } = matrix;
+      // matrix is array
+      if (Array.isArray(matrix)) {
+          [a, b, c, d, e, f] = matrix;
+      }
+      let angle = Math.atan2(b, a),
+          denom = Math.pow(a, 2) + Math.pow(b, 2),
+          scaleX = Math.sqrt(denom),
+          scaleY = (a * d - c * b) / scaleX,
+          skewX = Math.atan2(a * c + b * d, denom) / (Math.PI / 180),
+          translateX = e ? e : 0,
+          translateY = f ? f : 0,
+          rotate = angle ? angle / (Math.PI / 180) : 0;
+      let transObj = {
+          translateX: translateX,
+          translateY: translateY,
+          rotate: rotate,
+          scaleX: scaleX,
+          scaleY: scaleY,
+          skewX: skewX,
+          skewY: 0
+      };
+      let cssTransforms = [];
+      let svgTransforms = [];
+      for (let prop in transObj) {
+          transObj[prop] = +parseFloat(transObj[prop]).toFixed(precision);
+          let val = transObj[prop];
+          let unit = "";
+          if (prop == "rotate" || prop == "skewX") {
+              unit = "deg";
+          }
+          if (prop.indexOf("translate") != -1) {
+              unit = "px";
+          }
+          // combine these properties
+          let convert = ["scaleX", "scaleY", "translateX", "translateY"];
+          if (val !== 0) {
+              cssTransforms.push(`${prop}(${val}${unit})`);
+          }
+          if (convert.indexOf(prop) == -1 && val !== 0) {
+              svgTransforms.push(`${prop}(${val})`);
+          } else if (prop == "scaleX") {
+              svgTransforms.push(
+                  `scale(${+scaleX.toFixed(precision)} ${+scaleY.toFixed(precision)})`
+              );
+          } else if (prop == "translateX") {
+              svgTransforms.push(
+                  `translate(${transObj.translateX} ${transObj.translateY})`
+              );
+          }
+
+      }
+      // append css style string to object
+      transObj.cssTransform = cssTransforms.join(" ");
+      transObj.svgTransform = svgTransforms.join(" ");
+
+      transObj.matrix = [a, b, c, d, e, f ].map(val=>roundTo(val, precision));
+      transObj.matrixAtt = `matrix(${transObj.matrix.join(' ')})`;
+
+   
+
+      return transObj;
+  }
+
   function pathElToShape(el, {
       convert_rects = false,
       convert_ellipses = false,
@@ -5224,14 +5750,16 @@
       convert_rects = false,
       convert_ellipses = false,
       convert_poly = false,
-      convert_lines = false
+      convert_lines = false,
+
+      matrix=null
 
   } = {}) {
 
       let nodeName = el.nodeName.toLowerCase();
 
       if (
-          nodeName === 'path' ||
+          nodeName === 'path' && !matrix ||
           nodeName === 'rect' && !convert_rects ||
           (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
           (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
@@ -5239,17 +5767,25 @@
       ) return el;
 
       let pathData = getPathDataFromEl(el, { width, height });
+
+      // shape attributes – obsolete for path els
+      let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
+
+      // transform pathData
+      if(matrix && Object.values(matrix).join('')!=='100100'){
+          pathData = transformPathData(pathData, matrix);
+          exclude.push('transform', 'transform-origin');
+      }
+
       let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ');
       let attributes = [...el.attributes].map(att => att.name);
 
       let pathN = document.createElementNS(svgNs, 'path');
       pathN.setAttribute('d', d);
 
-      let exclude = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
-
+      // copy attributes
       attributes.forEach(att => {
           if (!exclude.includes(att)) {
-
               let val = el.getAttribute(att);
               pathN.setAttribute(att, val);
           }
@@ -6034,117 +6570,28 @@
    * transform property object
    */
 
-  function parseCSSTransform(transformString, transformOrigin = { x: 0, y: 0 }) {
-
-      if (!transformString) return false;
-
-      let transformOptions = {
-          transforms: [],
-          transformOrigin,
-      };
-
-      let regex = /(\w+)\(([^)]+)\)/g;
-      let match;
-
-      function convertToDegrees(value) {
-          if (typeof value === 'string') {
-              if (value.includes('rad')) {
-                  return parseFloat(value) * (180 / Math.PI);
-              } else if (value.includes('turn')) {
-                  return parseFloat(value) * 360;
-              }
-          }
-          return parseFloat(value);
-      }
-
-      while ((match = regex.exec(transformString)) !== null) {
-          let name = match[1];
-          let values = match[2].split(/,\s*/).map(v => convertToDegrees(v));
-
-          switch (name) {
-
-              case 'translate':
-                  transformOptions.transforms.push({ translate: [values[0] || 0, values[1] || 0] });
-                  break;
-              case 'translateX':
-                  transformOptions.transforms.push({ translate: [values[0] || 0, 0, 0] });
-                  break;
-
-              case 'translateY':
-                  transformOptions.transforms.push({ translate: [0, values[0] || 0, 0] });
-                  break;
-              case 'scale':
-                  transformOptions.transforms.push({ scale: [values[0] || 0, values[1] || 0] });
-                  break;
-              case 'skew':
-                  transformOptions.transforms.push({ skew: [values[0] || 0, values[1] || 0] });
-                  break;
-
-              case 'skewX':
-                  transformOptions.transforms.push({ skew: [values[0] || 0, 0] });
-                  break;
-
-              case 'skewY':
-                  transformOptions.transforms.push({ skew: [0, values[0] || 0] });
-                  break;
-
-              case 'rotate':
-
-                  console.log('rotate', values);
-
-                  transformOptions.transforms.push({ rotate: [0, 0, values[0] || 0] });
-                  break;
-              case 'matrix':
-                  transformOptions.transforms.push({ matrix: values });
-                  break;
-          }
-      }
-
-      // Extract transform-origin, perspective-origin, and perspective if included as separate properties
-      let styleProperties = transformString.split(/;\s*/);
-      styleProperties.forEach(prop => {
-          let [key, value] = prop.split(':').map(s => s.trim());
-          if (key === 'transform-origin' || key === 'perspective-origin') {
-              let [x, y] = value.split(/\s+/).map(parseFloat);
-              if (key === 'transform-origin') {
-                  transformOptions.transformOrigin = { x: x || 0, y: y || 0 };
-              }
-          }
-      });
-
-      return transformOptions;
-  }
-
-  /**
-   * wrapper function to switch between
-   * 2D or 3D matrix
-   */
-  function getMatrix({
-      transforms = [],
-      transformOrigin = { x: 0, y: 0 },
-  } = {}) {
-
-      let matrix = getMatrix2D(transforms, transformOrigin);
-
-      return matrix
-  }
-
-  function getMatrix2D(transformations = [], origin = { x: 0, y: 0 }) {
+  function getMatrixFromTransform(transformations = []) {
 
       // Helper function to multiply two 2D matrices
-      const multiply = (m1, m2) => ({
-          a: m1.a * m2.a + m1.c * m2.b,
-          b: m1.b * m2.a + m1.d * m2.b,
-          c: m1.a * m2.c + m1.c * m2.d,
-          d: m1.b * m2.c + m1.d * m2.d,
-          e: m1.a * m2.e + m1.c * m2.f + m1.e,
-          f: m1.b * m2.e + m1.d * m2.f + m1.f
-      });
+
+      const multiply = (m1, m2) => {
+          let mtxN = {
+              a: m1.a * m2.a + m1.c * m2.b,
+              b: m1.b * m2.a + m1.d * m2.b,
+              c: m1.a * m2.c + m1.c * m2.d,
+              d: m1.b * m2.c + m1.d * m2.d,
+              e: m1.a * m2.e + m1.c * m2.f + m1.e,
+              f: m1.b * m2.e + m1.d * m2.f + m1.f
+          };
+
+          return mtxN;
+      };
 
       // Helper function to create a translation matrix
-      const translationMatrix = (x, y) => ({
-          a: 1, b: 0, c: 0, d: 1, e: x, f: y
-      });
+      const translationMatrix = (x, y) => {
+          let mtx ={a: 1, b: 0, c: 0, d: 1, e: x, f: y};
+          return mtx
+      };
 
       // Helper function to create a scaling matrix
       const scalingMatrix = (x, y) => ({
@@ -6153,13 +6600,13 @@
 
       // get skew or rotation axis matrix
       const angleMatrix = (angles, type) => {
-          const toRad = (angle) => angle * Math.PI / 180;
-          let [angleX, angleY] = angles.map(ang => { return toRad(ang) });
+
+          let [angleX, angleY=0] = angles.map(ang => ang*deg2rad);
           let m = {};
 
           if (type === 'rot') {
-              let cos = Math.cos(angleX), sin = Math.sin(angleX);
-              m = { a: cos, b: sin, c: -sin, d: cos, e: 0, f: 0 };
+              let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+              m = { a: cosX, b: sinX, c: -sinX, d: cosX, e: 0, f: 0 };
           } else if (type === 'skew') {
               let tanX = Math.tan(angleX), tanY = Math.tan(angleY);
               m = {
@@ -6172,200 +6619,47 @@
       // Start with an identity matrix
       let matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 
-      // Apply transform origin: translate to origin, apply transformations, translate back
-      if (origin.x !== 0 || origin.y !== 0) {
-          matrix = multiply(matrix, translationMatrix(origin.x, origin.y));
-      }
-
-      // Default values for transformations
-      const defaults = {
-          translate: [0, 0],
-          scale: [1, 1],
-          skew: [0, 0],
-          rotate: [0],
-          matrix: [1, 0, 0, 1, 0, 0]
-      };
-
       // Process transformations in the provided order (right-to-left)
-      for (let transform of transformations) {
-          let type = Object.keys(transform)[0]; // Get the transformation type (e.g., "translate")
-          let values = transform[type] || defaults[type]; // Use default values if none provided
+      for (let i = 0; i < transformations.length; i++) {
 
-          // Destructure values with fallbacks
-          let [x, y = defaults[type][1]] = values;
+          let transform = transformations[i];
 
-          // Z-rotate as  2d rotation
-          if (type === 'rotate' && values.length === 3) {
-              x = values[2];
-          }
+          // Get the transformation type (e.g., "translate")
+          let type = Object.keys(transform)[0];
+
+          let values = transform[type];
+
+          let [x, y] = values;
 
           switch (type) {
               case "matrix":
                   let keys = ['a', 'b', 'c', 'd', 'e', 'f'];
                   let obj = Object.fromEntries(keys.map((key, i) => [key, values[i]]));
+
                   matrix = multiply(matrix, obj);
                   break;
               case "translate":
-                  if (x || y) matrix = multiply(matrix, translationMatrix(x, y));
+                  matrix = multiply(matrix, translationMatrix(x, y));
                   break;
               case "skew":
-                  if (x || y) matrix = multiply(matrix, angleMatrix([x, y], 'skew'));
+                  matrix = multiply(matrix, angleMatrix([x, y], 'skew'));
                   break;
               case "rotate":
-                  if (x) matrix = multiply(matrix, angleMatrix([x], 'rot'));
+                  matrix = multiply(matrix, angleMatrix([x], 'rot'));
+
                   break;
               case "scale":
-                  if (x !== 1 || y !== 1) matrix = multiply(matrix, scalingMatrix(x, y));
+                  matrix = multiply(matrix, scalingMatrix(x, y));
                   break;
 
               default:
                   throw new Error(`Unknown transformation type: ${type}`);
           }
-      }
 
-      // Revert transform origin
-      if (origin.x !== 0 || origin.y !== 0) {
-          matrix = multiply(matrix, translationMatrix(-origin.x, -origin.y));
       }
 
       return matrix;
   }
-
-  function svgStylesToAttributes(el, {
-      removeNameSpaced = true,
-      decimals = -1
-  } = {}) {
-
-      let nodeName = el.nodeName.toLowerCase();
-      let attProps = getElAttributes(el);
-      let cssProps = getElStyleProps(el);
-
-      // normalize transform attributes
-      /*
-      if (attProps['transform']) {
-          console.log(`attProps['transform']`, attProps['transform']);
-      }
-      */
-
-      // merge properties
-      let props = {
-          ...attProps,
-          ...cssProps
-      };
-
-      // filter out obsolete properties
-      let propsFiltered = {};
-
-      // parse CSS transforms
-      let cssTrans = cssProps['transform'];
-
-      if (cssTrans) {
-          let transStr = `${cssTrans}`;
-          let transformObj = parseCSSTransform(transStr);
-          let matrix = getMatrix(transformObj);
-
-          // apply as SVG matrix transform
-          props['transform'] = `matrix(${Object.values(matrix).join(',')})`;
-      }
-
-      // can't be replaced with attributes
-      let cssOnlyProps = ['inline-size'];
-      let styleProps = [];
-
-      for (let prop in props) {
-
-          let value = props[prop];
-
-          // CSS variable
-          if (value && prop.startsWith('--') || cssOnlyProps.includes(prop) ||
-              (!removeNameSpaced && prop.startsWith('-'))) {
-              styleProps.push(`${prop}:${value}`);
-              continue
-          }
-
-          // check if property is valid
-          if (value && attLookup.atts[prop] &&
-              (attLookup.atts[prop] === '*' ||
-                  attLookup.atts[prop].includes(nodeName) ||
-                  !removeNameSpaced && (prop.includes(':'))
-              )
-          ) {
-              propsFiltered[prop] = value;
-          }
-
-          // remove property
-          el.removeAttribute(prop);
-
-      }
-
-      // apply filtered attributes
-      for (let prop in propsFiltered) {
-          let value = propsFiltered[prop];
-          el.setAttribute(prop, value);
-      }
-
-      if (styleProps.length) {
-          el.setAttribute('style', styleProps.join(';'));
-      }
-
-      return propsFiltered;
-
-  }
-
-  function parseInlineStyle(styleAtt = '') {
-
-      let props = {};
-      if (!styleAtt) return props;
-
-      let styleArr = styleAtt.split(';').filter(Boolean).map(prop => prop.trim());
-      let l = styleArr.length;
-      if (!l) return props;
-
-      for (let i = 0; l && i < l; i++) {
-          let style = styleArr[i];
-          let [prop, value] = style.split(':').filter(Boolean);
-          props[prop] = value;
-
-      }
-
-      return props
-  }
-
-  function getElStyleProps(el) {
-      let styleAtt = el.getAttribute('style');
-      let props = styleAtt ? parseInlineStyle(styleAtt) : {};
-      return props
-  }
-
-  function getElAttributes(el) {
-      let props = {};
-      let atts = [...el.attributes].map((att) => att.name);
-      let l = atts.length;
-      if (!l) return props;
-
-      for (let i = 0; i < l; i++) {
-          let att = atts[i];
-          let value = el.getAttribute(att);
-          props[att] = value;
-      }
-
-      return props;
-  }
-
-  /*
-  function roundValue(value = '', decimals = -1) {
-      if (decimals < 0) return value;
-      value = value.replace(/["]/g, '').trim()
-      let valueNum = parseFloat(value);
-      let valueHasNumber = !isNaN(valueNum);
-      if (!valueHasNumber) return value;
-
-      let unit = valueHasNumber ? getUnit(value) : '';
-      if (valueHasNumber) value = `${valueNum.toFixed(decimals)}${unit}`;
-
-      return value;
-  }
-  */
 
   function normalizePoly(pts, {
       toObject = true,
@@ -6477,6 +6771,518 @@
       return bb;
   }
 
+  /**
+   * parse svg presentational attributes
+   * or CSS styles
+   */
+
+  function parseStylesProperties(el, {
+      fontSize = 16,
+      removeNameSpaced = true,
+      autoRoundValues = false,
+      minifyRgbColors = false,
+      removeInvalid = true,
+      removeDefaults = true,
+      cleanUpStrokes = true,
+      normalizeTransforms = true,
+      exclude = [],
+      width = 0,
+      height = 0,
+  } = {}) {
+
+      let nodeName = el.nodeName.toLowerCase();
+      let attProps = getSvgPresentationAtts(el);
+      let cssProps = getSvgCssProps(el);
+
+      /**
+       * merge props
+       * CSS has higher specificity
+       */
+      let props = {
+          ...attProps,
+          ...cssProps,
+      };
+
+      delete props['style'];
+      exclude.push('style');
+
+      let remove = ['style'];
+      let transformsStandalone = ['scale', 'translate', 'rotate'];
+
+      /**
+       * remove invalid properties 
+       * e.g font-family for <path>
+       */
+
+      if (removeInvalid || removeDefaults || removeNameSpaced) {
+          let propsFilteredObj = filterSvgElProps(nodeName, props, { removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: transformsStandalone, cleanUpStrokes: false });
+          props = propsFilteredObj.propsFiltered;
+          remove.push(...propsFilteredObj.remove);
+      }
+
+      // sanitized prop array
+      let propArr = [];
+
+      for (let prop in props) {
+
+          let valueStr = props[prop];
+
+          // we parse the path data separately
+          if (prop === 'd' || prop.startsWith('data-')) {
+              continue;
+          }
+
+          let item = { prop, values: [] };
+
+          // minify rgb values
+          if (minifyRgbColors && colorProps.includes(prop)) {
+              let color = parseColor(valueStr);
+              if (color.mode === 'rgba' || color.mode === 'rgb') {
+                  let hex = rgba2Hex(color);
+                  valueStr = hex;
+              }
+          }
+
+          if (prop === 'transform') {
+              let transArr = [];
+
+              let transFormFunctions = valueStr.split(/(\w+)\(([^)]+)\)/).map(val => val.trim()).filter(Boolean);
+
+              for (let i = 1; i < transFormFunctions.length; i += 2) {
+                  let fn = transFormFunctions[i - 1];
+                  let isHorizontal = transHorizontal.includes(fn);
+                  let isVertical = transVertical.includes(fn);
+                  if (isHorizontal) fn = fn.replace('X', '');
+                  if (isVertical) fn = fn.replace('Y', '');
+                  let values = transFormFunctions[i].split(/,| /).filter(Boolean);
+                  let transItem = { fn, values: [] };
+
+                  for (let v = 0; v < values.length; v++) {
+                      let transValues = parseValue(values[v]);
+                      transItem.values.push(...transValues);
+                  }
+
+                  let defaultX = fn.startsWith('scale') ? 1 : 0;
+                  let defaultY = fn.startsWith('scale') ? 1 : 0;
+
+                  if (isHorizontal) transItem.values = [transItem.values[0], { value: defaultX, unit: '', numeric: true }];
+                  if (isVertical) transItem.values = [{ value: defaultY, unit: '', numeric: true }, transItem.values[0]];
+
+                  transArr.push(transItem);
+              }
+
+              if (transArr.length) {
+                  propArr.push({ prop: 'transforms', values: transArr });
+              }
+          }
+
+          // other props
+          else {
+
+              item.values = parseValue(valueStr);
+
+          }
+
+          if (item.values.length) {
+              propArr.push(item);
+          }
+
+      }
+
+      /**
+       * normalize values to 
+       * user units
+       */
+
+      let propsNorm = { transformArr: [], matrix: null, transComponents: null };
+      let transFormOrigin = [];
+      let normalizedDiagonal = false;
+
+      for (let i = 0; i < propArr.length; i++) {
+          let item = propArr[i];
+          let { prop, values } = item;
+          let valsNew = [], valX = 0, valY = 0, unitX = '', unitY = '';
+
+          if (prop !== 'transforms') {
+
+              if (cleanUpStrokes && (prop === 'stroke-dasharray' || prop === 'stroke-dashoffset')) {
+                  normalizedDiagonal = true;
+                  for (let i = 0; i < values.length; i++) {
+                      let val = normalizeUnits(values[i].value, { unit: values[i].unit, width, height, normalizedDiagonal, fontSize });
+                      valsNew.push(val);
+                  }
+              }
+
+              else if (prop === 'transform-origin') {
+
+                  values.forEach((item, i) => {
+                      let val = item.value;
+                      if (val === 'left') values[i].value = 0;
+                      else if (val === 'right') values[i].value = width;
+                      else if (val === 'top') values[i].value = 0;
+                      else if (val === 'bottom') values[i].value = height;
+                      else if (val === 'center') values[i].value = '50%';
+                  });
+
+                  valX = values[0].value;
+                  valY = values[1] ? values[1].value : valX;
+                  unitX = values[0].unit;
+                  unitY = values[1] ? values[1].unit : unitX;
+
+                  // normalize units for matrix calculation
+                  valX = normalizeUnits(valX, { unit: unitX, width, height, isHorizontal: true, fontSize });
+                  valY = normalizeUnits(valY, { unit: unitY, width, height, isVertical: true, fontSize });
+                  transFormOrigin.push(valX, valY);
+
+              } else {
+
+                  for (let v = 0; v < values.length; v++) {
+                      let val = values[v];
+
+                      let unit = val.unit;
+                      let valAbs = val.value;
+                      let isNumeric = val.numeric;
+
+                      let isHorizontal = horizontalProps.includes(prop);
+                      let isVertical = verticalProps.includes(prop);
+
+                      if (unit) {
+                          if (prop === 'scale' && unit === '%') {
+                              valAbs = valAbs * 0.01;
+                          } else {
+                              if (prop === 'r') normalizedDiagonal = true;
+                              valAbs = normalizeUnits(val.value, { unit, width, height, isHorizontal, isVertical, normalizedDiagonal, fontSize });
+
+                              if (autoRoundValues && isNumeric) {
+                                  valAbs = autoRound(valAbs);
+                              }
+
+                          }
+                      }
+                      valsNew.push(valAbs);
+                  }
+              }
+
+              if (valsNew.length) propsNorm[prop] = valsNew;
+
+          }
+
+          // is transform properties and functions
+          else {
+
+              let transforms = values || [];
+
+              let len = transforms.length;
+              let transFormAllObj = [];
+
+              for (let t = 0; len && t < len; t++) {
+                  let { fn, values } = transforms[t];
+                  let valsN = [], unitX = '', unitY = '', transformFunctionArr = [];
+
+                  // defaults
+                  let valX = 0;
+                  let valY = 0;
+                  let transObj = {};
+
+                  // console.log('!!!values', values);
+                  if (fn === 'scale' || fn === 'translate') {
+                      valX = values[0].value;
+                      valY = values[1] ? values[1].value : valX;
+                      unitX = values[0].unit;
+                      unitY = values[1] ? values[1].unit : unitX;
+
+                      if (fn === 'scale') {
+                          valX = unitX === '%' ? valX * 0.01 : valX;
+                          valY = unitY === '%' ? valY * 0.01 : valY;
+                      } else {
+                          valX = normalizeUnits(valX, { unit: unitX, width, height, isHorizontal: true, fontSize });
+                          valY = normalizeUnits(valY, { unit: unitY, width, height, isVertical: true, fontSize });
+
+                      }
+                      valsN.push(valX, valY);
+
+                      transObj[fn] = valsN;
+                      transformFunctionArr.push(transObj);
+
+                  }
+
+                  if (fn === 'matrix') {
+                      valsN = values.map(val => val.value);
+                      transObj[fn] = valsN;
+                      transformFunctionArr.push(transObj);
+                  }
+
+                  if (fn === 'skew') {
+
+                      valX = values[0].value;
+                      unitX = values[0].unit;
+                      valY = values[1].value;
+                      unitY = values[1].unit;
+
+                      valX = normalizeUnits(valX, { unit: unitX, isHorizontal: true, fontSize });
+                      valY = normalizeUnits(valY, { unit: unitY, isVertical: true, fontSize });
+
+                      // normalize large angles
+                      valX = valX > 360 ? (valX % 360) : valX;
+                      valY = valY > 360 ? (valY % 360) : valY;
+
+                      valsN = [valX, valY];
+                      transObj[fn] = valsN;
+                      transformFunctionArr.push(transObj);
+
+                  }
+
+                  // SVG rotations may contain a transform origin
+                  if (fn === 'rotate') {
+
+                      let angle = values[0].value;
+                      let unit = values[0].unit;
+                      angle = normalizeUnits(angle, { unit });
+
+                      let hasPivot = values.length === 3;
+                      let transOrigin = [];
+
+                      if (hasPivot) {
+
+                          let cx = values[1].value;
+                          let cy = values[2].value;
+                          transOrigin.push({ translate: [cx, cy] }, { translate: [-cx, -cy] });
+
+                      }
+
+                      transObj[fn] = [angle];
+
+                      if (transOrigin.length) {
+                          transformFunctionArr.push(transOrigin[0], transObj, transOrigin[1]);
+                      } else {
+                          transformFunctionArr.push(transObj);
+                      }
+                  }
+
+                  transFormAllObj.push(...transformFunctionArr);
+
+              }
+
+              propsNorm['transformArr'] = transFormAllObj;
+
+          }
+
+      }
+
+      // prepend standalone transforms before standards
+      let translate = propsNorm['translate'] !== undefined ? { translate: propsNorm['translate'] } : null;
+      let scale = propsNorm['scale'] !== undefined ? { scale: propsNorm['scale'] } : null;
+      let rotate = propsNorm['rotate'] !== undefined ? { rotate: propsNorm['rotate'] } : null;
+      let standaloneTransforms = [translate, rotate, scale].filter(Boolean);
+
+      if (standaloneTransforms.length) {
+          if (normalizeTransforms) remove.push('translate', 'scale', 'rotate');
+          propsNorm['transformArr'] = [...standaloneTransforms, ...propsNorm['transformArr']];
+      }
+
+      // replace transform-origin with translates
+
+      if (transFormOrigin.length && propsNorm['transformArr'] !== undefined) {
+          propsNorm['transformArr'] = [
+              { translate: [transFormOrigin[0], transFormOrigin[1]] },
+              ...propsNorm['transformArr'],
+              { translate: [-transFormOrigin[0], -transFormOrigin[1]] },
+          ];
+          if (normalizeTransforms) remove.push('transform-origin');
+      }
+
+      /**
+       * test run 
+       * apply parsed transforms
+       */
+      let { transformArr = [] } = propsNorm;
+
+      let transAtt = [];
+      let l = transformArr.length;
+      if (l) {
+          for (let i = 0; l && i < l; i++) {
+              let prop = transformArr[i];
+              let values = Object.values(prop).flat();
+              let name = Object.keys(prop)[0];
+              if (name === 'skew') {
+                  if (values[0]) transAtt.push(`skewX(${values[0]})`);
+                  if (values[1]) transAtt.push(`skewY(${values[1]})`);
+              } else {
+                  transAtt.push(`${name}(${values.join(' ')})`);
+              }
+          }
+          // consolidate transforms to matrix
+
+      }
+
+      propsNorm.remove = remove;
+      propsNorm.type = nodeName;
+
+      return propsNorm
+
+  }
+
+  /**
+  * consolidate transforms to matrix
+  */
+  function addTransFormProps(propsObj = {}, transformArr = []) {
+      if (propsObj.transformArr === undefined && !transformArr.length) return;
+
+      // take existing array or custom
+      transformArr = transformArr.length ? transformArr : propsObj.transformArr;
+      let matrix = getMatrixFromTransform(transformArr);
+      propsObj['matrix'] = matrix;
+
+      let transComponents = qrDecomposeMatrix(matrix, 3);
+      propsObj.transComponents = transComponents;
+
+      return propsObj
+  }
+
+  /**
+   * filter out nonsense 
+   * presentation attributes or
+   * style properties not valid
+   * for element type
+   */
+  function filterSvgElProps(elNodename = '', props = {}, {
+      removeInvalid = true,
+      removeDefaults = true,
+      allowDataAtts = true,
+      cleanUpStrokes = true,
+      include = ['id', 'class'],
+      exclude = [],
+  } = {}) {
+      let propsFiltered = {};
+      let remove = [];
+
+      // allow defaults for nested
+
+      let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined) : false;
+
+      for (let prop in props) {
+          let value = props[prop][0];
+
+          // filter out useless
+          let isValid = removeInvalid ?
+              (attLookup.atts[prop] ? attLookup.atts[prop].includes(elNodename) : false) :
+              false;
+
+          // allow data attributes
+          let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;
+
+          // filter out defaults
+          let isDefault = removeDefaults ?
+              (attLookup.defaults[prop] ? attLookup.defaults[prop] !== undefined && attLookup.defaults[prop].includes(value) : false) :
+              false;
+
+          if (isDataAtt || include.includes(prop)) isValid = true;
+          if (isDefault) isValid = false;
+          if (exclude.length && exclude.includes(prop)) isValid = false;
+          if (noStrokeColor && strokeAtts.includes(prop)) isValid = false;
+
+          if (isValid) {
+              propsFiltered[prop] = props[prop];
+          }
+          else {
+              remove.push(prop);
+          }
+      }
+
+      /*
+      // set explicit stroke width when disabled by stroke color
+      if (propsFiltered['stroke'] && propsFiltered['stroke'][0] === 'none') {
+          propsFiltered['stroke-width'] = [1]
+          remove.push('stroke', 'stroke-width')
+          console.log('remove', remove);
+      }
+      */
+
+      return { propsFiltered, remove }
+  }
+
+  function parseValue(valStr = '') {
+      let valArr = valStr.split(/,| /);
+
+      for (let i = 0; i < valArr.length; i++) {
+
+          let valStr = valArr[i];
+          let val = { value: null, unit: '', numeric: false };
+          let isNumeric = isNumericValue(valStr);
+          if (!isNumeric) {
+              val.value = valStr;
+          }
+          else if (isNumeric) {
+              let unit = getUnit(valStr);
+              let valNum = parseFloat(valStr);
+              val.value = valNum;
+              val.unit = unit;
+              val.numeric = true;
+          }
+          valArr[i] = val;
+      }
+
+      return valArr;
+  }
+
+  function getSvgCssProps(el) {
+      let styleAtt = el.getAttribute('style');
+      let props = styleAtt ? parseInlineCss(styleAtt) : {};
+      return props
+  }
+
+  function getSvgPresentationAtts(el) {
+      let props = {};
+      let atts = [...el.attributes].map((att) => att.name);
+      let l = atts.length;
+      if (!l) return props;
+
+      for (let i = 0; i < l; i++) {
+          let att = atts[i];
+          let value = el.getAttribute(att);
+
+          // test invalid transform functions
+          if (att === 'transform') {
+              let transformSan = [];
+              let transFormFunctions = value.split(/(\w+)\(([^)]+)\)/).map(val => val.trim()).filter(Boolean);
+
+              for (let i = 1; i < transFormFunctions.length; i += 2) {
+                  let prop = transFormFunctions[i - 1];
+                  let val = transFormFunctions[i];
+                  let units = val.split(/,| /).map(val => getUnit(val.trim())).filter(Boolean);
+
+                  // remove invalid transform function
+                  if (!units.length) {
+                      transformSan.push(`${prop}(${val})`);
+                  }
+              }
+              value = transformSan.join(' ');
+          }
+
+          props[att] = value.trim();
+      }
+
+      return props;
+  }
+
+  function parseInlineCss(styleAtt = '') {
+
+      let props = {};
+      if (!styleAtt) return props;
+
+      let styleArr = styleAtt.split(';').filter(Boolean).map(prop => prop.trim());
+      let l = styleArr.length;
+      if (!l) return props;
+
+      for (let i = 0; l && i < l; i++) {
+          let style = styleArr[i];
+          let [prop, value] = style.split(':').filter(Boolean);
+          props[prop] = value;
+      }
+
+      return props
+  }
+
   function removeEmptySVGEls(svg) {
     let els = svg.querySelectorAll('g, defs');
     els.forEach(el => {
@@ -6498,6 +7304,12 @@
     cleanupClip = true,
     addViewBox = false,
     addDimensions = false,
+    minifyRgbColors = false,
+
+    normalizeTransforms = true,
+    autoRoundValues = true,
+
+    unGroup = false,
 
     mergePaths = false,
     removeOffCanvas = true,
@@ -6509,15 +7321,14 @@
     convert_rects = false,
     convert_ellipses = false,
     convert_poly = false,
-    convert_lines=false,
+    convert_lines = false,
 
     convertTransforms = false,
+    removeDefaults = true,
     cleanUpStrokes = true,
     decimals = -1,
     excludedEls = [],
   } = {}) {
-
-    attributesToGroup = cleanupSVGAtts ? true : false;
 
     // replace namespaced refs 
     if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
@@ -6529,16 +7340,57 @@
     let viewBox = getViewBox(svg);
     let { x, y, width, height } = viewBox;
 
+    // get svg styles
+    let propOptions = {
+      width: width,
+      height: height,
+      normalizeTransforms,
+      removeDefaults: false,
+      cleanUpStrokes: false,
+      autoRoundValues,
+      minifyRgbColors,
+    };
+    let stylePropsSVG = parseStylesProperties(svg, propOptions);
+
+    // add svg font size for scaling relative
+    propOptions.fontSize = stylePropsSVG['font-size'] ? stylePropsSVG['font-size'][0] : 16;
+
+    /**
+     * get group styles
+     * especially transformations to
+     * be inherited by children
+     */
+    let groups = svg.querySelectorAll('g');
+    let groupProps = [];
+
+    groups.forEach(g => {
+      let stylePropsG = parseStylesProperties(g, propOptions);
+      groupProps.push(stylePropsG);
+      let children = g.querySelectorAll(`${renderedEls.join(', ')}`);
+
+      // store parent styles to child property
+      children.forEach(child => {
+        if (child.parentStyleProps === undefined) {
+          child.parentStyleProps = [];
+        }
+        child.parentStyleProps.push(stylePropsG);
+      });
+    });
+
     if (cleanupSVGAtts) {
 
-      let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
+      let allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class'];
+      if (!stylesToAttributes) {
+        allowed.push('fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-family', 'font-style', 'style');
+      }
+
       removeExcludedAttribues(svg, allowed);
     }
 
     // add viewBox
     if (addViewBox) addSvgViewBox(svg, { x, y, width, height });
     if (addDimensions) {
-      svg.setAttribute('width', width); 
+      svg.setAttribute('width', width);
       svg.setAttribute('height', height);
     }
 
@@ -6551,40 +7403,18 @@
     // always remove scripts
     let removeEls = ['metadata', 'script', ...excludedEls];
 
-    let els = svg.querySelectorAll('*');
+    removeSVGEls(svg, { removeEls, removeNameSpaced });
 
     // an array of all elements' properties
     let svgElProps = [];
-
-    let geometryElements = ['polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse'];
-
-    /** convert paths to shapes */
-    if(shapeConvert === 'toShapes'){
-      let paths = svg.querySelectorAll('path');
-      paths.forEach(path=>{
-        let shape = pathElToShape(path, {convert_rects, convert_ellipses, convert_poly, convert_lines});
-        path.replaceWith(shape);
-        path = shape;
-
-      });
-
-    }
+    let els = svg.querySelectorAll(`${renderedEls.join(', ')}`);
 
     for (let i = 0; i < els.length; i++) {
       let el = els[i];
 
       let name = el.nodeName.toLowerCase();
 
-      // convert shapes
-      if (shapeConvert === 'toPaths' && name !== 'path' && geometryElements.includes(name)) {
-        let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines });
-        el.replaceWith(path);
-        name = 'path';
-        el = path;
-
-      }
-
-      // remove hidden elements
+      // 1. remove hidden elements
       let style = el.getAttribute('style') || '';
       let isHiddenByStyle = style ? style.trim().includes('display:none') : false;
       let isHidden = (el.getAttribute('display') && el.getAttribute('display') === 'none') || isHiddenByStyle;
@@ -6598,85 +7428,214 @@
        * convert relative or physical units
        * to user units
        */
+      let styleProps = parseStylesProperties(el, propOptions);
 
-      /*
-      let styleProps = parseStylesProperties(el, {
-        width:viewBox.width,
-        height:viewBox.height
-      })
-        */
+      // get parent styles
+      let { parentStyleProps = [] } = el;
+      let inheritedProps = {};
+      let transFormInherited = [];
 
-      /*
-      let propTest = normalizeUnits('50%',{width:200, height:100, isHorizontal:true})
-      console.log('propTest', propTest);
-      */
+      /** inherit transforms 
+       * and styles from group 
+       */
+      parentStyleProps.forEach(props => {
+        // transforms from groups are applied cumulatively
+        let { transformArr = [] } = props;
+        transFormInherited.push(...transformArr);
 
-      // styles to attributes
-      if (stylesToAttributes || attributesToGroup || mergePaths || cleanUpStrokes) {
-        let propsFiltered = svgStylesToAttributes(el, { removeNameSpaced, decimals });
+        // merge
+        inheritedProps = {
+          ...inheritedProps,
+          ...props
+        };
+      });
 
-        svgElProps.push({ el, name, idx: i, propsFiltered });
+      transFormInherited = [...transFormInherited, ...styleProps.transformArr];
+      styleProps.transformArr = transFormInherited;
+
+      // merge with svg props
+      styleProps = {
+        ...stylePropsSVG,
+        ...inheritedProps,
+        ...styleProps
+      };
+
+      // add combined transforms
+      addTransFormProps(styleProps, transFormInherited);
+
+      let { remove, matrix, transComponents } = styleProps;
+
+      // mark attributes for removal
+      if (removeClassNames) styleProps.remove.push('class');
+      if (removeIds) styleProps.remove.push('id');
+      if (removeDimensions) {
+        styleProps.remove.push('width');
+        styleProps.remove.push('height');
       }
 
-    }
+      // styles to atts
+      if (unGroup || convertTransforms || minifyRgbColors ) stylesToAttributes = true;
 
-    // remove stroke properties if no stroke color applied - common inkscape issue
-    if (cleanUpStrokes) {
+      if (stylesToAttributes) {
 
-      for (let item of svgElProps) {
+        /**
+         * normalize transforms
+         */
+        if (normalizeTransforms && matrix) {
+          let { rotate, scaleX, scaleY, skewX, translateX, translateY } = transComponents;
 
-        let { el, propsFiltered } = item;
-        let strokeProps = Object.keys(propsFiltered);
+          // scale attributes instead of transform
+          let hasRot = rotate !== 0 || skewX !== 0;
+          let unProportional = scaleX !== scaleY;
+          let scalableByAtt = ['circle', 'ellipse', 'rect'];
+          let needsTrans = convertTransforms || (name === 'g') || (hasRot) || unProportional;
 
-        if (!strokeProps.includes('stroke')) {
-          strokeAtts.forEach(att => {
-            el.removeAttribute(att);
+          if (!needsTrans && scalableByAtt.includes(name)) {
 
-            // delete in property object
-            if (item['propsFiltered'][att] !== undefined) delete item['propsFiltered'][att];
+            if (name === 'circle' || name === 'ellipse') {
+              styleProps.cx[0] = [styleProps.cx[0] * scaleX + translateX];
+              styleProps.cy[0] = [styleProps.cy[0] * scaleX + translateY];
+
+              if (styleProps.r) styleProps.r[0] = [styleProps.r[0] * scaleX];
+
+              if (styleProps.rx) styleProps.rx[0] = [styleProps.rx[0] * scaleX];
+              if (styleProps.ry) styleProps.ry[0] = [styleProps.ry[0] * scaleX];
+
+            }
+            else if (name === 'rect') {
+              let x = styleProps.x ? styleProps.x[0] + translateX : translateX;
+              let y = styleProps.y ? styleProps.y[0] + translateY : translateY;
+
+              let rx = styleProps.rx ? styleProps.rx[0] * scaleX : 0;
+              let ry = styleProps.ry ? styleProps.ry[0] * scaleY : 0;
+
+              styleProps.x = [x];
+              styleProps.y = [y];
+
+              styleProps.rx = [rx];
+              styleProps.ry = [ry];
+
+              styleProps.width = [styleProps.width[0] * scaleX];
+              styleProps.height = [styleProps.height[0] * scaleX];
+            }
+
+            remove.push('transform');
+
+            // scale props like stroke width or dash-array
+            styleProps = scaleProps(styleProps, { props: ['stroke-width', 'stroke-dasharray'], scale: scaleX });
+
+          } else {
+            el.setAttribute('transform', transComponents.matrixAtt);
+
+          }
+        }
+
+        /**
+         * apply consolidated 
+         * element attributes
+         */
+
+        let stylePropsFiltered = filterSvgElProps(name, styleProps,
+          { removeDefaults: true, cleanUpStrokes });
+
+        remove = [...remove, ...stylePropsFiltered.remove];
+
+        for (let prop in stylePropsFiltered.propsFiltered) {
+          let values = styleProps[prop];
+
+          let val = values.length ? values.join(' ') : values[0];
+          el.setAttribute(prop, val);
+        }
+
+        // remove obsolete attributes
+        for (let i = 0; i < remove.length; i++) {
+          let att = remove[i];
+          if (!stylesToAttributes && att === 'style') continue
+
+          el.removeAttribute(att);
+        }
+
+        /**
+         * remove group styles
+         * copied to children
+         * or remove nesting
+         */
+
+        if (unGroup) {
+          groups.forEach((g, i) => {
+            let children = [...g.children];
+
+            children.forEach(child => {
+              g.parentNode.insertBefore(child, g);
+            });
+            g.remove();
+          });
+        } else {
+          groups.forEach((g, i) => {
+            let atts = [...Object.keys(groupProps[i]), 'style', 'transform'];
+            atts.forEach(att => {
+              g.removeAttribute(att);
+            });
+          });
+
+        }
+
+      } // endof style processing
+
+      /**
+       * element conversions:
+       * shapes to paths or 
+       * paths to shapes
+       */
+
+      // force shape conversion when transform conversion is enabled
+      if (convertTransforms) {
+        shapeConvert = 'toPaths';
+        convert_rects = true;
+        convert_ellipses = true;
+        convert_poly = true;
+        convert_lines = true;
+      }
+
+      // convert shapes to paths
+      if (shapeConvert === 'toPaths') {
+
+        let { matrix = null, transComponents = null } = styleProps;
+
+        if (matrix && transComponents) {
+          // scale props like stroke width or dash-array before conversion
+          ['stroke-width', 'stroke-dasharray'].forEach(att => {
+            let attVal = el.getAttribute(att);
+            let vals = attVal ? attVal.split(' ').filter(Boolean).map(Number).map(val => val * transComponents.scaleX) : [];
+            if (vals.length) el.setAttribute(att, vals.join(' '));
           });
         }
-      }
-    }
 
-    // group styles
-    if (attributesToGroup || mergePaths) {
-      moveAttributesToGroup(svgElProps, mergePaths);
-    }
+        // convert paths only if a matrix transform is required
+        if (matrix ? geometryEls.includes(name) : shapeEls.includes(name)) {
 
-    if (removeDimensions) {
-      svg.removeAttribute('width');
-      svg.removeAttribute('height');
-    }
+          let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines, matrix });
+          el.replaceWith(path);
 
-    if (removeClassNames || removeIds) {
-      let att = removeClassNames ? 'class' : 'id';
-      let selector = `[${att}]`;
-      let els = svg.querySelectorAll(selector);
-      svg.removeAttribute(att);
-      els.forEach(el => {
-        el.removeAttribute(att);
-      });
-    }
+          name = 'path';
+          el = path;
 
-    /**
-     * refine properties 
-     * such as transforms or properties including units
-     */
-
-    /*
-    for(let i=0; i<svgElProps.length; i++){
-      let item = svgElProps[i];
-      let {propsFiltered} = item;
-
-      for(let prop in propsFiltered){
-
-        let propOb = parseStyleProperty(prop, propsFiltered[prop])
+        }
 
       }
 
-    }
-    */
+      // convert paths to shapes 
+      else if (shapeConvert === 'toShapes') {
+        let paths = svg.querySelectorAll('path');
+        paths.forEach(path => {
+          let shape = pathElToShape(path, { convert_rects, convert_ellipses, convert_poly, convert_lines });
+          path.replaceWith(shape);
+          path = shape;
+        });
+
+      }
+
+    }//endof element loop
 
     // remove futile clip-paths
     if (cleanupClip) removeFutileClipPaths(svg, { x, y, width, height });
@@ -6806,139 +7765,32 @@
 
   }
 
-  function moveAttributesToGroup(svgElProps = [], mergePaths = true) {
+  function scaleProps(styleProps = {}, { props = [], scale = 1 } = {}) {
+    if (scale === 1 || !props.length) return props;
 
-    let combine = [[svgElProps[0]]];
-    let idx = 0;
-    let lastProps = '';
-    let l = svgElProps.length;
-    let itemsWithProps = svgElProps.filter(item => item.propstr);
-    let path0;
+    for (let i = 0; i < props.length; i++) {
+      let prop = props[i];
 
-    // merge paths without properties
-    let dCombined = '';
-    if (!itemsWithProps.length && mergePaths) {
-      let path0 = null;
-
-      for (let i = 0; i < l; i++) {
-        let item = svgElProps[i];
-        if (item.name !== 'path') continue;
-        let remove = true;
-
-        let path = item.el;
-
-        // set 1st path
-        if (!path0) {
-          path0 = path;
-          remove = false;
-        }
-
-        let d = item.propsFiltered.d;
-        let isAbs = d.startsWith('M');
-        let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
-
-        dCombined += dAbs;
-
-        // delete path el
-        if (remove) path.remove();
-      }
-
-      if (path0) path0.setAttribute('d', dCombined);
-      return
-    }
-
-    // add to combine chunks
-    for (let i = 0; i < l; i++) {
-      let item = svgElProps[i];
-      let props = item.propsFiltered;
-      let propstr = [];
-      for (let prop in props) {
-        if (prop !== 'd' && prop !== 'id') {
-          propstr.push(`${prop}:${props[prop]}`);
-        }
-      }
-      propstr = propstr.join('_');
-      item.propstr = propstr;
-
-      if (l > 1 && propstr === lastProps) {
-        combine[idx].push(item);
-      } else {
-        if (l > 1 && combine[idx].length) {
-          combine.push([]);
-          idx++;
-        }
-      }
-      lastProps = propstr;
-    }
-
-    // add att groups
-    for (let i = 0; i < combine.length; i++) {
-      let group = combine[i];
-
-      if (group.length > 1) {
-        // 1st el
-        let el0 = group[0].el;
-        let props = group[0].propsFiltered;
-        let g = el0.parentNode.closest('g') ? el0.parentNode.closest('g') : null;
-
-        // wrap in group if not existent
-        if (!g) {
-          g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          el0.parentNode.insertBefore(g, el0);
-          group.forEach(item => {
-            g.append(item.el);
-          });
-        }
-
-        let children = [...g.children];
-        for (let prop in props) {
-          if (prop !== 'd' && prop !== 'id') {
-            let value = props[prop];
-            // apply to parent group
-            g.setAttribute(prop, value);
-
-            // remove from children
-            children.forEach(el => {
-              if (el.getAttribute(prop) === value) {
-                el.removeAttribute(prop);
-              }
-            });
-          }
-
-          if (mergePaths) {
-            group = group.filter(Boolean);
-            let l = group.length;
-            // nothing to merge
-            if (l === 1) return group[0].el;
-
-            path0 = group[0].el;
-            let dCombined = group[0].propsFiltered.d;
-
-            for (let i = 1; i < l; i++) {
-              let item = group[i];
-              let path = item.el;
-              let d = item.propsFiltered.d;
-              let isAbs = d.startsWith('M');
-
-              let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
-
-              console.log('dAbs', dAbs);
-
-              // concat pathdata string
-              dCombined += dAbs;
-
-              // delete path el
-              path.remove();
-            }
-
-            path0.setAttribute('d', dCombined);
-
-          }
-
-        }
+      if (styleProps[prop] !== undefined) {
+        styleProps[prop] = styleProps[prop].map(val => val * scale);
       }
     }
+    return styleProps
+  }
 
+  function removeSVGEls(svg, {
+    remove = ['metadata', 'script'],
+    removeNameSpaced = true,
+  } = {}) {
+    let els = svg.querySelectorAll('*');
+    els.forEach(el => {
+      let nodeName = el.nodeName;
+      if ((removeNameSpaced && nodeName.includes(':')) ||
+        remove.includes(nodeName)
+      ) {
+        el.remove();
+      }
+    });
   }
 
   function removeExcludedAttribues(el, allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class']) {
@@ -6950,11 +7802,19 @@
     });
   }
 
-  function stringifySVG(svg, omitNamespace = false) {
+  function stringifySVG(svg, {
+    omitNamespace = false,
+    removeComments = true,
+  } = {}) {
     let markup = new XMLSerializer().serializeToString(svg);
 
     if (omitNamespace) {
       markup = markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '');
+    }
+
+    if (removeComments) {
+      markup = markup
+        .replace(/(<!--.*?-->)|(<!--[\S\s]+?-->)|(<!--[\S\s]*?$)/g, '');
     }
 
     markup = markup
@@ -6965,7 +7825,7 @@
 
       .replace(/> </g, '><')
       .trim()
-       // sanitize linebreaks within pathdata
+      // sanitize linebreaks within pathdata
       .replaceAll('&#10;', '\n');
 
     return markup
@@ -8814,7 +9674,7 @@
           poly = poly.map(pt => { return [pt.x, pt.y] });
       }
       else if(polyFormat==='string'){
-          poly = poly.map(pt => { return [pt.x, pt.y].join(',') }).join(' ');
+          poly = poly.map(pt => { return [pt.x, pt.y].join(',') }).flat().join(' ');
       }
 
       return { pathData, poly }
@@ -9031,6 +9891,8 @@
       scaleTo = 0,
       crop = false,
       alignToOrigin = false,
+
+      // flatten transforms
       convertTransforms = false,
 
       decimals = 3,
@@ -9042,20 +9904,21 @@
       tolerance = 1,
       reversePath = false,
 
+      minifyRgbColors = false,
       removePrologue = true,
       removeHidden = true,
       removeUnused = true,
       cleanupDefs = true,
       cleanupClip = true,
       cleanupSVGAtts = true,
-      
+
       stylesToAttributes = false,
       fixHref = false,
       legacyHref = false,
       removeNameSpaced = true,
-      attributesToGroup = false,
-      removeOffCanvas = false,
 
+      removeOffCanvas = false,
+      unGroup = false,
       mergePaths = false,
 
       // shape conversions
@@ -9071,6 +9934,8 @@
       cleanUpStrokes = true,
       addViewBox = false,
       addDimensions = false,
+
+      removeComments = true,
 
   } = {}) {
 
@@ -9150,10 +10015,18 @@
       // mode:1 – process complete svg DOM
       else {
 
+          // convert all shapes to paths
+          if (shapesToPaths) {
+              shapeConvert = true;
+              convert_rects = true;
+              convert_ellipses = true;
+              convert_poly = true;
+              convert_lines = true;
+          }
+
           let svgPropObject = cleanUpSVG(input, {
               removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
-              shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines
-
+              shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms
           }
           );
           svg = svgPropObject.svg;
@@ -9435,8 +10308,8 @@
 
           if (autoAccuracy) {
               accuracyArr = accuracyArr.sort().reverse();
-              let decimalsMid = accuracyArr[Math.floor(accuracyArr.length*0.5)];
-              decimals = Math.floor( (accuracyArr[0] + decimalsMid) * 0.5  );
+              let decimalsMid = accuracyArr[Math.floor(accuracyArr.length * 0.5)];
+              decimals = Math.floor((accuracyArr[0] + decimalsMid) * 0.5);
 
               pathOptions.decimals = decimals;
           }
@@ -9559,7 +10432,7 @@
               });
           }
 
-          svg = stringifySVG(svg, omitNamespace);
+          svg = stringifySVG(svg, { omitNamespace, removeComments });
 
           svgSizeOpt = svg.length;
 

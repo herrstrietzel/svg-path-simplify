@@ -1,3 +1,45 @@
+
+export function parseColor(str) {
+    let type = str.startsWith('#') ? 'rgbHex' : (str.includes('(') ? 'fn' : typeof str);
+    let col = {}
+    let mode = null;
+    let colObj = { mode: null, values: [] }
+    if (type === 'rgbHex') {
+        col = hex2Rgb(str)
+        mode = 'rgba';
+    }
+    else if (type === 'fn') {
+        let colVals = str.split(/\(|\)/).filter(Boolean)
+        if (colVals.length < 2) return str;
+
+        mode = colVals[0];
+        let colorComponents = colVals[1].split(/,| /).filter(Boolean).map(Number)
+
+        let keys = mode.split('');
+        keys.forEach((k, i) => {
+            let val = colorComponents[i]
+            if (mode === 'rgba' && k === 'a') {
+                val = Math.floor(val * 255)
+            }
+            col[k] = val;
+        })
+    }
+    else if (type === 'string') {
+        colObj.mode = 'keyword'
+        colObj.values = [str]
+        return colObj
+    }
+
+    if (mode === 'rgba' || mode === 'rgb') {
+        col.a = !col.a ? 255 : col.a;
+    }
+
+    colObj.mode = mode
+    colObj.values = Object.values(col)
+
+    return colObj;
+}
+
 export function hex2Rgb(hex = '') {
     // Remove # if present
     if (hex.startsWith('#')) hex = hex.substring(1);
@@ -30,12 +72,17 @@ export function hex2Rgb(hex = '') {
 
 }
 
-export function rgba2Hex({ r, g, b, a = 255 }) {
+export function rgba2Hex({ r = 0, g = 0, b = 0, a = 255, values = [] }) {
     // Helper function to convert number to 2-digit hex
     const toHex = (num) => {
         const hex = Math.min(255, Math.max(0, Math.round(num))).toString(16);
         return hex.length === 1 ? '0' + hex : hex;
     };
+
+    // convert from number array input
+    if (!r && !g && !b && values.length) {
+        [r, g, b, a = 255] = values;
+    }
 
     // Get hex values
     let rHex = toHex(r);
@@ -51,7 +98,7 @@ export function rgba2Hex({ r, g, b, a = 255 }) {
     }
 
     // Check for 4-character RGBA short notation (e.g., #ffff)
-    if (aHex && allowsShort ) {
+    if (aHex && allowsShort) {
         return `#${rHex[0]}${gHex[0]}${bHex[0]}${aHex[0]}`;
     }
 
@@ -67,7 +114,7 @@ export function rgba2Hex({ r, g, b, a = 255 }) {
 
 
 export function hsl2Rgb(hsla = {}) {
-    let {h, s, l, a = 1} = hsla;
+    let { h, s, l, a = 1 } = hsla;
 
     // Normalize
     h = ((h % 360) + 360) % 360; // wrap hue
@@ -90,9 +137,9 @@ export function hsl2Rgb(hsla = {}) {
     let r = (r1 + m) * 255;
     let g = (g1 + m) * 255;
     let b = (b1 + m) * 255;
-    a = Math.floor(a*255);
+    a = Math.floor(a * 255);
 
     [r, g, b] = [r, g, b].map((val) => +val.toFixed(0));
 
-    return {r,g,b,a}
+    return { r, g, b, a }
 }

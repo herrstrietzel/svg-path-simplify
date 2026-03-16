@@ -51,6 +51,8 @@ export function parsePathDataNormalized(d,
     let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
     let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
 
+    //console.log('???quadraticToCubic', quadraticToCubic);
+
     // normalize
     pathData = normalizePathData(pathData,
         {
@@ -77,10 +79,13 @@ export function convertPathData(pathData, {
     hasShorthands = true,
     hasQuadratics = true,
     hasArcs = true,
+    optimizeArcs = true,
     testTypes = false
 
 
 } = {}) {
+
+
 
     // pathdata properties - test= true adds a manual test 
     if (testTypes) {
@@ -99,24 +104,74 @@ export function convertPathData(pathData, {
     toShorthands = toLonghands ? false : toShorthands
 
 
-    //console.log(toShorthands, toRelative, decimals);
-    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
+    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
+
+
+    // minify semicircle radii
+    if (optimizeArcs) pathData = optimizeArcPathData(pathData);
 
 
     //if(decimals>-1 && decimals<2) pathData = roundPathData(pathData, decimals);
     if (toShorthands) pathData = pathDataToShorthands(pathData);
-    if (hasShorthands && toLonghands) pathData = pathDataToLonghands(pathData);
-
-    if (toAbsolute) pathData = pathDataToAbsolute(pathData);
 
     if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData)
 
+    //console.log(toShorthands, toRelative, decimals);
+    if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
+
+
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
+
+
     if (toRelative) pathData = pathDataToRelative(pathData);
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
     return pathData
+}
+
+/**
+ * 
+ * @param {*} pathData 
+ * @returns 
+ */
+
+export function optimizeArcPathData(pathData = []) {
+    pathData.forEach((com, i) => {
+        let { type, values } = com;
+        if (type === 'A') {
+            let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
+            let comPrev = pathData[i - 1]
+            let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
+            let M = { x: x0, y: y0 };
+            let p = { x, y };
+            //largeArc=true
+            //let pMid = {x: Math.abs(x-x0), y:Math.abs(y-y0)}
+
+            // rx and ry are large enough
+            if (rx >= 1 && (x === x0 || y === y0)) {
+                let diff = Math.abs(rx - ry) / rx;
+
+                // rx~==ry 
+                if (diff < 0.01) {
+
+                    // test radius against mid point
+                    let pMid = interpolate(M, p, 0.5)                    
+                    let distM = getDistance(pMid, M)
+                    let rDiff = Math.abs(distM - rx) / rx
+
+                    // half distance between mid and start point should be ~ equal
+                    if(rDiff<0.01){
+                        pathData[i].values[0] = 1;
+                        pathData[i].values[1] = 1;
+                        pathData[i].values[2] = 0;
+                    }
+                }
+            }
+        }
+    })
+    return pathData;
 }
 
 
@@ -138,6 +193,7 @@ export function normalizePathData(pathData = [],
 
     } = {}
 ) {
+
 
     return convertPathData(pathData, { toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy, hasRelatives, hasShorthands, hasQuadratics, hasArcs, testTypes, decimals: -1 })
 }
@@ -577,7 +633,7 @@ export function pathDataToShorthands(pathData, decimals = -1, test = false) {
             let dy1 = (p0.y - cpPrev.y)
 
             //adjust maxDist
-            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.025
+            maxDist = getDistManhattan(cpPrev, cpFirst) * 0.01
 
             // reflected cp
             let cpR = { x: cpPrev.x + dx1 * 2, y: cpPrev.y + dy1 * 2 }

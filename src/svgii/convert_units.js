@@ -1,4 +1,4 @@
-import { deg2rad, rad2Deg, root2 } from "../constants";
+import { deg2rad, inch2cm, inch2pt, rad2Deg, root2 } from "../constants";
 import { hex2Rgb, hsl2Rgb, rgba2Hex } from "./convert_colors";
 import { autoRound } from "./rounding";
 import { horizontalProps, verticalProps } from "./svg-styles-to-attributes-const";
@@ -56,21 +56,21 @@ export function normalizeUnits(value = null, {
     // only required for circle r normalization when height!=width
     normalizedDiagonal = width === height ? false : normalizedDiagonal;
 
-    //console.log('???value',value );
+    let type = typeof value;
     if (!value) return value;
 
     // check if value is string
-    let isArray = value.split(/,| /).length>1
-    let isFunction = value.includes('(')
+    let isNum = type === 'number' ? true : isNumericValue(value)
+    let isArray = type === 'string' ? value.split(/,| /).length > 1 : false;
+    let isFunction = type === 'string' ? value.includes('(') : false;
     //console.log(isArray);
-    let isNum = isNumericValue(value)
     if (!isNum || isArray || isFunction) return value
 
     // check unit if not specified
     unit = !unit ? getUnit(value) : unit;
 
     let val = parseFloat(value);
-    let scale=1;
+    let scale = 1;
     let scaleRoot = Math.sqrt(width * width + height * height) / root2
 
 
@@ -92,7 +92,6 @@ export function normalizeUnits(value = null, {
             }
             break;
 
-
         case "rad":
             scale = rad2Deg;
             break;
@@ -103,15 +102,31 @@ export function normalizeUnits(value = null, {
         case "in":
             scale = dpi;
             break;
+
         case "pt":
-            scale = (1 / 72) * dpi;
+            // 1/72
+            scale = dpi * inch2pt;
             break;
+
+        case "pc":
+            // 1/6
+            scale = dpi * 0.16666667;
+            break;
+
         case "cm":
-            scale = (1 / 2.54) * dpi;
+            // 1/2.54
+            scale = inch2cm * dpi;
             break;
         case "mm":
-            scale = ((1 / 2.54) * dpi) / 10;
+            //scale = ((1 / 2.54) * dpi) * 0.1;
+            scale = inch2cm * dpi * 0.1
             break;
+
+        // has anyone ever used it?
+        case "Q":
+            scale = inch2cm * dpi * 0.025;
+            break;
+
         // just a default approximation
         case "em":
         case "rem":

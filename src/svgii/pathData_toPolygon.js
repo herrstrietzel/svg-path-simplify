@@ -129,8 +129,10 @@ simplifyRDP=1,
         poly = poly.map(pt => { return [pt.x, pt.y] })
     }
     else if(polyFormat==='string'){
-        poly = poly.map(pt => { return [pt.x, pt.y].join(',') }).join(' ')
+        poly = poly.map(pt => { return [pt.x, pt.y].join(',') }).flat().join(' ')
     }
+
+    //console.log(pathData);
 
     return { pathData, poly }
 

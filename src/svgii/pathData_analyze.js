@@ -55,10 +55,10 @@ export function analyzePathData(pathData = [], {
     let len = pathData.length;
 
     // threshold for corner angles: 10 deg
-    let thresholdCorner = Math.PI * 2 / 360 * 10
+    //let thresholdCorner = Math.PI * 2 / 360 * 10
 
     // define angle threshold for semi extremes
-    let thresholdAngle = detectSemiExtremes ? 0.01 : 0.05
+    //let thresholdAngle = detectSemiExtremes ? 0.01 : 0.05
 
 
     for (let c = 2; len && c <= len; c++) {
@@ -86,7 +86,7 @@ export function analyzePathData(pathData = [], {
         // check flatness of command
         let toleranceFlat = 0.01;
         let thresholdLength = dimA * 0.1
-        let threshold = thresholdLength*0.01
+        let threshold = thresholdLength * 0.01
         let areaThresh = squareDist * toleranceFlat;
         let isFlat = Math.abs(cptArea) < areaThresh;
 
@@ -109,14 +109,29 @@ export function analyzePathData(pathData = [], {
             let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x)
             let dy = type === 'C' ? Math.abs(com.cp2.y - com.p.y) : Math.abs(com.cp1.y - com.p.y)
 
-            let horizontal = (dy === 0 || dy<threshold ) && dx > 0
-            let vertical = (dx === 0 || dx<threshold ) && dy > 0
+            //let horizontal = (dy === 0 || dy<=threshold ) && dx > 0
+            //let vertical = (dx === 0 || dx<=threshold ) && dy > 0
+            let horizontal = (dy === 0 || dy <= threshold) && dx > 0
+            let vertical = (dx === 0 || dx <= threshold) && dy > 0
+
 
             if (horizontal || vertical) {
                 hasExtremes = true;
             }
 
             // is extreme relative to bounding box 
+
+            // (cp1.x===p0.x && cp1.y!==p0.y  ) ||
+            if ((cp1.x === p0.x && cp1.y !== p0.y) || (cp1.y === p0.y && cp1.x !== p0.x)) {
+                //hasExtremes = true;
+                //renderPoint(markers, p0 )
+                //p0.extreme = true
+                //let comP = pathDataProps[pathDataProps.length-1]
+                pathDataProps[pathDataProps.length - 1].extreme = true
+                //console.log(comP);
+            }
+
+
             if ((p.x === left || p.y === top || p.x === right || p.y === bottom)) {
                 hasExtremes = true;
             }
@@ -126,6 +141,7 @@ export function analyzePathData(pathData = [], {
                 let couldHaveExtremes = bezierhasExtreme(null, commandPts)
                 if (couldHaveExtremes) {
                     let tArr = getTatAngles(commandPts)
+
                     if (tArr.length && (tArr[0] > 0.2)) {
                         hasExtremes = true;
                     }
@@ -181,23 +197,27 @@ export function analyzePathData(pathData = [], {
 
                 let signChange2 = (areaCpt < 0 && com.cptArea > 0) || (areaCpt > 0 && com.cptArea < 0) ? true : false;
 
-                let isCorner=!isFlat && signChange2;
+                let isCorner = !isFlat && signChange2;
                 if (isCorner) com.corner = true;
             }
-        }
-
-        //debug = true;
-        if (debug) {
-            //if (com.semiExtreme) renderPoint(markers, com.p, 'blue', '2%', '0.5')
-            if (com.directionChange) renderPoint(markers, com.p, 'orange', '1.5%', '0.5')
-            if (com.corner) renderPoint(markers, com.p, 'magenta', '1.5%', '0.5')
-            if (com.extreme) renderPoint(markers, com.p, 'cyan', '1%', '0.5')
-
         }
 
         pathDataProps.push(com)
 
     }
+
+
+    //debug = true;
+    
+    if (debug) {
+        pathDataProps.forEach(com=>{
+            //if (com.semiExtreme) renderPoint(markers, com.p, 'blue', '2%', '0.5')
+            if (com.directionChange) renderPoint(markers, com.p, 'orange', '1.5%', '0.5')
+            if (com.corner) renderPoint(markers, com.p, 'magenta', '1.5%', '0.5')
+            if (com.extreme) renderPoint(markers, com.p, 'cyan', '1%', '0.5')
+        })
+    }
+
 
     //pathDataProps.push(comLast)
 
