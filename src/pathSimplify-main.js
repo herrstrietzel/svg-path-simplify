@@ -43,6 +43,7 @@ export function svgPathSimplify(input = '', {
 
     toAbsolute = false,
     toRelative = true,
+    toMixed = false,
     toShorthands = true,
     toLonghands = false,
 
@@ -117,7 +118,7 @@ export function svgPathSimplify(input = '', {
     reversePath = false,
 
     //svg cleanup options
-    minifyRgbColors = false,
+    minifyRgbColors = true,
     removePrologue = true,
     removeHidden = true,
     removeUnused = true,
@@ -130,7 +131,13 @@ export function svgPathSimplify(input = '', {
     legacyHref = false,
     removeNameSpaced = true,
 
-    //attributesToGroup = false,
+    //meta 
+    allowMeta = false,
+    allowDataAtts = true,
+    allowAriaAtts = true,
+
+
+    attributesToGroup = false,
     removeOffCanvas = false,
     unGroup = false,
     mergePaths = false,
@@ -241,17 +248,20 @@ export function svgPathSimplify(input = '', {
 
         // convert all shapes to paths
         if (shapesToPaths) {
-            shapeConvert = true
+            shapeConvert = 'toPaths'
             convert_rects = true
             convert_ellipses = true
             convert_poly = true
             convert_lines = true
         }
 
+        //console.log('shapesToPaths', shapesToPaths, 'shapeConvert', shapeConvert, convert_rects, convert_ellipses, convert_poly);
+
         //sanitize
         let svgPropObject = cleanUpSVG(input, {
             removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
-            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms
+            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms,
+            allowMeta, allowDataAtts, allowAriaAtts, allowMeta, attributesToGroup
         }
         );
 
@@ -285,6 +295,7 @@ export function svgPathSimplify(input = '', {
     // SVG optimization options
     let pathOptions = {
         toRelative,
+        toMixed,
         toAbsolute,
         toLonghands,
         toShorthands,

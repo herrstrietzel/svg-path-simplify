@@ -3128,6 +3128,7 @@ function convertPathData(pathData, {
     toShorthands = true,
     toLonghands = false,
     toRelative = true,
+    toMixed = false,
     toAbsolute = false,
     decimals = 3,
     arcToCubic = false,
@@ -3142,6 +3143,8 @@ function convertPathData(pathData, {
     testTypes = false
 
 } = {}) {
+
+    let pathDataAbs = [];
 
     // pathdata properties - test= true adds a manual test 
     if (testTypes) {
@@ -3170,11 +3173,37 @@ function convertPathData(pathData, {
 
     if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
 
+    if(toMixed) toRelative = true;
+
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
 
+    // clone absolute pathdata
+    if(toMixed){
+        pathDataAbs = JSON.parse(JSON.stringify(pathData));
+    }
+
     if (toRelative) pathData = pathDataToRelative(pathData);
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
+
+    // choose most compact commands: relative or absolute
+    if(toMixed){
+        for(let i=0; i<pathData.length; i++){
+            let com = pathData[i];
+            let comA = pathDataAbs[i];
+            // compare Lengths
+            let comStr = [com.type, com.values.join(' ')].join('').replaceAll(' -', '-').replaceAll(' 0.', ' .');
+            let comStrA = [comA.type, comA.values.join(' ')].join('').replaceAll(' -', '-').replaceAll(' 0.', ' .');
+
+            let lenR = comStr.length;
+            let lenA = comStrA.length;
+
+            if(lenA<lenR){
+
+                pathData[i] = pathDataAbs[i];
+            }
+        }
+    }
 
     return pathData
 }
@@ -3186,6 +3215,9 @@ function convertPathData(pathData, {
  */
 
 function optimizeArcPathData(pathData = []) {
+
+    let remove =[];
+
     pathData.forEach((com, i) => {
         let { type, values } = com;
         if (type === 'A') {
@@ -3194,6 +3226,12 @@ function optimizeArcPathData(pathData = []) {
             let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
             let M = { x: x0, y: y0 };
             let p = { x, y };
+
+            if(rx===0 || ry===0){
+                pathData[i]= null;
+                remove.push(i);
+
+            }
 
             // rx and ry are large enough
             if (rx >= 1 && (x === x0 || y === y0)) {
@@ -3217,6 +3255,8 @@ function optimizeArcPathData(pathData = []) {
             }
         }
     });
+
+    if(remove.length) pathData = pathData.filter(Boolean);
     return pathData;
 }
 

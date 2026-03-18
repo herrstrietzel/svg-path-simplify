@@ -75,6 +75,12 @@
     --color-focus-dark: var(--color-text);
     --color-border: hsl(55, 3%, 45%);
     --color-text: hsl(55, 10%, 20%);
+
+    --color-menu-bg: var(--color-background);
+    --padding-menu: 0.3em;
+    --menu-tip-offset: 0.5em;
+
+
 }
 
 
@@ -286,18 +292,19 @@ header.header-left {
 }
 
 
+
 .header-nav {
     display: flex;
     flex-direction: column;
     gap: 0.5em;
     text-align: center;
     width: 2em;
-    ;
     font-size: 1.5em;
     gap: 0;
-    row-gap: 0.5em;
+    row-gap: 0.75em;
     margin: 0;
     justify-content: center;
+
 
     .elzoomo-btn {
         background: none;
@@ -477,6 +484,12 @@ a.btn-download-multi {
 
 
 .multiFile {
+
+
+    .radios-show-original {
+        display: none;
+    }
+
 
     .errorSimplify {
         outline: 2px solid red;
@@ -811,9 +824,9 @@ canvas {
 .elzoomo-el {
     position: absolute;
     inset: 0;
-    left:0;
-    right:0;
-    width:100%;
+    left: 0;
+    right: 0;
+    width: 100%;
     height: 100%
 }
 
@@ -1045,6 +1058,69 @@ dialog {
 */
 
 
-.li-bll, :where(.enhanceInputs,[data-enhance-inputs]) ul {
+.li-bll,
+:where(.enhanceInputs, [data-enhance-inputs]) ul {
     padding-left: 1.1em;
 }
+
+
+.input-wrap-checkbox-switch {
+    padding-left: .05em;
+}
+
+
+
+@media (min-width: 1024px) {
+    .col-switch {
+        width: fit-content;
+        text-align: left;
+    }
+}
+
+.svgWrapO {
+    display: none;
+}
+
+.showOriginal {
+    .svgWrapO {
+        display: block;
+    }
+
+    .svgWrapS {
+        display: none;
+    }
+}
+
+/*
+optgroup {
+    font-family: 'IBM Plex Sans';
+}
+
+.select-one * {
+    font-family: Arial, 'IBM Plex Sans';
+    color:red;
+    font-weight:inherit;
+}
+*/
+
+
+
+.menu {
+    --color-menu-bg: var(--color-focus);
+    --color-menu-bg: var(--color-background);
+    /* --color-text: #fff; */
+    font-size: 0.85rem;
+    max-width: 30vw;
+}
+
+
+.menu-marker-size {
+    translate: 0.2em 0;
+    font-size: 1rem;
+    z-index: 2000;
+    max-width: 25ch;
+}
+
+.menu-bottom-right,
+.menu-bottom-left,
+.menu-bottom-center {}

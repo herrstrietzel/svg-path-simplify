@@ -987,14 +987,111 @@ Z    `,
  </g>
  </svg>`,
 
-	dasharray__relative: `<svg viewBox="0 0 200 100">
+		dasharray__relative: `<svg viewBox="0 0 200 100">
   <circle cx="50%" cy="50%" r="25%" stroke="#ccc" fill="none" />
   <circle cx="50%" cy="50%" r="50" stroke="red" fill="none" stroke-dasharray="25% 500%"/>
-</svg>`
+</svg>`,
+
+		transform__multi: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" font-size="24px" font-family="Arial" style="fill:red">
+  <g style="transform:translate(-25%, 10px); stroke:#000000; stroke-width:2px">
+    <g transform="translate(25.0 0)" style="transform:translate(49.765%, 1em) scale(50%);  transform-origin:center 10px">
+      <ellipse cx="50%" cy="50%" rx="50%" ry="50%" fill="orange" fill-opacity="0.5" style="transform:rotate(-0.785398rad) 
+matrix(1.2, 0 ,0,1.2,0,0 ) translateX(-1mm) translateY(-1mm) skewX(10rad) skewY(10rad) scaleX(0.8) scaleY(75%); transform-origin:10mm 5mm; rotate:25deg; scale:50% 1.25; translate:-3mm -0.1in;"></ellipse>
+      <circle cx="50%" cy="50%" r="50%" fill="blue" fill-opacity="0.5" font-family="Arial" font-size="12px" transform="translate(-1 2) translate(-50 0)"></circle>
+      <rect x="0" y="0" width="49.999%" height="50.0001%" stroke-dasharray="0 10" stroke-linecap="round" transform="rotate(3 120 60) translate(-3,-5) rotate(-15) scale(0.75)" transform-origin="center"></rect>
+      
+      <rect x="0" y="0" width="49.999%" height="60.0001%" stroke-dasharray="0 10" rx="5%" ry="20%" stroke-linecap="round" transform="translate(-80,-50) scale(0.75)" transform-origin="center" style="fill:green; fill-opacity:0.5"></rect>
+      
+      <text x="50%" y="50%" stroke="none" fill="#000000" transform="rotate(-15) translate(-200 0)">Text</text>
+
+    </g>
+  </g>
+</svg>`,
+
+		icons__feather_alert: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-alert-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`,
+
+
+		icons__feather_alert_meta: `
+		
+		<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-alert-circle" 
+		data-att="data" 
+		aria-label="label"
+		title="title"
+		 >
+
+  <defs
+     id="defs542" />
+
+
+  <sodipodi:namedview
+     id="namedview542"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.64891779"
+     inkscape:cx="237.3182"
+     inkscape:cy="458.45561"
+     inkscape:window-width="1920"
+     inkscape:window-height="1131"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="flag-icons-es" />
+
+
+
+<metadata>
+    <rdf:RDF
+      xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+      xmlns:connect="http://www.w3.org/1999/08/29-svg-connections-in-RDF#">
+      <rdf:Description about="#CableA">
+        <connect:ends rdf:resource="#socket1" />
+        <connect:ends rdf:resource="#ComputerA" />
+      </rdf:Description>
+      <rdf:Description about="#CableB">
+        <connect:ends rdf:resource="#socket2" />
+        <connect:ends rdf:resource="#ComputerB" />
+      </rdf:Description>
+      <rdf:Description about="#CableN">
+        <connect:ends rdf:resource="#socket5" />
+        <connect:ends>Everything</connect:ends>
+      </rdf:Description>
+      <rdf:Description about="#Hub">
+        <connect:ends rdf:resource="#socket1" />
+        <connect:ends rdf:resource="#socket2" />
+        <connect:ends rdf:resource="#socket3" />
+        <connect:ends rdf:resource="#socket4" />
+        <connect:ends rdf:resource="#socket5" />
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
+
+<circle data-att="data" aria-label="circle" cx="12" cy="12" r="10"><title>Circle</title><desc>description</desc></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+<script>alert('oi')</script>
+</svg>`,
+
+	icon__feather_alert_multicolor:`<svg id="svg" xmlns="http://www.w3.org/2000/svg" width="24" height="24" data-viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-alert-circle"><circle id="c1" class="c1" cx="12" cy="12" r="10"></circle><line  stroke="red" x1="12" y1="8" x2="12" y2="12"></line><line stroke="red" x1="12" y1="16" x2="12.01" y2="16"></line></svg>`,
+
+	icon__feather_alert_grouped:`
+	<svg id="svg" xmlns="http://www.w3.org/2000/svg" width="24" height="24" data-viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-alert-circle">
+
+	<circle id="c1" class="c1" cx="12" cy="12" r="10"></circle>
+	<g>	
+		<line  stroke="red" x1="12" y1="8" x2="12" y2="12"></line>
+		<line stroke="red" x1="12" y1="16" x2="12.01" y2="16"></line>
+	</g>
+	</svg>`
+
+
 
 
 
 	}
+
 
 
 

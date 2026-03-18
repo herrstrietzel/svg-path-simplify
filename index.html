@@ -67,22 +67,23 @@
     <script src="demo/samples.js" defer></script>
 
     <!-- Md parser -->
-    <script src="https://cdn.jsdelivr.net/gh/UmemotoCtrl/mdpjs@0.1.4/js/mdp.min.js" async></script>
+    <script src="https://cdn.jsdelivr.net/gh/UmemotoCtrl/mdpjs@0.1.4/js/mdp.min.js" defer></script>
 
     <!-- Zip creation -->
     <script src="https://cdn.jsdelivr.net/npm/uzip@0.20201231.0/UZIP.min.js" async></script>
 
 
     <!-- UI helpers -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.7/dist/enhanceInputs.min.css"
-        as="style" />
 
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.7/dist/enhanceInputs.min.css">
-        <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.7/dist/enhanceInputs.min.js" defer></script>
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.9/dist/enhanceInputs.min.css"
+        as="style" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.9/dist/enhanceInputs.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/enhance-inputs@0.3.9/dist/enhanceInputs.min.js" defer></script>
 
     <!-- 
-            <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
-            <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
+        <link rel="stylesheet" href="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.css">
+        <script src="//localhost/___git/enhance-inputs/enhance-inputs/dist/enhanceInputs.js" defer></script>
+
     -->
 
 
@@ -90,7 +91,7 @@
         <script src="https://cdn.jsdelivr.net/npm/svg-path-simplify@0.1.2/dist/svg-path-simplify.min.js" defer></script>
     -->
 
-    <script src="dist/svg-path-simplify.js" defer></script>
+    <script src="dist/svg-path-simplify.min.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
     <script src="demo/lib/elzoomo/elzoomo.js" defer></script>
@@ -216,6 +217,17 @@
                                 aria-description="Remove SVG non-presentational attributes from the root SVG"
                                 checked>cleanupSVGAtts</label>
 
+                        <label><input type="checkbox" data-type="checkbox-switch" name="allowMeta"
+                                aria-description="Allows metadata elements as well as title and description elements">allowMeta</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="allowAriaAtts"
+                                aria-description="Allows accessibility related ARIA attributes – probably added on purpose"
+                                checked>allowAriaAtts</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="allowDataAtts"
+                                aria-description="Allows custom data attributes – probably added on purpose"
+                                checked>allowDataAtts</label>
+
 
                         <label><input type="checkbox" data-type="checkbox-switch" name="removeOffCanvas"
                                 aria-description="Removes elements beyond viewBox/outside viewport">removeOffCanvas</label>
@@ -225,9 +237,8 @@
 
 
                         <!-- 
-                                
                                 <label><input type="checkbox" class="dsp-debug" name="convertTransforms">convertTransforms</label>
-                                -->
+                        -->
                     </p>
                 </details>
 
@@ -240,8 +251,11 @@
                         <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
                                 aria-description="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
 
+                        <label><input type="checkbox" data-type="checkbox-switch" name="attributesToGroup"
+                                aria-description="Try to combine style attributes in group">attributesToGroup</label>
+
                         <label><input type="checkbox" data-type="checkbox-switch" name="minifyRgbColors"
-                                aria-description="Minifies RGB colors e.g for fill, stroke or stop-color">minifyRgbColors</label>
+                                aria-description="Minifies RGB colors e.g for fill, stroke or stop-color" checked>minifyRgbColors</label>
 
 
                     </p>
@@ -534,7 +548,7 @@
                 </details>
 
 
-              <details open>
+                <details open>
                     <summary class="h3">SVG output settings</summary>
                     <p>
                         <label><input type="checkbox" data-type="checkbox-switch" name="toRelative"
@@ -543,6 +557,10 @@
                         <label><input type="checkbox" data-type="checkbox-switch" name="toShorthands"
                                 aria-description="Converts all commands to shorthand when applicable – reduces file size"
                                 checked>toShorthands</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="toMixed"
+                                aria-description="Choose the most compact command relative or absolute – you won't be able to change the start position as with all relative commands">toMixed</label>
+
                         <label><input type="checkbox" data-type="checkbox-switch" name="lineToCubic"
                                 aria-description="converts lines to cubics – helpful for morphing animations">lineToCubic</label>
 
@@ -627,6 +645,25 @@
                     <a href="#" class="a-dialog" data-dialog="#about" data-dialog-title="Options" data-icon="question"
                         title="Available parameters"></a>
 
+                    <!-- reset -->
+                    <button type="button" class="btn btnReset" title="Reset settings" data-icon="arrow-path"></button>
+
+                    <!--settings-->
+                    <!-- 
+                    
+                    <button type="button" class="btn btn-menu btnConfig" title="Edit settings" data-icon="gear"
+                        data-menu-anchor="menu1"></button>
+
+                    <div class="menu menu-right-top menu-active" data-menu="menu1">
+                        <p>
+                            <label>Marker size
+                                <input type="number" name="markerSize" value="0.3" min="0.05" max="1" step="0.05">
+                            </label>
+                        </p>
+                    </div>
+
+                    -->
+
                     <button type="button" class="elzoomo-btn elzoomo-btn-zoomin" title="zoom in"
                         data-icon="plus"></button>
                     <button type="button" class="elzoomo-btn elzoomo-btn-zoomout" title="zoom out"
@@ -650,11 +687,23 @@
                     <div class="grd-btns grd grd-1 grd-ld-2 wrp-btns --txt-rgh">
 
                         <div class="col col-switch">
+                            <p class="mrg-0 radios-show-original">
+                                <label class="inl-blc"> <input type="radio" name="showOriginal" value="hide"
+                                        data-secondary="true" checked>optimized</label>
+                                <label class="inl-blc"> <input type="radio" name="showOriginal" value="show"
+                                        data-secondary="true">original</label>
+                            </p>
                             <p class="mrg-0">
-                                <label><input type="checkbox" data-type="checkbox-switch" name="showMarkers"
-                                        checked>showMarkers</label>
+                                <span>
+                                    <label><input type="checkbox" data-type="checkbox-switch" name="showMarkers"
+                                            data-secondary="true" checked>showMarkers</label>
+                                    <button type="button" class="btn btn-inline btn-menu btnConfig"
+                                        title="Edit marker size" data-icon="gear" data-menu-anchor="menu1"></button>
 
-                                <label><input type="checkbox" data-type="checkbox-switch"
+                                </span>
+
+
+                                <label><input type="checkbox" data-type="checkbox-switch" data-secondary="true"
                                         name="showTransparency">showTransparency</label>
                             </p>
                         </div>
@@ -747,7 +796,12 @@
                         <g id="markers"></g>
                     </svg>
 
-                    <div id="svgWrap" class="svgWrap"></div>
+                    <div id="svgWrap" class="svgWrap">
+                        <div id="svgWrapO" class="svgWrapO"></div>
+                        <div id="svgWrapS" class="svgWrapS"></div>
+                    </div>
+
+
                     <div id="svgWrapMulti" class="svgWrapMulti grd grd-2 grd-md-4 grd-ld-6 gap-1em"></div>
 
                 </div>
@@ -783,6 +837,15 @@
         <div class="md-cnt" data-md="./docs/api.md">
         </div>
     </dialog>
+
+    <div class="menu menu-marker-size menu-top-right --menu-active" data-menu="menu1">
+        <p>
+            <label>Marker size
+                <input type="number" id="inpuMarkerSize" name="markerSize" value="0.3" min="0.05" max="1" step="0.05" data-ignore>
+            </label>
+        </p>
+    </div>
+
 
     <!-- 
         <div id="spriteMap"></div>

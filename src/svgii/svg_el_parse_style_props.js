@@ -21,6 +21,10 @@ export function parseStylesProperties(el, {
     removeDefaults = true,
     cleanUpStrokes = true,
     normalizeTransforms = true,
+    removeIds=false,
+    removeClassNames=false,
+
+    include=[],
     exclude = [],
     width = 0,
     height = 0,
@@ -57,7 +61,7 @@ export function parseStylesProperties(el, {
      */
 
     if (removeInvalid || removeDefaults || removeNameSpaced) {
-        let propsFilteredObj = filterSvgElProps(nodeName, props, { removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: transformsStandalone, cleanUpStrokes: false })
+        let propsFilteredObj = filterSvgElProps(nodeName, props, { removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false })
         props = propsFilteredObj.propsFiltered
         remove.push(...propsFilteredObj.remove)
     }
@@ -415,12 +419,21 @@ export function filterSvgElProps(elNodename = '', props = {}, {
     removeInvalid = true,
     removeDefaults = true,
     allowDataAtts = true,
+    allowMeta = false,
+    allowAriaAtts = false,
     cleanUpStrokes = true,
-    include = ['id', 'class'],
+    //include = ['id', 'class'],
+    include=[],
+    removeIds=false, 
+    removeClassNames=false,
     exclude = [],
 } = {}) {
     let propsFiltered = {}
     let remove = [];
+
+    if(!removeIds) include.push('id')
+    if(!removeClassNames) include.push('class')
+    //console.log('???include', 'removeIds', removeIds, include);
 
     // allow defaults for nested
     //removeDefaults = false;
@@ -439,26 +452,39 @@ export function filterSvgElProps(elNodename = '', props = {}, {
             false;
 
         // remove null transforms
-        if(prop==='transform' && value==='matrix(1 0 0 1 0 0)') isValid = false;
+        if (prop === 'transform' && value === 'matrix(1 0 0 1 0 0)') isValid = false;
 
         // allow data attributes
         let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;
+        let isMeta = allowMeta && prop === 'title'
+        let isAria = allowAriaAtts && prop.startsWith('aria-')
 
         // filter out defaults
         let isDefault = removeDefaults ?
             (attLookup.defaults[prop] ? attLookup.defaults[prop] !== undefined && attLookup.defaults[prop].includes(value) : false) :
             false;
 
+        let isFutileStroke = noStrokeColor && strokeAtts.includes(prop);
 
+        if (isDefault || isDataAtt || isMeta || isAria || isFutileStroke) isValid = false
+        if (include.includes(prop)) isValid = true;
+
+        //console.log('!valid', prop, isValid);
+
+
+        /*
         if (isDataAtt || include.includes(prop)) isValid = true;
         if (isDefault) isValid = false
         if (exclude.length && exclude.includes(prop)) isValid = false;
         if (noStrokeColor && strokeAtts.includes(prop)) isValid = false
+        */
+
 
         if (isValid) {
             propsFiltered[prop] = props[prop]
         }
         else {
+            //console.log('remove', prop);
             remove.push(prop)
         }
     }

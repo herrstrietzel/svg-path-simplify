@@ -17,7 +17,7 @@ let useWorker = false;
 window.addEventListener('DOMContentLoaded', (e) => {
 
     settings = enhanceInputsSettings;
-   // console.log('settings', settings);
+    // console.log('settings', settings);
 
     // check query strings
     let queryParams = getQueryParams();
@@ -44,6 +44,29 @@ window.addEventListener('DOMContentLoaded', (e) => {
     // show current settings
     updateConfig(settings)
 
+    // toggle markers
+    showMarkersInPreview(previewWrp, settings)
+
+    // toggle preview
+    togglePreview(previewWrp, settings)
+
+
+    let inpuMarkerSize = document.getElementById('inpuMarkerSize')
+    inpuMarkerSize.value = '0.3'
+
+
+    // secondary events - not triggering optimization
+    document.addEventListener('settingsChangeSecondary', (e) => {
+        //console.log('settingschangeSec', settings);
+
+        // toggle markers
+        showMarkersInPreview(previewWrp, settings)
+
+        // toggle preview
+        togglePreview(previewWrp, settings)
+
+    })
+
 
     document.addEventListener('settingsChange', (e) => {
         //console.log('settingschange', settings);
@@ -56,11 +79,18 @@ window.addEventListener('DOMContentLoaded', (e) => {
 
     })
 
+
+    inpuMarkerSize.addEventListener('input', e=>{
+        let val = +inpuMarkerSize.value
+        previewWrp.style.setProperty('--strokeWidthPrev', val+'%')
+
+    })
+
 })
 
 function updateConfig(settings = {}) {
 
-    let {omitDefaults} = settings || false
+    let { omitDefaults } = settings || false
 
     let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults', 'detailsOpen']
 
@@ -70,12 +100,12 @@ function updateConfig(settings = {}) {
     for (let prop in settings) {
         if (!excludeProps.includes(prop)) {
             let value = settings[prop];
-            if(!omitDefaults || value!==defaults[prop]){
+            if (!omitDefaults || value !== defaults[prop]) {
                 configs[prop] = settings[prop]
             }
         }
     }
-    let configJson = 'const options='+JSON.stringify(configs, null, ' ').replaceAll('"', '')
+    let configJson = 'const options=' + JSON.stringify(configs, null, ' ').replaceAll('"', '')
     textConfig.value = configJson
 
     return configs;
@@ -135,7 +165,7 @@ inputFile.addEventListener('input', async (e) => {
 
     else {
 
-        
+
         let fileItem = fileStack[0]
         lastFileName = fileItem.name;
         btnDownload.setAttribute('download', lastFileName);
@@ -262,7 +292,6 @@ function updateSVG(settings = {}, processed = false) {
     // remove previews
     svgWrapMulti.textContent = '';
 
-    showMarkersInPreview(previewWrp, settings)
 
     // get detailed object
     settings.getObject = true;
@@ -278,9 +307,9 @@ function updateSVG(settings = {}, processed = false) {
 
     // remove defaults from query
     let settingsShare = {};
-    
+
     // add sample
-    if(settings['samples']) settingsShare['samples'] = settings['samples'];
+    if (settings['samples']) settingsShare['samples'] = settings['samples'];
 
     let settingsFiltered = updateConfig(settings)
 
@@ -341,9 +370,9 @@ function updateSVG(settings = {}, processed = false) {
     }
     */
 
-    if(polys.length){
+    if (polys.length) {
         //console.log(polys);
-        polyOut.value=JSON.stringify(polys).replaceAll('"', '')
+        polyOut.value = JSON.stringify(polys).replaceAll('"', '')
     }
 
 
@@ -377,7 +406,9 @@ function updateSVG(settings = {}, processed = false) {
 
 
     // update preview rendering
-    svgWrap.innerHTML = '';
+    //svgWrap.innerHTML = '';
+    svgWrapO.innerHTML = '';
+    svgWrapS.innerHTML = '';
 
     // incase input was pathdata array
     dInput = dPreview;
@@ -406,19 +437,33 @@ function updateSVG(settings = {}, processed = false) {
         svgEl.classList.add('dsp-non')
 
         // prefix ids and refs
-        svg = svg
-        .replaceAll('id="', 'id="__')
-        .replaceAll('url(#', 'url(#__')
-        .replaceAll('href="#', 'href="#__');
-        //console.log('preview svg', svg);
+        let svgO = settings.dInput ? prefixIds(settings.dInput, { prefix: '_' }) : '';
+
+        // optimized svg
+        let svg_prev = prefixIds(svg);
+
+        function prefixIds(svg, { prefix = '__' } = {}) {
+            return svg
+                .replaceAll('id="', `id="${prefix}`)
+                .replaceAll('url(#', `url(#${prefix}`)
+                .replaceAll('href="#', `href="#${prefix}`);
+        }
 
 
-        svgWrap.insertAdjacentHTML('beforeend', svg)
-        let svgDocEl = svgWrap.querySelector('svg')
+        //svgWrap.insertAdjacentHTML('beforeend', svg_prev)
+
+        // unoptimized
+        svgWrapO.insertAdjacentHTML('beforeend', svgO)
+
+        // optimized
+        svgWrapS.insertAdjacentHTML('beforeend', svg_prev)
+
+        //let svgDocEl = svgWrap.querySelector('svg')
+        let svgDocElO = svgWrapO.querySelector('svg')
+        let svgDocEl = svgWrapS.querySelector('svg')
 
         let viewBox = getViewBox(svgDocEl);
         let viewBoxAtt = svgDocEl.getAttribute('viewBox')
-
 
 
         if (!viewBoxAtt) {
@@ -429,23 +474,26 @@ function updateSVG(settings = {}, processed = false) {
             svgDocEl.setAttribute('viewBox', viewBoxAtt)
         }
 
+
+        svgDocElO.removeAttribute('width')
+        svgDocElO.removeAttribute('height')
+
         svgDocEl.removeAttribute('width')
         svgDocEl.removeAttribute('height')
-
 
         /**
          * adjust marker size 
          * based on 1st transformed element
          */
         let svgEl1 = svgDocEl.querySelectorAll('path, polygon, polyline, line, circle, ellipse, rect')
-        if(svgEl1[0]){
+        if (svgEl1[0]) {
             svgEl1 = svgEl1[0]
             //console.log(svgDocEl, svgEl1);
-            let matrix1 = getElementTransform(svgDocEl, svgEl1 )
+            let matrix1 = getElementTransform(svgDocEl, svgEl1)
             let scale1 = +matrix1.a.toFixed(7)
-    
+
             let wrap = svgDocEl.closest('.wrp-zoom');
-            if(wrap){
+            if (wrap) {
                 // scale element
                 wrap.style.setProperty('--elScale', scale1)
             }
@@ -483,7 +531,7 @@ function updateSVG(settings = {}, processed = false) {
         title: `svg-path-simplify`,
         description: `svg-path-simplify`,
         html: svgExport,
-        css:`body{background: repeating-conic-gradient(hsl(55, 10%, 85%) 0% 25%, transparent 25% 50%);
+        css: `body{background: repeating-conic-gradient(hsl(55, 10%, 85%) 0% 25%, transparent 25% 50%);
         background-size: 1em 1em;} svg{display:block; outline: 1px solid red; overflow:visible}`
     }
 
@@ -585,6 +633,21 @@ function getViewBox(svg = null, decimals = -1) {
     return viewBox
 }
 */
+
+function togglePreview(target, settings = {}) {
+
+    //console.log('showOriginal', settings.showOriginal, settings);
+
+    if (settings.showOriginal === 'show') {
+        //console.log('show');
+        target.classList.add('showOriginal')
+        target.classList.remove('showMarkers')
+
+    } else {
+        //console.log('hide');
+        target.classList.remove('showOriginal')
+    }
+}
 
 
 

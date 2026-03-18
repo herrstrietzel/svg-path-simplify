@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.2] - 2026-03-18
+### Fixed
+- attribute retrieval and conversion in node
+- transform conversions
+### Added  
+- mixed SVG path data: chooses between most compact commands – relative or absolute
+- web UI features (e.g marker resizing, toggle original and optimized)
+
+
 ## [0.4.1] - 2026-03-16
 ### Fixed
 - null transform removal matrix(1 0 0 1 0 0)

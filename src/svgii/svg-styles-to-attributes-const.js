@@ -19,6 +19,7 @@ export const transHorizontal = ['scaleX', 'translateX', 'skewX'];
 export const transVertical = ['scaleY', 'translateY', 'skewY'];
 
 export const colorProps = ['fill', 'stroke', 'stop-color'];
+export const geometryProps = ['d', 'points', 'cx', 'cy', 'x1', 'x2', 'y1', 'y2', 'width', 'height', 'r', 'rx', 'ry', 'x', 'y'];
 
 
 export const geometryEls = [

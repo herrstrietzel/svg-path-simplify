@@ -17,6 +17,201 @@ import { attLookup } from './svg-styles-to-attributes-const.js';
 import { qrDecomposeMatrix } from './transform_qr_decompose.js';
 
 
+export function shapeElToPath(el, { width = 0,
+    height = 0,
+    convert_rects = false,
+    convert_ellipses = false,
+    convert_poly = false,
+    convert_lines = false,
+    //matrix={a:1, b:0, c:0, d:1, e:0, f:0},
+    matrix=null
+
+} = {}) {
+
+    let nodeName = el.nodeName.toLowerCase();
+    //console.log('shapeElToPath', nodeName);
+
+
+    if (
+        nodeName === 'path' && !matrix ||
+        nodeName === 'rect' && !convert_rects ||
+        (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
+        (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
+        (nodeName === 'line') && !convert_lines
+    ) return el;
+
+
+    let pathData = getPathDataFromEl(el, { width, height });
+
+    // shape attributes – obsolete for path els
+    let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
+
+    // transform pathData
+    if(matrix && Object.values(matrix).join('')!=='100100'){
+        pathData = transformPathData(pathData, matrix)
+        exclude.push('transform', 'transform-origin')
+    }
+
+    let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ')
+    let attributes = [...el.attributes].map(att => att.name);
+
+    let pathN = document.createElementNS(svgNs, 'path');
+    pathN.setAttribute('d', d);
+
+
+    // copy attributes
+    attributes.forEach(att => {
+        if (!exclude.includes(att)) {
+            let val = el.getAttribute(att);
+            pathN.setAttribute(att, val)
+        }
+    })
+
+    //el.replaceWith(pathN)
+    //console.log(pathN.outerHTML, d);
+    return pathN
+
+}
+/*
+export function copyAttributes(newEl, oldEl){
+
+    let attributes = [...oldEl.attributes].map(att => att.name);
+
+
+}
+*/
+
+
+// retrieve pathdata from svg geometry elements
+export function getPathDataFromEl(el, {
+    stringify = false,
+    width = 0,
+    height = 0
+} = {}) {
+
+    let pathData = [];
+    let type = el.nodeName.toLowerCase();
+    let attNames, d, x, y, r, rx, ry, cx, cy, x1, x2, y1, y2;
+
+    if (!width || !height) {
+        let svg = getRootSvg(el);
+        let viewBox = getViewBox(svg)
+        width = viewBox.width;
+        height = viewBox.height;
+    }
+
+    // convert relative and physical units to user-units
+    let atts = svgElUnitsToPixel(el, { width, height })
+
+    switch (type) {
+        case 'path':
+            d = el.getAttribute("d");
+            pathData = parsePathDataNormalized(d);
+            break;
+
+        case 'rect':
+            attNames = ['x', 'y', 'width', 'height', 'rx', 'ry'];
+            ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
+
+            if (!rx && !ry) {
+                pathData = [
+                    { type: "M", values: [x, y] },
+                    { type: "L", values: [x + width, y] },
+                    { type: "L", values: [x + width, y + height] },
+                    { type: "L", values: [x, y + height] },
+                    { type: "Z", values: [] }
+                ];
+            } else {
+
+                rx = rx ? rx : ry;
+                ry = ry ? ry : rx;
+
+                if (rx > width / 2) {
+                    rx = width / 2;
+                }
+                if (ry > height / 2) {
+                    ry = height / 2;
+                }
+                pathData = [
+                    { type: "M", values: [x + rx, y] },
+                    { type: "L", values: [x + width - rx, y] },
+                    { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
+                    { type: "L", values: [x + width, y + height - ry] },
+                    { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
+                    { type: "L", values: [x + rx, y + height] },
+                    { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
+                    { type: "L", values: [x, y + ry] },
+                    { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
+                    { type: "Z", values: [] }
+                ];
+            }
+            break;
+
+        case 'circle':
+        case 'ellipse':
+
+            attNames = ['cx', 'cy', 'rx', 'ry', 'r'];
+            ({ cx=0, cy=0, r, rx, ry } = atts);
+
+            let isCircle = type === 'circle';
+
+            if (isCircle) {
+                r = r;
+                rx = r
+                ry = r
+            } else {
+                rx = rx ? rx : r;
+                ry = ry ? ry : r;
+            }
+
+
+            // simplified radii for circles
+            let rxS = isCircle && r >= 1 ? 1 : rx;
+            let ryS = isCircle && r >= 1 ? 1 : ry;
+
+
+            pathData = [
+                { type: "M", values: [cx + rx, cy] },
+                { type: "A", values: [rxS, ryS, 0, 1, 1, cx - rx, cy] },
+                { type: "A", values: [rxS, ryS, 0, 1, 1, cx + rx, cy] },
+            ];
+
+            break;
+        case 'line':
+            attNames = ['x1', 'y1', 'x2', 'y2'];
+            ({ x1, y1, x2, y2 } = atts);
+            pathData = [
+                { type: "M", values: [x1, y1] },
+                { type: "L", values: [x2, y2] }
+            ];
+            break;
+        case 'polygon':
+        case 'polyline':
+
+            let points = el.getAttribute('points').split(/,| /).filter(Boolean).map(Number)
+
+            for (let i = 0; i < points.length; i += 2) {
+                pathData.push({
+                    type: (i === 0 ? "M" : "L"),
+                    values: [points[i], points[i + 1]]
+                });
+            }
+            if (type === 'polygon') {
+                pathData.push({
+                    type: "Z",
+                    values: []
+                });
+            }
+            break;
+    }
+
+    return stringify ? stringifyPathData(pathData) : pathData;
+
+};
+
+
+
+
 export function pathElToShape(el, {
     convert_rects = false,
     convert_ellipses = false,
@@ -147,196 +342,3 @@ export function pathElToShape(el, {
     return el;
 
 }
-
-export function shapeElToPath(el, { width = 0,
-    height = 0,
-    convert_rects = false,
-    convert_ellipses = false,
-    convert_poly = false,
-    convert_lines = false,
-    //matrix={a:1, b:0, c:0, d:1, e:0, f:0},
-    matrix=null
-
-} = {}) {
-
-    let nodeName = el.nodeName.toLowerCase();
-    //console.log('shapeElToPath', nodeName);
-
-
-    if (
-        nodeName === 'path' && !matrix ||
-        nodeName === 'rect' && !convert_rects ||
-        (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
-        (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
-        (nodeName === 'line') && !convert_lines
-    ) return el;
-
-
-    let pathData = getPathDataFromEl(el, { width, height });
-
-    // shape attributes – obsolete for path els
-    let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
-
-    // transform pathData
-    if(matrix && Object.values(matrix).join('')!=='100100'){
-        pathData = transformPathData(pathData, matrix)
-        exclude.push('transform', 'transform-origin')
-    }
-
-    let d = pathData.map(com => { return `${com.type} ${com.values} ` }).join(' ')
-    let attributes = [...el.attributes].map(att => att.name);
-
-    let pathN = document.createElementNS(svgNs, 'path');
-    pathN.setAttribute('d', d);
-
-
-    // copy attributes
-    attributes.forEach(att => {
-        if (!exclude.includes(att)) {
-            let val = el.getAttribute(att);
-            pathN.setAttribute(att, val)
-        }
-    })
-
-    //el.replaceWith(pathN)
-    //console.log(pathN.outerHTML, d);
-    return pathN
-
-}
-/*
-export function copyAttributes(newEl, oldEl){
-
-    let attributes = [...oldEl.attributes].map(att => att.name);
-
-
-}
-*/
-
-
-// retrieve pathdata from svg geometry elements
-export function getPathDataFromEl(el, {
-    stringify = false,
-    width = 0,
-    height = 0
-} = {}) {
-
-    let pathData = [];
-    let type = el.nodeName.toLowerCase();
-    let attNames, d, x, y, r, rx, ry, cx, cy, x1, x2, y1, y2;
-
-    if (!width || !height) {
-        let svg = getRootSvg(el);
-        let viewBox = getViewBox(svg)
-        width = viewBox.width;
-        height = viewBox.height;
-    }
-
-    // convert relative and physical units to user-units
-    let atts = svgElUnitsToPixel(el, { width, height })
-    //console.log('atts', atts);
-
-    switch (type) {
-        case 'path':
-            d = el.getAttribute("d");
-            pathData = parsePathDataNormalized(d);
-            break;
-
-        case 'rect':
-            attNames = ['x', 'y', 'width', 'height', 'rx', 'ry'];
-            ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
-
-            if (!rx && !ry) {
-                pathData = [
-                    { type: "M", values: [x, y] },
-                    { type: "L", values: [x + width, y] },
-                    { type: "L", values: [x + width, y + height] },
-                    { type: "L", values: [x, y + height] },
-                    { type: "Z", values: [] }
-                ];
-            } else {
-
-                rx = rx ? rx : ry;
-                ry = ry ? ry : rx;
-
-                if (rx > width / 2) {
-                    rx = width / 2;
-                }
-                if (ry > height / 2) {
-                    ry = height / 2;
-                }
-                pathData = [
-                    { type: "M", values: [x + rx, y] },
-                    { type: "L", values: [x + width - rx, y] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
-                    { type: "L", values: [x + width, y + height - ry] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
-                    { type: "L", values: [x + rx, y + height] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
-                    { type: "L", values: [x, y + ry] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
-                    { type: "Z", values: [] }
-                ];
-            }
-            break;
-
-        case 'circle':
-        case 'ellipse':
-
-            attNames = ['cx', 'cy', 'rx', 'ry', 'r'];
-            ({ cx=0, cy=0, r, rx, ry } = atts);
-
-            let isCircle = type === 'circle';
-
-            if (isCircle) {
-                r = r;
-                rx = r
-                ry = r
-            } else {
-                rx = rx ? rx : r;
-                ry = ry ? ry : r;
-            }
-
-
-            // simplified radii for circles
-            let rxS = isCircle && r >= 1 ? 1 : rx;
-            let ryS = isCircle && r >= 1 ? 1 : ry;
-
-
-            pathData = [
-                { type: "M", values: [cx + rx, cy] },
-                { type: "A", values: [rxS, ryS, 0, 1, 1, cx - rx, cy] },
-                { type: "A", values: [rxS, ryS, 0, 1, 1, cx + rx, cy] },
-            ];
-
-            break;
-        case 'line':
-            attNames = ['x1', 'y1', 'x2', 'y2'];
-            ({ x1, y1, x2, y2 } = atts);
-            pathData = [
-                { type: "M", values: [x1, y1] },
-                { type: "L", values: [x2, y2] }
-            ];
-            break;
-        case 'polygon':
-        case 'polyline':
-
-            let points = el.getAttribute('points').split(/,| /).filter(Boolean).map(Number)
-
-            for (let i = 0; i < points.length; i += 2) {
-                pathData.push({
-                    type: (i === 0 ? "M" : "L"),
-                    values: [points[i], points[i + 1]]
-                });
-            }
-            if (type === 'polygon') {
-                pathData.push({
-                    type: "Z",
-                    values: []
-                });
-            }
-            break;
-    }
-
-    return stringify ? stringifyPathData(pathData) : pathData;
-
-};

@@ -1,6 +1,6 @@
 {
   "name": "svg-path-simplify",
-  "version": "0.4.1",
+  "version": "0.4.2",
 
   "type": "module",
 
@@ -34,7 +34,10 @@
     "watch": "rollup -c --watch",
     "test": "node tests/testSVG.js",
     "test1": "node tests/test.js",
-    "test2": "node tests/testSVG2.js"
+    "test2": "node tests/testSVG2.js",
+    "test3": "node tests/testSVG_transform.js",
+    "test4": "node tests/testSVG_shape.js"
+    
   },
 
   "keywords": [

@@ -16,8 +16,14 @@ export function svgElUnitsToPixel(el, {
 
     let attributes = [...el.attributes];
     let attNames = attributes.map(att => att.name)
-    let attValues = attributes.map(att => att.nodeValue)
-    //console.log('attributes', attributes);
+
+    // doesn't work in node!
+    //let attValues = attributes.map(att => att.nodeValue)
+    
+    let attValues = []
+    attNames.forEach(att=>{
+        attValues.push(el.getAttribute(att))
+    })
 
     let isSquare = width === height;
 
