@@ -294,7 +294,7 @@ let pathDataOpt = simplifyPathData(pathDataString);
 ### Web app
 You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
 
-![web app](./demo/img/screenshot.png)    
+![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)    
 
 #### Features
 * test all provided simplification option - export settings as JS object
@@ -310,6 +310,9 @@ You can easily test this library via the [**webapp**](https://herrstrietzel.gith
 * [simple setup IIFE](./demo/simple-iife.html)
 * [simple setup esm](./demo/simple-esm.html)  
 * [codepen](https://codepen.io/herrstrietzel/pen/PwzxpoE)
+
+### Webapp examples
+* [font/glyph simplification](https://herrstrietzel.github.io/svg-path-simplify/?samples=fira_alegreya_opensans)
 
 
 
@@ -333,9 +336,8 @@ SVGs > 1 MB are most of the time not salvagable. At least if they contain 10K+ o
 
 ## Changelog, Updates and rollback
 ### Changelog
-* 0.3.0 webapp adds support for multi file batch optimizations, web worker support, drawing direction fix option (for fill rules)
-* 0.2.0 added features for polygon curve fitting
-* 0.1.0 fixed node support for complete svg files
+See [changelog.md](https://github.com/herrstrietzel/svg-path-simplify/blob/main/CHANGELOG.md) 
+
 
 ### Rollback
 If you encounter any issues with the recent versions you can rollback to a previous version.  
