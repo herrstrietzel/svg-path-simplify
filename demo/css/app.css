@@ -1069,9 +1069,11 @@ dialog {
 }
 
 @media (min-width: 1400px) {
+    /*
     .pReport {
         margin-bottom: -0.75lh
     }
+    */
 
 }
 
