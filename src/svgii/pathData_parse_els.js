@@ -16,29 +16,25 @@ import { autoRound, roundTo } from './rounding.js';
 import { attLookup } from './svg-styles-to-attributes-const.js';
 import { qrDecomposeMatrix } from './transform_qr_decompose.js';
 
-
+/**
+ * Convert shapes to paths
+ * converts also transforms
+ */
 export function shapeElToPath(el, { width = 0,
     height = 0,
-    convert_rects = false,
-    convert_ellipses = false,
-    convert_poly = false,
-    convert_lines = false,
-    //matrix={a:1, b:0, c:0, d:1, e:0, f:0},
-    matrix=null
+    convertShapes = [],
+    matrix = null
 
 } = {}) {
+
 
     let nodeName = el.nodeName.toLowerCase();
     //console.log('shapeElToPath', nodeName);
 
 
-    if (
-        nodeName === 'path' && !matrix ||
-        nodeName === 'rect' && !convert_rects ||
-        (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
-        (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
-        (nodeName === 'line') && !convert_lines
-    ) return el;
+
+    if (!convertShapes.includes(nodeName)) return el;
+    //console.log(convertShapes);
 
 
     let pathData = getPathDataFromEl(el, { width, height });
@@ -47,8 +43,9 @@ export function shapeElToPath(el, { width = 0,
     let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
 
     // transform pathData
-    if(matrix && Object.values(matrix).join('')!=='100100'){
+    if (matrix && Object.values(matrix).join('') !== '100100') {
         pathData = transformPathData(pathData, matrix)
+        //console.log('transformPathData', pathData);
         exclude.push('transform', 'transform-origin')
     }
 
@@ -72,14 +69,7 @@ export function shapeElToPath(el, { width = 0,
     return pathN
 
 }
-/*
-export function copyAttributes(newEl, oldEl){
 
-    let attributes = [...oldEl.attributes].map(att => att.name);
-
-
-}
-*/
 
 
 // retrieve pathdata from svg geometry elements
@@ -112,39 +102,7 @@ export function getPathDataFromEl(el, {
         case 'rect':
             attNames = ['x', 'y', 'width', 'height', 'rx', 'ry'];
             ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
-
-            if (!rx && !ry) {
-                pathData = [
-                    { type: "M", values: [x, y] },
-                    { type: "L", values: [x + width, y] },
-                    { type: "L", values: [x + width, y + height] },
-                    { type: "L", values: [x, y + height] },
-                    { type: "Z", values: [] }
-                ];
-            } else {
-
-                rx = rx ? rx : ry;
-                ry = ry ? ry : rx;
-
-                if (rx > width / 2) {
-                    rx = width / 2;
-                }
-                if (ry > height / 2) {
-                    ry = height / 2;
-                }
-                pathData = [
-                    { type: "M", values: [x + rx, y] },
-                    { type: "L", values: [x + width - rx, y] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
-                    { type: "L", values: [x + width, y + height - ry] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
-                    { type: "L", values: [x + rx, y + height] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
-                    { type: "L", values: [x, y + ry] },
-                    { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
-                    { type: "Z", values: [] }
-                ];
-            }
+            pathData = rectToPathData(x, y, width, height, rx, ry);
             break;
 
         case 'circle':
@@ -163,7 +121,6 @@ export function getPathDataFromEl(el, {
                 rx = rx ? rx : r;
                 ry = ry ? ry : r;
             }
-
 
             // simplified radii for circles
             let rxS = isCircle && r >= 1 ? 1 : rx;
@@ -210,13 +167,51 @@ export function getPathDataFromEl(el, {
 };
 
 
+export function rectToPathData(x = 0, y = 0, width = 0, height = 0, rx = 0, ry = 0) {
+    let pathData = [];
+
+    if (!rx && !ry) {
+        pathData = [
+            { type: "M", values: [x, y] },
+            { type: "L", values: [x + width, y] },
+            { type: "L", values: [x + width, y + height] },
+            { type: "L", values: [x, y + height] },
+            { type: "Z", values: [] }
+        ];
+    } else {
+
+        rx = rx ? rx : ry;
+        ry = ry ? ry : rx;
+
+        if (rx > width / 2) {
+            rx = width / 2;
+        }
+        if (ry > height / 2) {
+            ry = height / 2;
+        }
+        pathData = [
+            { type: "M", values: [x + rx, y] },
+            { type: "L", values: [x + width - rx, y] },
+            { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
+            { type: "L", values: [x + width, y + height - ry] },
+            { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
+            { type: "L", values: [x + rx, y + height] },
+            { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
+            { type: "L", values: [x, y + ry] },
+            { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
+            { type: "Z", values: [] }
+        ];
+    }
+
+    return pathData
+}
+
+
+
 
 
 export function pathElToShape(el, {
-    convert_rects = false,
-    convert_ellipses = false,
-    convert_poly = false,
-    convert_lines = false
+    convertShapes = [],
 } = {}) {
 
     //console.log('pathElToShape', convert_rects, convert_ellipses, convert_lines );
@@ -236,10 +231,13 @@ export function pathElToShape(el, {
     let attsNew = {}
     let decimals = 7;
 
+
     if (isPoly) {
 
+        //console.log('pathsToShapes', isPoly);
+
         // is line
-        if (pathData.length === 2 && convert_lines) {
+        if (pathData.length === 2 && convertShapes.includes('line')) {
             type = 'line'
             shape = document.createElementNS(svgNs, type)
             let [x1, y1, x2, y2] = [...pathData[0].values, ...pathData[1].values].map(val => roundTo(val, decimals))
@@ -255,7 +253,7 @@ export function pathElToShape(el, {
             let areaDiff = Math.abs(1 - areaRect / areaPoly);
 
             // is rect
-            if (convert_rects && areaDiff < 0.01) {
+            if (convertShapes.includes('rect') && areaDiff < 0.01) {
                 type = 'rect'
                 shape = document.createElementNS(svgNs, type)
                 let { x, y, width, height } = bb
@@ -263,7 +261,7 @@ export function pathElToShape(el, {
 
             }
             // polyline or polygon
-            else if(convert_poly) {
+            else if (convertShapes.includes('polygon') || convertShapes.includes('polyline')) {
                 type = closed ? 'polygon' : 'polyline';
                 shape = document.createElementNS(svgNs, type)
                 let points = vertices.map(pt => { return [pt.x, pt.y] }).flat().map(val => roundTo(val, decimals)).join(' ')
@@ -272,7 +270,7 @@ export function pathElToShape(el, {
         }
     }
     // circles or ellipses
-    else if (!hasLines && convert_ellipses) {
+    else if (!hasLines && (convertShapes.includes('circle') || convertShapes.includes('ellipse'))) {
 
         // try to convert cubics to arcs
         if (!hasArcs && hasBeziers) {
@@ -308,11 +306,11 @@ export function pathElToShape(el, {
             rxVals = Array.from(rxVals)
             ryVals = Array.from(ryVals)
 
-            if(cxVals.length===1 && cyVals.length===1 && rxVals.length===1 && ryVals.length===1){
+            if (cxVals.length === 1 && cyVals.length === 1 && rxVals.length === 1 && ryVals.length === 1) {
                 let [rx, ry, cx, cy] = [rxVals[0], ryVals[0], cxVals[0], cyVals[0]]
-                type = rx===ry ? 'circle' : 'ellipse';
+                type = rx === ry ? 'circle' : 'ellipse';
                 shape = document.createElementNS(svgNs, type)
-                attsNew = type==='circle' ? { r:rx, cx, cy } : {rx, ry, cx, cy}
+                attsNew = type === 'circle' ? { r: rx, cx, cy } : { rx, ry, cx, cy }
             }
         }
     }
@@ -334,11 +332,11 @@ export function pathElToShape(el, {
                 shape.setAttribute(att, attributes[att])
             }
         }
-
         // replace
         el = shape;
     }
 
+    //console.log(el);
     return el;
 
 }

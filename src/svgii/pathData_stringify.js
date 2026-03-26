@@ -4,22 +4,24 @@
 * d attribute string 
 */
 
-export function pathDataToD(pathData, optimize = 0) {
+export function pathDataToD(pathData, mode = 0) {
 
-    optimize = parseFloat(optimize)
-
-
+    mode = parseFloat(mode)
+    /*
+    0 = max minification
+    0.5 = safe
+    1 = verbose
+    2 = beautify
+    */
     let len = pathData.length;
-    let beautify = optimize > 1;
-    let minify = beautify || optimize ? false : true;
 
-
-    let d = '';
     let valsString = pathData[0].values.join(" ");
-    let separator_command = beautify ? `\n` : (minify ? '' : ' ');
-    let separator_type = !minify ? ' ' : '';
+    let separator_command = mode > 1 ? `\n` :
+        ((mode < 1) ? '' : ' ');
+    let separator_type = mode > 0.5 ? ' ' : '';
 
-    d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
+    // 1st command
+    let d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
 
 
     for (let i = 1; i < len; i++) {
@@ -29,7 +31,7 @@ export function pathDataToD(pathData, optimize = 0) {
         valsString = '';
 
         // Minify Arc commands (A/a) – actually sucks!
-        if (minify && (type === 'A' || type === 'a')) {
+        if (!mode && (type === 'A' || type === 'a')) {
             values = [
                 values[0], values[1], values[2],
                 `${values[3]}${values[4]}${values[5]}`,
@@ -38,16 +40,15 @@ export function pathDataToD(pathData, optimize = 0) {
         }
 
         // Omit type for repeated commands
-        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm')
+        type = ((mode < 1) && com0.type === com.type && com.type.toLowerCase() !== 'm')
             ? " "
-            : (minify && com0.type === "M" && com.type === "L"
+            : ((mode < 1) && com0.type === "M" && com.type === "L"
                 ? " "
                 : com.type);
 
 
         // concatenate subsequent floating point values
-        if (minify) {
-
+        if (!mode) {
 
             let prevWasFloat = false;
 
@@ -67,71 +68,32 @@ export function pathDataToD(pathData, optimize = 0) {
                 if (v > 0 && !(prevWasFloat && isSmallFloat)) {
                     valsString += ' ';
                 }
-                //console.log(isSmallFloat, prevWasFloat, valStr);
 
                 valsString += valStr
                 prevWasFloat = isSmallFloat;
             }
 
-            //console.log('minify', valsString);
-            d += `${type}${separator_type}${valsString}${separator_command}`;
-
         }
         // regular non-minified output
         else {
-            d += `${type}${separator_type}${values.join(' ')}${separator_command}`;
+            valsString = values.join(' ')
         }
+
+        if(i===len-1) separator_command=''
+        d += `${type}${separator_type}${valsString}${separator_command}`;
     }
 
-    if (minify) {
+
+    if (mode < 1) {
         d = d
             .replace(/[A-Za-z]0(?=\.)/g, m => m[0])
             .replace(/ 0\./g, " .") // Space before small decimals
             .replace(/ -/g, "-")     // Remove space before negatives
             .replace(/-0\./g, "-.")  // Remove leading zero from negative decimals
-            .replace(/Z/g, "z");     // Convert uppercase 'Z' to lowercase
+            .replace(/Z/g, "z")    // Convert uppercase 'Z' to lowercase
     }
+
+    //console.log(`"${d}"`);
 
     return d;
 }
-
-
-export function pathDataToD_0(pathData, decimals = -1, minify = false) {
-    // implicit l command
-    if (pathData[1].type === "l" && minify) {
-        pathData[0].type = "m";
-    }
-    let d = `${pathData[0].type}${pathData[0].values.join(" ")}`;
-
-    for (let i = 1; i < pathData.length; i++) {
-        let com0 = pathData[i - 1];
-        let com = pathData[i];
-
-        let type = (com0.type === com.type && minify) ?
-            " " : (
-                (com0.type === "m" && com.type === "l") ||
-                (com0.type === "M" && com.type === "l") ||
-                (com0.type === "M" && com.type === "L")
-            ) && minify ?
-                " " : com.type;
-
-        // round
-        if (com.values.length && decimals > -1) {
-            com.values = com.values.map(val => { return +val.toFixed(decimals) })
-        }
-        d += `${type}${com.values.join(" ")}`;
-    }
-
-
-    if (minify) {
-        d = d
-            .replaceAll(" 0.", " .")
-            .replaceAll(" -", "-")
-            .replaceAll("-0.", "-.")
-            .replace(/\s+([mlcsqtahvz])/gi, "$1")
-            .replaceAll("Z", "z");
-    }
-
-    return d;
-}
-

@@ -72,7 +72,7 @@ export function detectAccuracy(pathData) {
     let dim_min = dims.sort()
     //console.log('dim_min', dim_min);
 
-    let sliceIdx = Math.ceil(dim_min.length / 8);
+    let sliceIdx = Math.ceil(dim_min.length / 6);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
 
@@ -88,6 +88,7 @@ export function detectAccuracy(pathData) {
 
 
 export function roundTo(num = 0, decimals = 3) {
+    if(decimals<=-1) return num;
     if (!decimals) return Math.round(num);
     let factor = 10 ** decimals;
     return Math.round(num * factor) / factor;
@@ -98,20 +99,20 @@ export function roundTo(num = 0, decimals = 3) {
  * floating point accuracy 
  * based on numeric value
  */
-export function autoRound(val, integerThresh = 10){
+export function autoRound(val, integerThresh = 50){
   let decimals=8;  
-
-  //console.log('val', val);
   
-  if(val>integerThresh){
+  if(val>integerThresh*2){
     decimals=0
   }
-  else if(val>5){
+  else if(val>integerThresh){
     decimals=1
   }else{
-     decimals=Math.ceil(integerThresh/val).toString().length
+     decimals=Math.ceil(500/val).toString().length
+     //console.log('decimals small', val, decimals);
   }
       
+  //console.log(val, decimals);
   let factor = 10 ** decimals;
   return Math.round(val * factor) / factor;
 }

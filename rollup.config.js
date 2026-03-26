@@ -20,6 +20,15 @@ const stripDevComments = () => ({
     }
 });
 
+const stripConsoleLogs = () => ({
+    name: 'strip-console-logs',
+    renderChunk(code) {
+        return code
+            // Remove only console.log() statements
+            .replace(/^\s*console\.log\s*\([^;]*\);?\s*$/gm, '')
+    }
+});
+
 
 
 export default [
@@ -41,7 +50,7 @@ export default [
                 name: libName,
                 extend: true,
                 exports: 'named',
-                plugins: [terser()]
+                plugins: [stripConsoleLogs(), terser()]
             },
         ]
     },
@@ -59,7 +68,7 @@ export default [
                 file: `dist/${libName}.esm.min.js`,
                 format: 'es',
                 exports: 'named',
-                plugins: [terser()]
+                plugins: [stripConsoleLogs(), terser()]
             },
         ]
     },
@@ -78,7 +87,7 @@ export default [
                 file: `dist/${libName}.pathdata.esm.min.js`,
                 format: 'es',
                 exports: 'named',
-                plugins: [terser()]
+                plugins: [stripConsoleLogs(), terser()]
             },
         ]
     },

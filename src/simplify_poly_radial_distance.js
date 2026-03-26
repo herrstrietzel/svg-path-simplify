@@ -31,7 +31,8 @@ export function simplifyPolyRD(pts, {quality = 0.9, width = 0, height = 0}={}) {
     }
 
     // nothing to do - exit
-    if (pts.length < 4 || (!isAbsolute && quality) >= 1) return pts;
+    //|| (!isAbsolute && quality) >= 1
+    if (pts.length < 4 ) return pts;
 
     let p0 = pts[0];
     let pt;
@@ -43,8 +44,7 @@ export function simplifyPolyRD(pts, {quality = 0.9, width = 0, height = 0}={}) {
     if (!isAbsolute) {
 
         // quality to tolerance
-        tolerance = 1 - quality;
-
+        tolerance = quality;
 
         /**
          * approximate dimensions

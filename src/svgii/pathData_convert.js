@@ -80,6 +80,7 @@ export function convertPathData(pathData, {
     hasShorthands = true,
     hasQuadratics = true,
     hasArcs = true,
+    isPoly = false,
     optimizeArcs = true,
     testTypes = false
 
@@ -103,7 +104,9 @@ export function convertPathData(pathData, {
 
     // some params exclude each other
     toRelative = toAbsolute ? false : toRelative;
-    toShorthands = toLonghands ? false : toShorthands
+    //toAbsolute = !toRelative ? true : toAbsolute;
+    toShorthands = toLonghands ? false : toShorthands;
+    //toLonghands = !toShorthands ? true : toLonghands;
 
 
     if (toAbsolute) pathData = pathDataToAbsolute(pathData);
@@ -117,6 +120,7 @@ export function convertPathData(pathData, {
     //if(decimals>-1 && decimals<2) pathData = roundPathData(pathData, decimals);
     if (toShorthands) pathData = pathDataToShorthands(pathData);
 
+    //console.log('hasArcs', hasArcs,  arcToCubic, pathData);
     if (hasArcs && arcToCubic) pathData = pathDataArcsToCubics(pathData)
 
     //console.log(toShorthands, toRelative, decimals);

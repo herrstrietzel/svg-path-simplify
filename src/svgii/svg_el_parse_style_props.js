@@ -18,16 +18,19 @@ export function parseStylesProperties(el, {
     autoRoundValues = false,
     minifyRgbColors = false,
     removeInvalid = true,
+    allowDataAtts=true,
+    allowAriaAtts=true,
     removeDefaults = true,
     cleanUpStrokes = true,
     normalizeTransforms = true,
-    removeIds=false,
-    removeClassNames=false,
+    removeIds = false,
+    removeClassNames = false,
 
-    include=[],
+    include = [],
     exclude = [],
     width = 0,
     height = 0,
+    stylesheetProps = {}
 } = {}) {
 
     //autoRoundValues = false;
@@ -35,22 +38,52 @@ export function parseStylesProperties(el, {
 
     let nodeName = el.nodeName.toLowerCase();
     let attProps = getSvgPresentationAtts(el)
-    let cssProps = getSvgCssProps(el)
+    let inlineCssProps = getSvgCssProps(el)
+
+    // get CSS properties from SVG style element
+    let cssRuleSelectors = el.cssRules || [];
+    let cssProps = {};
+
+    cssRuleSelectors.forEach(selector => {
+        for (let prop in stylesheetProps[selector]) {
+            let val = stylesheetProps[selector][prop];
+            //console.log('!!val', val);
+
+            // check CSS vars
+            if (val.startsWith('var(')) {
+                let varName = val.replace(/[var\(|\)]/g, '').trim()
+                //console.log('!!isvar', val, varName, stylesheetProps[':root']);
+                if (stylesheetProps[':root']) {
+                    val = `var(${varName}, ${stylesheetProps[':root'][varName]})`
+                }
+            }
+            cssProps[prop] = val
+        }
+    })
+
+    //console.log('cssProps', cssProps);
+    //console.log('styleSheetProps', cssRuleSelectors, stylesheetProps);
 
     /**
-     * merge props
-     * CSS has higher specificity
+     * merge props by specificity
+     * 1. attributes
+     * 2. CSS rules
+     * 3. inline CSS
      */
     let props = {
         ...attProps,
         ...cssProps,
+        ...inlineCssProps,
     }
 
     //console.log('!props combined', props);
 
-
+    // obsolete/not style relevant anymore
     delete props['style'];
-    exclude.push('style')
+    delete props['class'];
+    delete props['id'];
+
+    exclude.push('style', 'class', 'id')
 
     let remove = ['style']
     let transformsStandalone = ['scale', 'translate', 'rotate'];
@@ -61,9 +94,10 @@ export function parseStylesProperties(el, {
      */
 
     if (removeInvalid || removeDefaults || removeNameSpaced) {
-        let propsFilteredObj = filterSvgElProps(nodeName, props, { removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false })
+        let propsFilteredObj = filterSvgElProps(nodeName, props, {allowDataAtts, allowAriaAtts, removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false })
         props = propsFilteredObj.propsFiltered
         remove.push(...propsFilteredObj.remove)
+        //console.log(propsFilteredObj.remove, allowDataAtts, allowAriaAtts);
     }
 
     //console.log('???props', nodeName,  props, remove);
@@ -84,11 +118,16 @@ export function parseStylesProperties(el, {
 
         // minify rgb values
         if (minifyRgbColors && colorProps.includes(prop)) {
+            //console.log(minifyRgbColors, nodeName, prop, valueStr);
+
             let color = parseColor(valueStr)
+
             if (color.mode === 'rgba' || color.mode === 'rgb') {
                 let hex = rgba2Hex(color)
                 valueStr = hex;
             }
+            //console.log(nodeName, color, valueStr);
+
         }
 
 
@@ -131,7 +170,6 @@ export function parseStylesProperties(el, {
         else {
             //console.log('other', prop);
             item.values = parseValue(valueStr);
-
         }
 
         if (item.values.length) {
@@ -211,6 +249,7 @@ export function parseStylesProperties(el, {
 
                             if (autoRoundValues && isNumeric) {
                                 valAbs = autoRound(valAbs)
+                                //valAbs = roundTo(valAbs, 3)
                             }
 
                             //console.log('norm', prop, valAbs, 'val', val, unit, isHorizontal, isVertical, width, height, 'isNumeric', isNumeric);
@@ -423,23 +462,23 @@ export function filterSvgElProps(elNodename = '', props = {}, {
     allowAriaAtts = false,
     cleanUpStrokes = true,
     //include = ['id', 'class'],
-    include=[],
-    removeIds=false, 
-    removeClassNames=false,
+    include = [],
+    removeIds = false,
+    removeClassNames = false,
     exclude = [],
 } = {}) {
     let propsFiltered = {}
     let remove = [];
 
-    if(!removeIds) include.push('id')
-    if(!removeClassNames) include.push('class')
+    if (!removeIds) include.push('id')
+    if (!removeClassNames) include.push('class')
     //console.log('???include', 'removeIds', removeIds, include);
 
     // allow defaults for nested
     //removeDefaults = false;
 
-    let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined) : false;
-    //console.log('noStrokeColor', elNodename, 'cleanUpStrokes', cleanUpStrokes);
+    let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined || props['stroke'][0] === 'none') : false;
+    //console.log('noStrokeColor', elNodename, 'cleanUpStrokes', cleanUpStrokes, 'noStrokeColor', noStrokeColor);
 
     for (let prop in props) {
         let values = props[prop]
@@ -455,9 +494,11 @@ export function filterSvgElProps(elNodename = '', props = {}, {
         if (prop === 'transform' && value === 'matrix(1 0 0 1 0 0)') isValid = false;
 
         // allow data attributes
-        let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;
-        let isMeta = allowMeta && prop === 'title'
-        let isAria = allowAriaAtts && prop.startsWith('aria-')
+        let isDataAtt = prop.startsWith('data-') ? true : false;
+        let isMeta = prop === 'title'
+        let isAria = prop.startsWith('aria-')
+
+        if( (allowDataAtts && isDataAtt) || (allowAriaAtts && isAria) || (allowMeta && isMeta ) ) continue
 
         // filter out defaults
         let isDefault = removeDefaults ?
@@ -469,17 +510,6 @@ export function filterSvgElProps(elNodename = '', props = {}, {
         if (isDefault || isDataAtt || isMeta || isAria || isFutileStroke) isValid = false
         if (include.includes(prop)) isValid = true;
 
-        //console.log('!valid', prop, isValid);
-
-
-        /*
-        if (isDataAtt || include.includes(prop)) isValid = true;
-        if (isDefault) isValid = false
-        if (exclude.length && exclude.includes(prop)) isValid = false;
-        if (noStrokeColor && strokeAtts.includes(prop)) isValid = false
-        */
-
-
         if (isValid) {
             propsFiltered[prop] = props[prop]
         }
@@ -489,23 +519,15 @@ export function filterSvgElProps(elNodename = '', props = {}, {
         }
     }
 
-    /*
-    // set explicit stroke width when disabled by stroke color
-    if (propsFiltered['stroke'] && propsFiltered['stroke'][0] === 'none') {
-        propsFiltered['stroke-width'] = [1]
-        remove.push('stroke', 'stroke-width')
-        console.log('remove', remove);
-    }
-    */
-
-
-    //remove=[]
     return { propsFiltered, remove }
 }
 
 
 export function parseValue(valStr = '') {
-    let valArr = valStr.split(/,| /);
+    //exclude url or var functions or font family
+    //let exclude = ['font-family', 'url', 'var'];
+    valStr = valStr.replace('!important', '');
+    let valArr = (valStr.includes("'") || valStr.includes('(') || valStr.includes(')')) ? [valStr] : valStr.split(/,| /).filter(Boolean);
 
     for (let i = 0; i < valArr.length; i++) {
 

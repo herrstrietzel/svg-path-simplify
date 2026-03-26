@@ -5,15 +5,19 @@
 * https://francoisromain.medium.com/smooth-a-svg-path-with-cubic-bezier-curves-e37b49d46c74
 */
 
-import { checkLineIntersection, getDistManhattan, interpolate, mirrorCpts } from "./geometry";
+import { checkLineIntersection, getAngle, getDistance, getDistManhattan, getPathDataVertices, getPointOnEllipse, getSquareDistance, interpolate, mirrorCpts, reducePoints, rotatePoint } from "./geometry";
 import { getPolyBBox } from "./geometry_bbox";
 import { renderPath, renderPoint, renderPoly } from "./visualize";
 import { simplifyPolyRDP } from "../simplify_poly_RDP";
 import { pathDataFromPoly } from "./pathData_fromPoly";
 import { getPolyChunks } from "./poly_analyze_get_chunks";
-import { analyzePoly, isClosedPolygon } from "./poly_analyze";
+import { analyzePoly, detectRegularPolygon, getPolyCentroid, getPolyCentroidWeighted, isClosedPolygon } from "./poly_analyze";
 import { fitCurveSchneider } from "../poly-fit-curve-schneider";
 import { simplifyPolyRD } from "../simplify_poly_radial_distance";
+import { simplifyRC } from "../simplify_poly_RC";
+import { getPolygonArea } from "./geometry_area";
+import { pathDataToD } from "./pathData_stringify";
+import { fixIntersectingCpts } from "../pathData_simplify_harmonize_cpts";
 
 
 
@@ -34,33 +38,88 @@ export function simplifyPolygonToPathData(pts, {
 } = {}) {
 
 
+    let polyPath = [];
+    let l = pts.length;
+    let M = pts[0]
+    let Z = pts[l - 1]
 
-    /*
-    // denoise via RDP
-    if (denoise && denoise !== 1) {
-        pts = simplifyPolyRDP(pts, {
-            width,
-            height,
-            quality: denoise,
-            manhattan,
-            absolute
-        })
+
+    // triangle
+    if (pts.length === 3) {
+
+        let pM1 = interpolate(M, pts[1], 0.5)
+        let pM2 = interpolate(pts[1], Z, 0.5)
+        let pM3 = interpolate(Z, pts[0], 0.5)
+
+        /*
+        console.log('triangle');
+        renderPoint(markers, M)
+        renderPoint(markers, pM1)
+        renderPoint(markers, pM2)
+        renderPoint(markers, pM3)
+        */
+
+        if (closed) {
+            let t = 0.6666
+            let cp1_1 = interpolate(pM1, pts[1], t)
+            let cp2_1 = interpolate(pM2, pts[1], t)
+            let cp1_2 = interpolate(pM2, Z, t)
+            let cp2_2 = interpolate(pM3, Z, t)
+            let cp1_3 = interpolate(pM3, M, t)
+            let cp2_3 = interpolate(pM1, M, t)
+
+            polyPath = [
+                { type: 'M', values: [pM1.x, pM1.y] },
+                { type: 'C', values: [cp1_1.x, cp1_1.y, cp2_1.x, cp2_1.y, pM2.x, pM2.y] },
+                { type: 'C', values: [cp1_2.x, cp1_2.y, cp2_2.x, cp2_2.y, pM3.x, pM3.y] },
+                { type: 'C', values: [cp1_3.x, cp1_3.y, cp2_3.x, cp2_3.y, pM1.x, pM1.y] },
+                { type: 'Z', values: [] },
+            ]
+
+        } else {
+            polyPath = [
+                //{ type: 'M', values: [pM1.x, pM1.y] },
+                { type: 'M', values: [M.x, M.y] },
+                { type: 'C', values: [pts[1].x, pts[1].y, pts[1].x, pts[1].y, Z.x, Z.y] },
+            ]
+        }
+        return polyPath;
     }
-    */
 
 
-    /*
-    // simplify polygon
-    if (simplifyRD != 1) {
-        pts = simplifyPolyRD(pts, { quality: simplifyRD+'px' })
+
+    // remove colinear
+    //pts = simplifyRC(pts)
+
+    /**
+     * detect regular polygon
+     * curved path is a circle
+     */
+    let centroid = getPolyCentroid(simplifyRC(pts))
+    let isRegularPolygon = detectRegularPolygon(pts, centroid)
+
+
+    if (isRegularPolygon) {
+        //renderPoint(markers, centroid)
+        //let r = getDistance(centroid, pts[0])
+        let ptAd = rotatePoint(pts[0], centroid.x, centroid.y, Math.PI)
+        let sweep = getPolygonArea(pts) > 0 ? 1 : 0;
+
+        polyPath = [
+            { type: 'M', values: [pts[0].x, pts[0].y] },
+            { type: 'A', values: [1, 1, 0, 0, sweep, ptAd.x, ptAd.y] },
+            { type: 'A', values: [1, 1, 0, 0, sweep, pts[0].x, pts[0].y] }
+        ]
+
+        if (closed) {
+            polyPath.push({ type: 'Z', values: [] })
+        }
+        return polyPath;
     }
 
 
-    if (simplifyRDP != 1) {
-        pts = simplifyPolyRDP(pts, { quality: simplifyRDP+'px' })
-    }
-    */
-
+    // remove colinear
+    //pts = simplifyRC(pts)
 
     // get topology of poly
     let polyAnalyzed = !keepExtremes && !keepCorners ? pts : analyzePoly(pts, {
@@ -70,7 +129,6 @@ export function simplifyPolygonToPathData(pts, {
     })
 
     //console.log(polyAnalyzed, polyAnalyzed2);
-    //return
 
     // split into segment chunks
     let chunks = !keepExtremes && !keepCorners ? [polyAnalyzed] : getPolyChunks(polyAnalyzed, { keepCorners, keepExtremes, keepInflections });
@@ -81,11 +139,14 @@ export function simplifyPolygonToPathData(pts, {
 
     //threshold = 2
 
-    let polyPath = simplifyPolyChunks(chunks, {
+    polyPath = simplifyPolyChunks(chunks, {
         closed,
         tolerance: threshold,
-        keepCorners
+        keepCorners,
+        keepExtremes: true,
     });
+
+    polyPath = fixIntersectingCpts(polyPath);
 
     return polyPath;
 }

@@ -3,7 +3,8 @@ import {abs, acos, asin, atan, atan2, ceil, cos, exp, floor,
     log, max, min, pow, random, round, sin, sqrt, tan, PI} from '/.constants.js';
     */
 
-import { rad2Deg, root2 } from "../constants";
+import { deg2rad, rad2Deg, root2 } from "../constants";
+//import { roundTo } from "./rounding";
 //import { getPolyBBox } from "./geometry_bbox";
 import { renderPoint } from "./visualize";
 
@@ -21,6 +22,11 @@ export function getAngle(p1, p2, normalize = false) {
     if (normalize && angle < 0) angle += Math.PI * 2
     return angle
 }
+
+
+
+
+
 
 
 export function getDeltaAngle2(centerPoint, startPoint, endPoint, largeArc = false) {
@@ -370,9 +376,40 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
 
 
 
+
 /**
  * get vertices from path command final on-path points
  */
+
+export function getPathDataVertices(pathData=[], includeCpts = false, decimals = -1) {
+    let polyPoints = [];
+    //console.log(pathData);
+
+    pathData.forEach((com) => {
+        let { type, values } = com;
+
+        // get final on path point from last 2 values
+        if (values.length) {
+
+            // round
+            if (decimals > -1) values = values.map(val => +val.toFixed(decimals))
+
+            if (includeCpts) {
+
+                for (let i = 1; i < values.length; i += 2) {
+                    polyPoints.push({ x: values[i - 1], y: values[i] });
+                }
+
+            } else {
+                polyPoints.push({ x: values[values.length - 2], y: values[values.length - 1] });
+            }
+
+        }
+    });
+    return polyPoints;
+}
+
+/*
 export function getPathDataVertices(pathData) {
     let polyPoints = [];
     let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
@@ -389,6 +426,7 @@ export function getPathDataVertices(pathData) {
     });
     return polyPoints;
 };
+*/
 
 
 
@@ -396,7 +434,148 @@ export function getPathDataVertices(pathData) {
  *  based on @cuixiping;
  *  https://stackoverflow.com/questions/9017100/calculate-center-of-svg-arc/12329083#12329083
  */
-export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2) {
+
+
+export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2, normalize = true
+) {
+
+    // helper for angle calculation
+    const getAngle = (cx, cy, x, y, normalize = true) => {
+        let angle = Math.atan2(y - cy, x - cx);
+        if (normalize && angle < 0) angle += Math.PI * 2
+        return angle
+    };
+
+    // make sure rx, ry are positive
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+
+    // normalize xAxis rotation
+    xAxisRotation = rx === ry ? 0 : (xAxisRotation < 0 && normalize ? xAxisRotation + 360 : xAxisRotation);
+
+
+    // create data object
+    let arcData = {
+        cx: 0,
+        cy: 0,
+        // rx/ry values may be deceptive in arc commands
+        rx: rx,
+        ry: ry,
+        startAngle: 0,
+        endAngle: 0,
+        deltaAngle: 0,
+        clockwise: sweep,
+        // copy explicit arc properties
+        xAxisRotation,
+        largeArc,
+        sweep
+    };
+
+
+    if (rx == 0 || ry == 0) {
+        // invalid arguments
+        throw Error("rx and ry can not be 0");
+    }
+
+
+    /**
+     * if rx===ry x-axis rotation is ignored
+     * otherwise convert degrees to radians
+     */
+    let phi = rx === ry ? 0 : xAxisRotation * deg2rad;
+    let cx, cy
+
+    let s_phi = !phi ? 0 : Math.sin(phi);
+    let c_phi = !phi ? 1 : Math.cos(phi);
+
+    let hd_x = (x1 - x2) / 2;
+    let hd_y = (y1 - y2) / 2;
+    let hs_x = (x1 + x2) / 2;
+    let hs_y = (y1 + y2) / 2;
+
+    // F6.5.1
+    let x1_ = !phi ? hd_x : c_phi * hd_x + s_phi * hd_y;
+    let y1_ = !phi ? hd_y : c_phi * hd_y - s_phi * hd_x;
+
+    // F.6.6 Correction of out-of-range radii
+    //   Step 3: Ensure radii are large enough
+    let lambda = (x1_ * x1_) / (rx * rx) + (y1_ * y1_) / (ry * ry);
+    if (lambda > 1) {
+        let lambdaRoot = Math.sqrt(lambda);
+        rx = rx * lambdaRoot;
+        ry = ry * lambdaRoot;
+
+        // save real rx/ry
+        arcData.rx = rx;
+        arcData.ry = ry;
+    }
+
+    let rxry = rx * ry;
+    let rxy1_ = rx * y1_;
+    let ryx1_ = ry * x1_;
+    let sum_of_sq = rxy1_ ** 2 + ryx1_ ** 2; // sum of square
+    if (!sum_of_sq) {
+        //console.log('error:', rx, ry, rxy1_, ryx1_);
+        throw Error("start point can not be same as end point");
+    }
+    let coe = Math.sqrt(Math.abs((rxry * rxry - sum_of_sq) / sum_of_sq));
+    if (largeArc === sweep) {
+        coe = -coe;
+    }
+
+    // F6.5.2
+    let cx_ = (coe * rxy1_) / ry;
+    let cy_ = (-coe * ryx1_) / rx;
+
+    /** F6.5.3
+     * center point of ellipse
+     */
+    cx = !phi ? hs_x + cx_ : c_phi * cx_ - s_phi * cy_ + hs_x;
+    cy = !phi ? hs_y + cy_ : s_phi * cx_ + c_phi * cy_ + hs_y;
+    arcData.cy = cy;
+    arcData.cx = cx;
+
+    /** F6.5.5
+     * calculate angles between center point and
+     * commands starting and final on path point
+     */
+    let startAngle = getAngle(cx, cy, x1, y1, normalize);
+    let endAngle = getAngle(cx, cy, x2, y2, normalize);
+
+    // adjust end angle
+
+    // Adjust angles based on sweep direction
+    if (sweep) {
+        // Clockwise
+        if (endAngle < startAngle) {
+            endAngle += Math.PI * 2;
+        }
+    } else {
+        // Counterclockwise
+        if (endAngle > startAngle) {
+            endAngle -= Math.PI * 2;
+        }
+    }
+
+    let deltaAngle = endAngle - startAngle;
+
+    // The rest of your code remains the same
+    arcData.startAngle = startAngle;
+    arcData.startAngle_deg = startAngle * rad2Deg;
+    arcData.endAngle = endAngle;
+    arcData.endAngle_deg = endAngle * rad2Deg;
+    arcData.deltaAngle = deltaAngle;
+    arcData.deltaAngle_deg = deltaAngle * rad2Deg;
+
+    //console.log('arc', arcData);
+    return arcData;
+}
+
+
+
+
+
+export function svgArcToCenterParam_back(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2) {
 
     // helper for angle calculation
     const getAngle = (cx, cy, x, y) => {
@@ -1292,7 +1471,7 @@ export function getDistance(p1, p2, isArray = false) {
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
     //console.log('dx', dx, dy, p1, p2);
-    return sqrt(dx * dx + dy * dy);
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 // just an alias

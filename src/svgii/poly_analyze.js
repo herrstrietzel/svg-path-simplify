@@ -9,6 +9,67 @@ import { pathDataToD } from "./pathData_stringify";
 import { renderPath, renderPoint, renderPoly } from "./visualize";
 
 
+export function getPolyCentroid(pts) {
+
+    let l = pts.length;
+    let x = 0, y = 0;
+    for (let i = 0; l && i < l; i++) {
+        let pt = pts[i];
+        x += pt.x
+        y += pt.y
+    }
+
+    let centroid = {x: x/l, y:y/l}
+    return centroid
+    //console.log(centroid);
+
+}
+
+export function getPolyCentroidWeighted(points) {
+    if (!points || points.length === 0) return null;
+    
+    let totalWeight = 0;
+    let sumX = 0;
+    let sumY = 0;
+    
+    for (const point of points) {
+        let weight = point.weight || 1; // default weight = 1
+        sumX += point.x * weight;
+        sumY += point.y * weight;
+        totalWeight += weight;
+    }
+    
+    if (totalWeight === 0) return null;
+    
+    return {
+        x: sumX / totalWeight,
+        y: sumY / totalWeight
+    };
+}
+
+
+
+export function detectRegularPolygon(pts, centroid={x:0, y:0}) {
+    let rSq = getSquareDistance(pts[0], centroid);
+    let isRegular = true;
+
+    for (let i = 1, l = pts.length; i < l; i++) {
+        let pt1 = pts[i];
+        let dist = getSquareDistance(pt1, centroid);
+
+        let diff = Math.abs(rSq-dist);
+        let diffRel = diff/rSq
+        //console.log('diffRel', diffRel);
+
+        if (diffRel > 0.05) {
+            return false;
+        }
+
+
+    }
+    return isRegular;
+}
+
 
 export function analyzePoly(pts, {
     x = 0,

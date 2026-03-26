@@ -1,4 +1,14 @@
 # Changelog
+## [0.4.3] - 2026-03-26
+### Added  
+- presets: apply options from existing presets (allows custom overriding) 
+- addititional input formats: `<symbol>` (handy for sprite editing), stringified (polygon) point arrays
+- compound path splitting: creates separate `<path>` elements from overlapping sub paths
+- custom element and attribute removal
+- "safe" mode for path data stringification – for better legacy application support 
+- webapp responds to keyboard shortcuts for saving, copying and pasting
+- "keepSmaller" option: takes the original input if simplification failed – useful for batch processing
+
 
 ## [0.4.2] - 2026-03-18
 ### Fixed

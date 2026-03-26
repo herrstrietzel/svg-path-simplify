@@ -103,7 +103,9 @@ const sanitizeArc = (val='', valueIndex=0) => {
 
 
 export function parsePathDataString(d, debug = true, limit=0) {
+    if(!d) return []
     d = d.trim();
+
 
     if(limit) console.log('!!!limit', limit);
 

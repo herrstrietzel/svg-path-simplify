@@ -21,7 +21,7 @@ import { renderPoint } from "./visualize";
  * creates precise polygon approximation from pathdata
  * converts arc to cubis
  */
-export function pathDataToPolygon(pathData, {
+export function pathDataToPolygonOpt(pathData, {
     precisionPoly = 1,
     autoAccuracy=false,
     polyFormat='points',
@@ -105,12 +105,12 @@ simplifyRDP=1,
 
     // simplify polygon
     if(simplifyRD>0){
-        pts2 = simplifyPolyRD(pts2, {quality:simplifyRD+'px'})
+        pts2 = simplifyPolyRD(pts2, {quality:simplifyRD})
     }
 
 
     if(simplifyRDP>0){
-        pts2 = simplifyPolyRDP(pts2, {quality:simplifyRDP+'px'})
+        pts2 = simplifyPolyRDP(pts2, {quality:simplifyRDP})
     }
 
 
@@ -120,7 +120,6 @@ simplifyRDP=1,
     
     if(autoAccuracy){
         decimals = detectAccuracyPoly(pts)
-        //console.log('decimals', decimals);
     }
 
     let poly = decimals>-1 ? pts2.map(pt => { return { x: roundTo(pt.x, decimals), y: roundTo(pt.y, decimals) } }) : pts2.map(pt => { return { x: pt.x, y: pt.y } })

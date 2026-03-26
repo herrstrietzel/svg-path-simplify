@@ -11,21 +11,18 @@ import { pathElToShape, shapeElToPath } from "./pathData_parse_els";
 //import { scaleProps } from "./svg-styles-to-attributes";
 import { geometryEls, geometryProps, renderedEls, shapeEls, strokeAtts } from "./svg-styles-to-attributes-const";
 import { addTransFormProps, filterSvgElProps, parseStylesProperties } from "./svg_el_parse_style_props";
-import { autoRound } from "./rounding";
+import { autoRound, roundTo } from "./rounding";
 import { getMatrixFromTransform } from "./svg-styles-getTransforms";
 import { qrDecomposeMatrix } from "./transform_qr_decompose";
 import { svgNs } from "../constants";
 import { toCamelCase, toShortStr } from "../string_helpers";
-
-
-export function removeEmptySVGEls(svg) {
-  let els = svg.querySelectorAll('g, defs');
-  els.forEach(el => {
-    if (!el.children.length) el.remove()
-  })
-}
-
-//const DOMParserPoly = globalThis.DOMParser;
+import { getElementLength } from "./svg_getElementLength";
+import { removeHiddenSvgEls, removeSvgAtts, removeSvgChildAtts, removeSvgEls } from "./svg_cleanup_remove_els_and_atts";
+import { cleanupSVGAttributes, removeElAtts } from "./svg_cleanup_general_svg_atts";
+import { convertPathLengthAtt } from "./svg_cleanup_convertPathLength";
+import { removeGroupProps, ungroupElements } from "./svg_cleanup_ungroup";
+import { parseSvgCss } from "../css_parse";
+import { setNormalizedTransformsToEl } from "./svg_cleanup_normalize_transforms";
 
 
 export function cleanUpSVG(svgMarkup, {
@@ -56,6 +53,8 @@ export function cleanUpSVG(svgMarkup, {
 
   cleanupSVGAtts = true,
   removeNameSpaced = true,
+  removeNameSpacedAtts = true,
+  convertPathLength = false,
 
   // meta
   allowMeta = false,
@@ -64,10 +63,14 @@ export function cleanUpSVG(svgMarkup, {
 
   //shapesToPaths = false,
   shapeConvert = false,
-  convert_rects = false,
-  convert_ellipses = false,
-  convert_poly = false,
-  convert_lines = false,
+  convertShapes = [],
+
+  // remove elements
+  removeElements = [],
+
+  // remove attributes
+  removeSVGAttributes = [],
+  removeElAttributes = [],
 
   convertTransforms = false,
   removeDefaults = true,
@@ -76,8 +79,13 @@ export function cleanUpSVG(svgMarkup, {
   excludedEls = [],
 } = {}) {
 
-  //attributesToGroup = cleanupSVGAtts ? true : false;
-  if (attributesToGroup) stylesToAttributes = true;
+
+
+  // resolve dependencies
+  if (unGroup || convertTransforms || minifyRgbColors || attributesToGroup) 
+  stylesToAttributes = true;
+
+  if(stylesToAttributes) cleanUpStrokes = true;
 
   // replace namespaced refs 
   if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
@@ -87,17 +95,39 @@ export function cleanUpSVG(svgMarkup, {
     .parseFromString(svgMarkup, "text/html")
     .querySelector("svg");
 
+
   let viewBox = getViewBox(svg)
   let { x, y, width, height } = viewBox;
+  let remove = []
 
 
-  // get svg styles
+
+  // add viewBox
+  if (addViewBox) addSvgViewBox(svg, { x, y, width, height })
+  if (addDimensions) {
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+  }
+
+  // remove unused defs or optimize order
+  if (cleanupDefs) cleanupSvgDefs(svg, { x, y, width, height, cleanupClip });
+
+
+  // remove off canvas
+  if (removeOffCanvas) removeOffCanvasEls(svg, { x, y, width, height });
+
+
+  /**
+   * collect svg styles
+   * and properties
+   */
   let propOptions = {
-    width: width,
-    height: height,
+    width,
+    height,
     normalizeTransforms,
     removeDefaults: false,
     cleanUpStrokes: false,
+    //cleanUpStrokes,
     allowMeta,
     allowDataAtts,
     allowAriaAtts,
@@ -105,16 +135,52 @@ export function cleanUpSVG(svgMarkup, {
     removeIds,
     removeClassNames,
     minifyRgbColors,
+    stylesheetProps: {},
+    exclude:[]
   }
 
-  // root svg properties
+  // root svg inline style properties
   let stylePropsSVG = parseStylesProperties(svg, propOptions)
   //console.log('stylePropsSVG', stylePropsSVG);
+
+  let styleEl = svg.querySelector('style')
+  let cssStylePropsSVG = {}
+
+  if (styleEl) {
+    cssStylePropsSVG = parseSvgCss(styleEl, { parent: svg })
+
+    //save stylesheet dependencies in node
+    for (let selector in cssStylePropsSVG) {
+      let els = svg.querySelectorAll(`${selector}`);
+      els.forEach(el => {
+        if (!el['cssRules']) el['cssRules'] = [];
+        el['cssRules'].push(selector)
+
+        // remove class names only used for styling
+        if (stylesToAttributes) {
+          let className = selector.substring(1)
+          el.classList.remove(className)
+        }
+      })
+    }
+
+    //console.log('cssStylePropsSVG', cssStylePropsSVG);
+
+    // remove style element from element
+    if (stylesToAttributes) {
+      styleEl.remove()
+    }
+  }
+  // remove style element from root SVG
+  if (stylesToAttributes) svg.removeAttribute('style')
+
+
+  // add stylesheet props
+  propOptions.stylesheetProps = cssStylePropsSVG;
 
 
   // add svg font size for scaling relative
   propOptions.fontSize = stylePropsSVG['font-size'] ? stylePropsSVG['font-size'][0] : 16;
-
 
 
   /**
@@ -126,7 +192,10 @@ export function cleanUpSVG(svgMarkup, {
   let groupProps = [];
 
   groups.forEach(g => {
+    //propOptions.exclude.push('class', 'id');
     let stylePropsG = parseStylesProperties(g, propOptions)
+    //console.log('stylePropsG', stylePropsG);
+
     groupProps.push(stylePropsG);
     let children = g.querySelectorAll(`${renderedEls.join(', ')}`)
 
@@ -141,85 +210,36 @@ export function cleanUpSVG(svgMarkup, {
 
 
 
-  if (cleanupSVGAtts) {
-    //console.log('cleanupSVGAtts');
-    let allowed = new Set(['viewBox', 'xmlns', 'width', 'height']);
-
-    if (!removeIds) allowed.add('id')
-    if (!removeClassNames) allowed.add('class')
-    if (removeDimensions) {
-      allowed.delete('width')
-      allowed.delete('height')
-    }
-
-    allowed = Array.from(allowed)
-    if (!stylesToAttributes) {
-      allowed.push('fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-family', 'font-style', 'style');
-    }
-
-    //console.log(allowed);
-    //if(allow)
-    removeExcludedAttribues(svg, { allowed, allowMeta, allowAriaAtts, allowDataAtts })
-  }
-
-  // remove meta
-  if (!allowMeta) {
-    let metaEls = svg.querySelectorAll('meta, metadata, desc, title')
-    metaEls.forEach(meta => {
-      meta.remove()
-    })
-  }
-
-  // add viewBox
-  if (addViewBox) addSvgViewBox(svg, { x, y, width, height })
-  if (addDimensions) {
-    svg.setAttribute('width', width);
-    svg.setAttribute('height', height);
-  }
-
-
-  // remove unused defs or optimize order
-  if (cleanupDefs) cleanupSvgDefs(svg, { x, y, width, height, cleanupClip });
-
-
-  // remove off canvas
-  if (removeOffCanvas) removeOffCanvasEls(svg, { x, y, width, height });
-
-
-  // always remove scripts
-  //let removeEls = ['metadata', 'script', ...excludedEls]
-  let removeEls = ['script', ...excludedEls]
-
-  removeSVGEls(svg, { remove: removeEls, removeNameSpaced });
-
-  // an array of all elements' properties
+  // collect all elements' properties
   let svgElProps = []
   let els = svg.querySelectorAll(`${renderedEls.join(', ')}`)
 
 
+  /**
+   * loop all geometry elements
+   */
   for (let i = 0; i < els.length; i++) {
     let el = els[i];
 
     let name = el.nodeName.toLowerCase();
     //console.log(name);
 
-    // 1. remove hidden elements
-    let style = el.getAttribute('style') || ''
-    let isHiddenByStyle = style ? style.trim().includes('display:none') : false;
-    let isHidden = (el.getAttribute('display') && el.getAttribute('display') === 'none') || isHiddenByStyle;
-    if (name.includes(':') || removeEls.includes(name) || (removeHidden && isHidden)) {
-      el.remove();
-      continue;
-    }
-
-
     /**
-     * get all style properties
+     * get all element style properties
      * convert relative or physical units
      * to user units
      */
     let styleProps = parseStylesProperties(el, propOptions)
     let stylePropsFiltered = {}
+    //console.log('styleProps', name, styleProps);
+
+
+    // convert pathLength before transforming
+    if (convertPathLength) {
+      styleProps = convertPathLengthAtt(el, { styleProps });
+      remove = [...new Set([...remove, ...styleProps.remove])];
+    }
+
 
     // get parent styles
     let { parentStyleProps = [] } = el;
@@ -227,7 +247,10 @@ export function cleanUpSVG(svgMarkup, {
     let transFormInherited = []
 
 
-    /** inherit transforms 
+
+    /** 
+     * consolidate all properties:
+     * merge with inherited transforms 
      * and styles from group 
      */
     parentStyleProps.forEach(props => {
@@ -243,13 +266,16 @@ export function cleanUpSVG(svgMarkup, {
     })
 
 
-    //merge transforms
+    // merge all transforms
     transFormInherited = [...transFormInherited, ...styleProps.transformArr]
     styleProps.transformArr = transFormInherited
 
 
-    // merge with svg props
+    // don't inherit class from SVG
+    if (stylePropsSVG['class']) delete stylePropsSVG['class']
+    if (stylePropsSVG['id']) delete stylePropsSVG['id']
 
+    // merge with svg props
     styleProps = {
       ...stylePropsSVG,
       ...inheritedProps,
@@ -257,148 +283,98 @@ export function cleanUpSVG(svgMarkup, {
     }
 
 
-    // dont inherit class
-    if (stylePropsSVG['class'] === styleProps['class']) {
-      delete styleProps['class']
-    }
-
     // add combined transforms
     addTransFormProps(styleProps, transFormInherited);
     //console.log('transFormInherited', transFormInherited);
     //console.log('styleProps', styleProps);
 
+    remove = [...new Set([...remove, ...styleProps.remove])];
 
-    let { remove, matrix, transComponents } = styleProps;
 
-    // styles to atts
-    if (unGroup || convertTransforms || minifyRgbColors) stylesToAttributes = true;
+    /**
+     * remove els and attributes
+     */
+
+    // remove meta
+    if (!allowMeta) removeElements.push('meta', 'metadata', 'desc', 'title')
+
+    if (removeClassNames) {
+      removeSVGAttributes.push('class');
+      removeElAttributes.push('class');
+    }
+
+    if (removeIds) {
+      removeSVGAttributes.push('id')
+      removeElAttributes.push('id')
+    }
+
+
+    // remove hidden elements
+    removeHiddenSvgEls(svg)
+
+    // remove SVG elements
+    removeSvgEls(svg, { removeElements, removeNameSpaced });
+
+    // remove SVG attributes
+    removeSvgAtts(svg, removeSVGAttributes);
+
+    // remove SVG child element attributes
+    removeSvgChildAtts(svg, removeElAttributes);
+
+
+    // general cleanup
+    if (cleanupSVGAtts) cleanupSVGAttributes(svg, { removeIds, removeClassNames, removeDimensions, stylesToAttributes, allowMeta, allowAriaAtts, allowDataAtts });
+
+
 
     if (stylesToAttributes) {
 
       /**
        * normalize transforms
        */
-      if (normalizeTransforms && matrix) {
-        let { rotate, scaleX, scaleY, skewX, translateX, translateY } = transComponents;
-        //console.log(rotate, scaleX, scaleY, skewX, skewY, translateX, translateY);
+      if (normalizeTransforms) {
+        styleProps = setNormalizedTransformsToEl(el, { styleProps });
+        //remove = styleProps.remove;
+        remove = [...new Set([...remove, ...styleProps.remove])];
 
-        // scale attributes instead of transform
-        let hasRot = rotate !== 0 || skewX !== 0;
-        let unProportional = scaleX !== scaleY;
-        let scalableByAtt = ['circle', 'ellipse', 'rect']
-        let needsTrans = convertTransforms || (name === 'g') || (hasRot) || unProportional
-
-        if (!needsTrans && scalableByAtt.includes(name)) {
-
-          if (name === 'circle' || name === 'ellipse') {
-            styleProps.cx[0] = [styleProps.cx[0] * scaleX + translateX]
-            styleProps.cy[0] = [styleProps.cy[0] * scaleX + translateY]
-
-            if (styleProps.r) styleProps.r[0] = [styleProps.r[0] * scaleX]
-            if (styleProps.rx) styleProps.rx[0] = [styleProps.rx[0] * scaleX]
-            if (styleProps.ry) styleProps.ry[0] = [styleProps.ry[0] * scaleX]
-
-          }
-          else if (name === 'rect') {
-            let x = styleProps.x ? styleProps.x[0] + translateX : translateX;
-            let y = styleProps.y ? styleProps.y[0] + translateY : translateY;
-
-            let rx = styleProps.rx ? styleProps.rx[0] * scaleX : 0;
-            let ry = styleProps.ry ? styleProps.ry[0] * scaleY : 0;
-
-            styleProps.x = [x]
-            styleProps.y = [y]
-
-            styleProps.rx = [rx]
-            styleProps.ry = [ry]
-
-            styleProps.width = [styleProps.width[0] * scaleX]
-            styleProps.height = [styleProps.height[0] * scaleX]
-          }
-
-          // remove now obsolete transform properties
-          delete styleProps.matrix
-          delete styleProps.transformArr
-          delete styleProps.transComponents
-
-          // mark transform attribute for removal
-          remove.push('transform')
-
-          // scale props like stroke width or dash-array
-          styleProps = scaleProps(styleProps, { props: ['stroke-width', 'stroke-dasharray'], scale: scaleX })
-
-        } else {
-          el.setAttribute('transform', transComponents.matrixAtt)
-
-        }
       }
-
 
       /**
        * apply consolidated 
        * element attributes
+       * remove non-supported element props
        */
       stylePropsFiltered = filterSvgElProps(name, styleProps,
         { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds });
 
-      remove = [...remove, ...stylePropsFiltered.remove];
+      //remove = [...remove, ...stylePropsFiltered.remove];
+      remove = [...new Set([...remove, ...stylePropsFiltered.remove])];
+      //console.log('el remove', name, remove);
+      //console.log('!!stylePropsFiltered', name, stylePropsFiltered);
 
       for (let prop in stylePropsFiltered.propsFiltered) {
         let values = styleProps[prop]
         let val = values.length ? values.join(' ') : values[0]
         el.setAttribute(prop, val)
-
       }
 
 
-      // remove obsolete attributes
+      /**
+       * remove obsolete 
+       * attributes
+       */
+      //removeSvgChildAtts(svg, remove)
+
       for (let i = 0; i < remove.length; i++) {
         let att = remove[i];
-        if (!stylesToAttributes && att === 'style') continue
-        //console.log('remove att', att, name);
+        //if (att === 'style') continue
+        //console.log('--remove att', remove, att, name);
         el.removeAttribute(att)
       }
 
 
-
-
-      /**
-       * remove group styles
-       * copied to children
-       * or remove nesting
-       */
-
-      if (unGroup) {
-        groups.forEach((g, i) => {
-          let children = [...g.children];
-
-          children.forEach(child => {
-            g.parentNode.insertBefore(child, g)
-          })
-          g.remove()
-        })
-      } else {
-        groups.forEach((g, i) => {
-          //let atts = [...Object.keys(groupProps[i]), 'style', 'transform', 'id'];
-          let atts = Object.keys(getElementAtts(g));
-
-          atts.forEach(att => {
-            //console.log('remove', remove);
-            let isData = !allowDataAtts && att.startsWith('data-')
-            let isAria = !allowAriaAtts && att.startsWith('aria-')
-            //console.log(isData, att);
-            remove.push('transform', 'style')
-
-            if (remove.includes(att) || isData || isAria) {
-              g.removeAttribute(att)
-            }
-          })
-        })
-
-      }
-
-
     } // endof style processing
+
 
 
     /**
@@ -407,14 +383,10 @@ export function cleanUpSVG(svgMarkup, {
      * paths to shapes
      */
 
-
     // force shape conversion when transform conversion is enabled
     if (convertTransforms) {
       shapeConvert = 'toPaths';
-      convert_rects = true;
-      convert_ellipses = true;
-      convert_poly = true;
-      convert_lines = true;
+      convertShapes = ['path', 'rect', 'ellipse', 'circle', 'line', 'polygon', 'polyline'];
     }
 
     // convert shapes to paths
@@ -422,8 +394,8 @@ export function cleanUpSVG(svgMarkup, {
 
       let { matrix = null, transComponents = null } = styleProps;
 
+      // scale props like stroke width or dash-array before conversion
       if (matrix && transComponents) {
-        // scale props like stroke width or dash-array before conversion
         ['stroke-width', 'stroke-dasharray'].forEach(att => {
           let attVal = el.getAttribute(att)
           let vals = attVal ? attVal.split(' ').filter(Boolean).map(Number).map(val => val * transComponents.scaleX) : []
@@ -433,10 +405,9 @@ export function cleanUpSVG(svgMarkup, {
 
       // convert paths only if a matrix transform is required
       if (matrix ? geometryEls.includes(name) : shapeEls.includes(name)) {
-
-        let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines, matrix });
+        //console.log('detrans', name, el.id, matrix);
+        let path = shapeElToPath(el, { width, height, convertShapes, matrix });
         el.replaceWith(path)
-
         name = 'path'
         el = path; // required for node
 
@@ -444,15 +415,19 @@ export function cleanUpSVG(svgMarkup, {
 
     }
 
-    // convert paths to shapes 
+    /**
+     * Reverse conversion:  
+     * paths to shapes 
+     */
     else if (shapeConvert === 'toShapes') {
       let paths = svg.querySelectorAll('path')
       paths.forEach(path => {
-        let shape = pathElToShape(path, { convert_rects, convert_ellipses, convert_poly, convert_lines })
-        //path.replaceWith(shape)
+        let shape = pathElToShape(path, { convertShapes })
+        path.replaceWith(shape)
         path = shape;
+        //name = shape.nodeName.toLowerCase()
+        //console.log('shape', shape);
       })
-
     }
 
 
@@ -460,7 +435,6 @@ export function cleanUpSVG(svgMarkup, {
      * combine styles
      * store in node property
      */
-
     if (mergePaths || attributesToGroup) {
 
       let options = { allowMeta, allowAriaAtts, removeIds, removeClassNames, allowDataAtts }
@@ -470,7 +444,7 @@ export function cleanUpSVG(svgMarkup, {
        * adjacent path merging 
        * e.g ignore classnames or ids
        */
-      if(mergePaths){
+      if (mergePaths) {
         options.removeIds = true;
         options.removeClassNames = true;
         options.allowAriaAtts = false;
@@ -486,226 +460,253 @@ export function cleanUpSVG(svgMarkup, {
         let values = stylePropsFiltered[prop]
         let val = values.length ? values.join(' ') : values[0]
 
-        let propShort = toShortStr(prop)
-        let valShort = toShortStr(val)
-        let propStr = `${propShort}-${valShort}`;
+        if(prop!=='class' && prop!=='id'){
 
-        // store in node property
-        if (!el.styleSet) el.styleSet = new Set()
-        el.styleSet.add(propStr)
+          let propShort = toShortStr(prop)
+          let valShort = toShortStr(val)
+          let propStr = `${propShort}-${valShort}`;
+  
+          // store in node property
+          if (!el.styleSet) el.styleSet = new Set()
+          if(propStr) el.styleSet.add(propStr)
+        }
       }
 
     }
 
-
   }//endof element loop
 
 
+  /**
+   * remove group styles
+   * copied to children
+   * or remove nesting
+   */
+
+  if (unGroup) {
+    ungroupElements(groups)
+  } else {
+
+    if (stylesToAttributes) {
+      groups.forEach(g => {
+        removeElAtts(g, ['style', 'transform']);
+      })
+    }
+    //removeGroupProps(groups, { remove, allowDataAtts, allowAriaAtts })
+  }
+
+
+  // styles to group
+  if (attributesToGroup) sharedAttributesToGroup(svg);
 
   /** 
    * merge paths with same styles
    */
   if (mergePaths) {
-    let paths = svg.querySelectorAll('path')
-    let len = paths.length;
-
-    if (len) {
-      let path0 = paths[0]
-      let d0 = path0.getAttribute('d')
-      let stylePrev = path0.styleSet !== undefined ? [...path0.styleSet].join('_') : ''
-
-      for (let i = 1; i < len; i++) {
-        let path = paths[i];
-        let style = path.styleSet !== undefined ? [...path.styleSet].join('_') : ''
-        let isSibling = path.previousElementSibling === path0;
-        let d = path.getAttribute('d');
-        let isAbs = d.startsWith('M')
-
-        if (isSibling && style === stylePrev) {
-          let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
-          //console.log('same style', dAbs, isAbs);
-          d0 += dAbs;
-          path0.setAttribute('d', d0)
-          path.remove();
-
-        } else {
-          path0 = path
-          d0 = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
-        }
-
-        // update style
-        stylePrev = style
-      }
-    }
-
-
-    /** 
-    * shared styles to group
-    */
-
-    if (attributesToGroup) {
-      let els = svg.querySelectorAll(geometryEls.join(', '))
-      let len = els.length;
-
-      let el0 = els[0] || null
-      let stylePrev = el0.styleSet !== undefined ? [...el0.styleSet].join('_') : ''
-
-
-      // all props
-      let allProps = {}
-
-      // find attributes shared by all
-      let globalAtts = []
-
-      if (len) {
-
-        let groups = [[el0]];
-        let idx = 0;
-        let elPrev = el0
-
-        for (let i = 0; i < len; i++) {
-          let el = els[i];
-          let atts = getElementAtts(el)
-          for (let att in atts) {
-            let att_str = `${att}_${atts[att]}`
-
-            if (!allProps[att_str]) {
-              allProps[att_str] = []
-            }
-            allProps[att_str].push(el)
-            //
-            if (allProps[att_str].length === len) {
-              globalAtts.push(att)
-            }
-          }
-        }
-
-        //console.log('allProps', allProps);
-        //console.log('globalAtts', globalAtts);
-
-        // apply global to parent SVG
-        if (globalAtts.length) {
-          let atts0 = getElementAtts(el0)
-          for (let att in atts0) {
-            // && 
-            if (globalAtts.includes(att) && att !== 'transform') {
-              svg.setAttribute(att, atts0[att])
-            }
-          }
-        }
-
-        // detect groups
-        for (let i = 1; i < len; i++) {
-          let el = els[i];
-          let styleArr = el.styleSet !== undefined ? [...el.styleSet] : [];
-          let style = styleArr.length ? styleArr.join('_') : '';
-          //console.log('style', style);
-
-          // same style add to group
-          if (style === stylePrev && elPrev.nextElementSibling === el) {
-            groups[idx].push(el)
-          }
-          // start new group
-          else {
-            groups.push([el])
-            idx++
-          }
-          // update style
-          stylePrev = style
-          elPrev = el
-
-        }// endof el loop
-
-
-
-
-
-
-
-        //console.log('groups', groups);
-
-        // create groups
-        for (let i = 0; i < groups.length; i++) {
-          let children = groups[i];
-          let child0 = children[0]
-          let atts = getElementAtts(child0)
-          let groupEl = child0.parentNode.closest('g')
-
-
-          if (children.length === 1) {
-            if (globalAtts.length) {
-              let globalTransform = globalAtts.includes('transform')
-              if (globalTransform) {
-                //console.log(globalTransform, globalAtts);
-                groupEl.setAttribute('transform', atts['transform'])
-              }
-
-              for (let att in atts) {
-                //&& att!=='transform'
-                if (globalAtts.includes(att)) {
-                  child0.removeAttribute(att)
-                }
-              }
-            }
-            continue
-          }
-
-
-          // create new group
-          if (!groupEl) {
-            //console.log('new group');
-            groupEl = document.createElementNS(svgNs, 'g')
-            child0.parentNode.insertBefore(groupEl, child0)
-            groupEl.append(...children)
-          }
-
-
-
-          // move attributes to group
-          for (let att in atts) {
-            let val = atts[att];
-            //console.log('att', atts, val);
-
-            //|| att === 'transform'
-            if (!geometryProps.includes(att)) {
-              if (!globalAtts.includes(att) || att === 'transform') {
-                groupEl.setAttribute(att, val)
-              }
-              children.forEach(child => {
-                child.removeAttribute(att)
-              })
-            }
-          }
-
-        } // endof groups
-
-      }
-    }
-
+    mergePathsWithSameProps(svg)
   }
 
-
+  //console.log('svg', svg);
 
   // remove futile clip-paths
   if (cleanupClip) removeFutileClipPaths(svg, { x, y, width, height })
 
-
   // replace href attributes with namespace - required by many older applications
-  if (legacyHref) {
-    svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink")
-    let hrefs = svg.querySelectorAll('[href]')
-    hrefs.forEach(el => {
-      let href = el.getAttribute('href')
-      el.setAttribute('xlink:href', href)
-      el.removeAttribute('href')
-    })
-  }
+  if (legacyHref) hrefToXlink(svg);
 
 
-
+  // remove empty class attributes
+  removeEmptyClassAtts(svg);
   return { svg, svgElProps }
 
 }
+
+
+
+function removeEmptyClassAtts(svg) {
+  let emptyClassEls = svg.querySelectorAll('[class=""');
+  emptyClassEls.forEach(el => {
+    el.removeAttribute('class')
+  })
+}
+
+
+/** 
+* shared styles to group
+*/
+function sharedAttributesToGroup(svg) {
+
+  let els = svg.querySelectorAll(renderedEls.join(', '))
+  let len = els.length;
+  if(len===1) return;
+
+  let el0 = els[0] || null
+  let stylePrev = el0.styleSet !== undefined ? [...el0.styleSet].join('_') : ''
+
+
+  // all props
+  let allProps = {}
+
+  // find attributes shared by all
+  let globalAtts = []
+
+  if (len) {
+
+    let groups = [[el0]];
+    let idx = 0;
+    let elPrev = el0
+
+    for (let i = 0; i < len; i++) {
+      let el = els[i];
+      let atts = getElementAtts(el)
+      for (let att in atts) {
+        let att_str = `${att}_${atts[att]}`
+
+        if (!allProps[att_str]) {
+          allProps[att_str] = []
+        }
+        allProps[att_str].push(el)
+        //
+        if (allProps[att_str].length === len) {
+          globalAtts.push(att)
+        }
+      }
+    }
+
+    //console.log('allProps', allProps);
+    //console.log('globalAtts', globalAtts);
+
+    // apply global to parent SVG
+    if (globalAtts.length) {
+      let atts0 = getElementAtts(el0)
+      for (let att in atts0) {
+        if (globalAtts.includes(att) && att !== 'transform') {
+          svg.setAttribute(att, atts0[att])
+        }
+      }
+    }
+
+    // detect groups
+    for (let i = 1; i < len; i++) {
+      let el = els[i];
+      let styleArr = el.styleSet !== undefined ? [...el.styleSet] : [];
+      let style = styleArr.length ? styleArr.join('_') : '';
+      //console.log('style', style);
+      //console.log('style === stylePrev', style, stylePrev);
+
+      // same style add to group
+      if (style === stylePrev && elPrev.nextElementSibling === el) {
+        groups[idx].push(el)
+      }
+      // start new group
+      else {
+        groups.push([el])
+        idx++
+      }
+      // update style
+      stylePrev = style
+      elPrev = el
+
+    }// endof el loop
+
+    //console.log('g', groups);
+
+    // create groups
+    for (let i = 0; i < groups.length; i++) {
+      let children = groups[i];
+      let child0 = children[0]
+      let atts = getElementAtts(child0)
+      let groupEl = child0.parentNode.closest('g')
+
+      // only 1 child - nothing to group
+      if (children.length === 1) continue
+
+
+      // create new group
+      if (!groupEl || groups.length>1) {
+        //console.log('new group');
+        groupEl = document.createElementNS(svgNs, 'g')
+        child0.parentNode.insertBefore(groupEl, child0)
+        groupEl.append(...children)
+      }
+
+      // move attributes to group
+      for (let att in atts) {
+        let val = atts[att];
+        //console.log('att', atts, val);
+
+        //|| att === 'transform'
+        let excludeAtts = ['id', 'class'];
+        if (!geometryProps.includes(att) && !excludeAtts.includes(att)) {
+          if (!globalAtts.includes(att) || att === 'transform') {
+            groupEl.setAttribute(att, val)
+          }
+          children.forEach(child => {
+            child.removeAttribute(att)
+          })
+        }
+      }
+
+
+    } // endof groups
+
+  }
+}
+
+
+// merge adjacent paths
+function mergePathsWithSameProps(svg) {
+  let paths = svg.querySelectorAll('path')
+  let len = paths.length;
+
+  if (len) {
+    let path0 = paths[0]
+    let d0 = path0.getAttribute('d')
+    let stylePrev = path0.styleSet !== undefined ? [...path0.styleSet].join(' ') : ''
+    //console.log('path0', path0);
+
+    let remove = []
+
+    for (let i = 1; i < len; i++) {
+      let path = paths[i];
+      let style = path.styleSet !== undefined ? [...path.styleSet].join(' ') : ''
+      let isSibling = path.previousElementSibling === path0;
+      let d = path.getAttribute('d');
+      let isAbs = d.startsWith('M')
+      //console.log('path.previousElementSibling', path.previousElementSibling);
+      //console.log(isSibling,  style, stylePrev, path.id);
+
+      if (isSibling && style === stylePrev) {
+        let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
+        //console.log('same style', dAbs, isAbs);
+        d0 += dAbs;
+        path0.setAttribute('d', d0)
+        //console.log('remove', path);
+        remove.push(path)
+        //path.remove();
+
+      } else {
+        path0 = path
+        //console.log('path0', path0, path);
+        d0 = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
+
+      }
+
+      // update style
+      stylePrev = style
+    }
+
+
+    //console.log('remove', remove);
+    remove.forEach(el => {
+      el.remove()
+    })
+
+  }
+
+}
+
+
 
 
 function removeOffCanvasEls(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
@@ -731,6 +732,13 @@ function addSvgViewBox(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
     ({ x, y, width, height } = getViewBox(svg));
   }
   svg.setAttribute('viewBox', [x, y, width, height].join(' '))
+}
+
+export function removeEmptySVGEls(svg) {
+  let els = svg.querySelectorAll('g, defs');
+  els.forEach(el => {
+    if (!el.children.length) el.remove()
+  })
 }
 
 
@@ -768,9 +776,6 @@ function cleanupSvgDefs(svg, { x = 0, y = 0, width = 0, height = 0, cleanupClip 
       svg.getElementById(id).remove()
     }
   })
-
-  // remove futile clip-paths
-  //if (cleanupClip) removeFutileClipPaths(svg, {x, y, width, height})
 
 }
 
@@ -825,274 +830,23 @@ function removeFutileClipPaths(svg, { x = 0, y = 0, width = 0, height = 0 } = {}
 }
 
 
-
-function moveAttributesToGroup(svgElProps = [], mergePaths = true) {
-
-  let combine = [[svgElProps[0]]]
-  let idx = 0;
-  let lastProps = '';
-  let l = svgElProps.length;
-  let itemsWithProps = svgElProps.filter(item => item.propstr)
-  let path0;
-
-
-  // merge paths without properties
-  let dCombined = ''
-  if (!itemsWithProps.length && mergePaths) {
-    let path0 = null;
-
-    for (let i = 0; i < l; i++) {
-      let item = svgElProps[i]
-      if (item.name !== 'path') continue;
-      let remove = true;
-
-
-      let path = item.el;
-
-      // set 1st path
-      if (!path0) {
-        path0 = path;
-        remove = false;
-      }
-
-      let d = item.propsFiltered.d
-      let isAbs = d.startsWith('M')
-      let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
-
-      dCombined += dAbs;
-
-      // delete path el
-      if (remove) path.remove();
-    }
-
-    //console.log('dCombined', dCombined);
-    if (path0) path0.setAttribute('d', dCombined)
-    return
-  }
-
-
-  // add to combine chunks
-  for (let i = 0; i < l; i++) {
-    let item = svgElProps[i];
-    let props = item.propsFiltered;
-    let propstr = [];
-    for (let prop in props) {
-      if (prop !== 'd' && prop !== 'id') {
-        propstr.push(`${prop}:${props[prop]}`)
-      }
-    }
-    propstr = propstr.join('_')
-    item.propstr = propstr;
-
-    if (l > 1 && propstr === lastProps) {
-      combine[idx].push(item)
-    } else {
-      if (l > 1 && combine[idx].length) {
-        combine.push([])
-        idx++
-      }
-    }
-    lastProps = propstr;
-  }
-
-
-  // add att groups
-  for (let i = 0; i < combine.length; i++) {
-    let group = combine[i]
-
-    if (group.length > 1) {
-      // 1st el
-      let el0 = group[0].el;
-      let props = group[0].propsFiltered;
-      let g = el0.parentNode.closest('g') ? el0.parentNode.closest('g') : null;
-
-      // wrap in group if not existent
-      if (!g) {
-        g = document.createElementNS(svgNs, 'g');
-        el0.parentNode.insertBefore(g, el0)
-        group.forEach(item => {
-          g.append(item.el)
-        })
-      }
-
-      let children = [...g.children]
-      for (let prop in props) {
-        if (prop !== 'd' && prop !== 'id') {
-          let value = props[prop]
-          // apply to parent group
-          g.setAttribute(prop, value)
-
-          // remove from children
-          children.forEach(el => {
-            if (el.getAttribute(prop) === value) {
-              el.removeAttribute(prop)
-            }
-          })
-        }
-
-
-        if (mergePaths) {
-          group = group.filter(Boolean)
-          let l = group.length
-          // nothing to merge
-          if (l === 1) return group[0].el;
-
-          path0 = group[0].el;
-          let dCombined = group[0].propsFiltered.d;
-
-          for (let i = 1; i < l; i++) {
-            let item = group[i]
-            let path = item.el;
-            let d = item.propsFiltered.d
-            let isAbs = d.startsWith('M')
-
-            let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ')
-
-            console.log('dAbs', dAbs);
-
-            //console.log(isAbs, dAbs);
-            // concat pathdata string
-            dCombined += dAbs;
-
-            // delete path el
-            path.remove();
-          }
-
-          path0.setAttribute('d', dCombined)
-
-        }
-
-      }
-    }
-  }
-
-}
-
-
-export function scaleProps(styleProps = {}, { props = [], scale = 1 } = {}) {
-  if (scale === 1 || !props.length) return props;
-
-  for (let i = 0; i < props.length; i++) {
-    let prop = props[i];
-
-    if (styleProps[prop] !== undefined) {
-      styleProps[prop] = styleProps[prop].map(val => val * scale)
-    }
-  }
-  return styleProps
-}
-
-export function removeSVGEls(svg, {
-  remove = ['metadata', 'script'],
-  removeNameSpaced = true,
-} = {}) {
-
-  let els = svg.querySelectorAll('*')
-
-  let allowMeta = !remove.includes('metadata');
-
-  els.forEach(el => {
-    let nodeName = el.nodeName;
-    let isMeta = allowMeta && el.closest('metadata')
-    if (
-      !isMeta &&
-      ((removeNameSpaced && nodeName.includes(':')) ||
-        remove.includes(nodeName))
-    ) {
-      el.remove()
-    }
+function hrefToXlink(svg) {
+  svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink")
+  let hrefs = svg.querySelectorAll('[href]')
+  hrefs.forEach(el => {
+    let href = el.getAttribute('href')
+    el.setAttribute('xlink:href', href)
+    //el.removeAttribute('href')
   })
 }
 
 
-function cleanSvgPrologue(svgString) {
-  return (
-    svgString
-      // Remove XML prologues like <?xml ... ?>
-      .replace(/<\?xml[\s\S]*?\?>/gi, "")
-      // Remove DOCTYPE declarations
-      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
-      // Remove comments <!-- ... -->
-      .replace(/<!--[\s\S]*?-->/g, "")
-      // Trim extra whitespace
-      .trim()
-  );
-}
-
-function removeExcludedAttribues(el, {
-  allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class'],
-  allowAriaAtts = true,
-  allowDataAtts = true,
-  allowMeta = false
-} = {}) {
-  let atts = [...el.attributes].map((att) => att.name);
-  atts.forEach((att) => {
-
-    let isMeta = allowMeta && (att === 'title')
-    let isAria = allowAriaAtts && att.startsWith('aria-')
-    let isData = allowDataAtts && att.startsWith('data-')
-    //console.log(att, isData, 'allowDataAtts', allowDataAtts);
-
-    if (
-      !allowed.includes(att) &&
-      !isAria && !isData && !isMeta
-    ) {
-      el.removeAttribute(att);
-    }
-  });
-}
-
-
-function removeAtts(el, exclude = [], include = []) {
-  let atts = [...el.attributes].map((att) => att.name);
-  atts.forEach((att) => {
-    if (exclude.includes(att) && !include.includes(att)) {
-      el.removeAttribute(att);
-    }
-  });
-}
-
-
-function removeNameSpaceAtts(el, {
-  include = ['xlink:href']
-} = {}) {
-  let atts = [...el.attributes].map((att) => att.name);
-  atts.forEach((att) => {
-    if (att.includes(":") && !include.includes(att)) {
-      el.removeAttribute(att);
-    }
-  });
-}
-
-export function stringifySVG(svg, {
-  omitNamespace = false,
-  removeComments = true,
-} = {}) {
-  let markup = new XMLSerializer().serializeToString(svg);
-
-  if (omitNamespace) {
-    markup = markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
-  }
-
-  if (removeComments) {
-    markup = markup
-      .replace(/(<!--.*?-->)|(<!--[\S\s]+?-->)|(<!--[\S\s]*?$)/g, '')
-  }
-
-  markup = markup
-    .replace(/\t/g, "")
-    .replace(/[\n\r|]/g, "\n")
-    .replace(/\n\s*\n/g, '\n')
-    .replace(/ +/g, ' ')
-    //.replace(/  +/g, ' ')
-    .replace(/> </g, '><')
-    .trim()
-    // sanitize linebreaks within pathdata
-    .replaceAll('&#10;', '\n');
 
 
 
 
 
-  return markup
-}
+
+
+
+

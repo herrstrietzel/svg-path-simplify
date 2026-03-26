@@ -1,8 +1,8 @@
 import { detectInputType } from './detect_input';
 import { simplifyPathDataCubic } from './pathData_simplify_cubic';
-import { getDistManhattan, getDistance, getPathDataVertices, interpolate, pointAtT } from './svgii/geometry';
+import { getDistManhattan, getDistance, getPathDataVertices, interpolate, pointAtT, reducePoints, svgArcToCenterParam, toParametricAngle } from './svgii/geometry';
 import { getPolyBBox } from './svgii/geometry_bbox';
-import { analyzePathData } from './svgii/pathData_analyze';
+import { analyzePathData, getPathDataVerbose } from './svgii/pathData_analyze';
 import { normalizePathData, parsePathDataNormalized, convertPathData } from './svgii/pathData_convert';
 import { shapeElToPath } from './svgii/pathData_parse_els';
 import { pathDataRemoveColinear } from './svgii/pathData_remove_collinear';
@@ -12,9 +12,9 @@ import { optimizeClosePath, pathDataToTopLeft } from './svgii/pathData_reorder';
 import { reversePathData } from './svgii/pathData_reverse';
 import { addExtremePoints, splitSubpaths } from './svgii/pathData_split';
 import { pathDataToD } from './svgii/pathData_stringify';
-import { detectAccuracy, roundPathData } from './svgii/rounding';
+import { detectAccuracy, roundPathData, roundTo } from './svgii/rounding';
 import { refineAdjacentExtremes } from './svgii/pathData_simplify_refineExtremes';
-import { cleanUpSVG, removeEmptySVGEls, stringifySVG } from './svgii/svg_cleanup';
+import { cleanUpSVG, removeEmptySVGEls } from './svgii/svg_cleanup';
 import { refineRoundedCorners } from './svgii/pathData_simplify_refineCorners';
 import { refineRoundSegments } from './svgii/pathData_refine_round';
 import { refineClosingCommand } from './svgii/pathData_remove_short';
@@ -23,151 +23,51 @@ import { getViewBox } from './svg_getViewbox';
 import { pathDataRevertCubicToQuadratic } from './pathData_simplify_revertToquadratics';
 import { pathDataCubicsToArc } from './pathData_simplify_cubicsToArcs';
 import { harmonizeCubicCpts } from './pathData_simplify_harmonize_cpts';
-import { pathDataToPolygon } from './svgii/pathData_toPolygon';
+import { pathDataToPolygonOpt } from './svgii/pathData_toPolygon';
 import { pathDataLineToCubic } from './svgii/pathData_line_to_cubic';
 import { fixPathDataDirections } from './svgii/pathData_fix_directions';
 import { simplifyPolyChunks, getCurvePathData, simplifyPolygonToPathData } from './svgii/poly_to_pathdata';
 import { pathDataFromPoly } from './svgii/pathData_fromPoly';
-import { normalizePoly } from './svgii/poly_normalize';
+import { normalizePoly, polyPtsToArray } from './svgii/poly_normalize';
 import { simplifyPolyRD } from './simplify_poly_radial_distance';
-import { simplifyPolyRDP } from './simplify_poly_RDP';
+import { simplifyPolyRDP, simplifyPolyRDP__, simplifyRDP_rel } from './simplify_poly_RDP';
+import { getEllipseLengthLG, getLegendreGaussValues, getLength, waArr_global } from './svgii/geometry_length';
+import { deg2rad } from './constants';
+import { getPathDataLength } from './svgii/pathData_getLength';
+import { stringifySVG } from './string_helpers';
+import { presetSettings, settingsDefaults } from './pathSimplify-presets';
+import { splitCompundGroups } from './svgii/pathData_split_to_groups';
 //import { getPolyChunks } from "./svgii/poly_analyze_get_chunks";
 
 
 //import { installDOMPolyfills } from './dom-polyfill';
 
-export function svgPathSimplify(input = '', {
+export function svgPathSimplify(input = '', settings = {}) {
 
-    // return svg markup or object
-    getObject = false,
-
-    toAbsolute = false,
-    toRelative = true,
-    toMixed = false,
-    toShorthands = true,
-    toLonghands = false,
-
-    //optimize = 0,
-
-    // not necessary unless you need cubics only
-    quadraticToCubic = true,
-
-    // mostly a fallback if arc calculations fail      
-    arcToCubic = false,
-    cubicToArc = false,
+    let preset = settings['preset'] !== undefined && settings['preset'] ? settings['preset'] : null;
+    let defaults = preset && presetSettings[preset] !== undefined ? presetSettings[preset] : presetSettings['default'];
 
 
-    simplifyBezier = true,
-    optimizeOrder = true,
-    autoClose = false,
-    removeZeroLength = true,
-    refineClosing = true,
-    removeColinear = true,
-    flatBezierToLinetos = true,
-    revertToQuadratics = true,
-
-    refineExtremes = true,
-    simplifyCorners = false,
-    removeDimensions = false,
-    removeIds = false,
-    removeClassNames = false,
-    omitNamespace = false,
-
-    fixDirections = false,
-
-    keepExtremes = true,
-    keepCorners = true,
-    extrapolateDominant = true,
-    keepInflections = false,
-    addExtremes = false,
-    addSemiExtremes = false,
-
-    toPolygon = false,
-    smoothPoly = false,
-    polyFormat = 'points',
-    precisionPoly = 1,
-
-    simplifyRD = 1,
-    simplifyRDP = 1,
-
-    harmonizeCpts = false,
-
-    removeOrphanSubpaths = false,
-    simplifyRound = false,
-
-    //svg scaling
-    scale = 1,
-    scaleTo = 0,
-    crop = false,
-    alignToOrigin = false,
-
-    // flatten transforms
-    convertTransforms = false,
+    // merge settings
+    settings = {
+        ...defaults,
+        ...settings
+    }
 
 
+    let { getObject = false, removeComments, removeOffCanvas, unGroup, mergePaths, removeElements, removeDimensions, removeIds, removeClassNames, omitNamespace, cleanUpStrokes, addViewBox, addDimensions, removePrologue, removeHidden, removeUnused, cleanupDefs, cleanupClip, cleanupSVGAtts, removeNameSpaced, removeNameSpacedAtts, attributesToGroup, minifyRgbColors, stylesToAttributes, fixHref, legacyHref, allowMeta, allowDataAtts, allowAriaAtts, convertPathLength, removeSVGAttributes, removeElAttributes, shapesToPaths, shapeConvert, convertShapes, simplifyBezier, optimizeOrder, autoClose, removeZeroLength, refineClosing, removeColinear, flatBezierToLinetos, revertToQuadratics, refineExtremes, simplifyCorners, fixDirections, keepExtremes, keepCorners, keepInflections, addExtremes, reversePath, toAbsolute, toRelative, toMixed, toShorthands, toLonghands, quadraticToCubic, arcToCubic, cubicToArc, lineToCubic, decimals, autoAccuracy, minifyD, tolerance, toPolygon, smoothPoly, polyFormat, precisionPoly, simplifyRD, simplifyRDP, harmonizeCpts, removeOrphanSubpaths, simplifyRound, scale, scaleTo, crop, alignToOrigin, convertTransforms, keepSmaller, splitCompound } = settings;
 
-    //svg path optimizations
-    decimals = 3,
-    autoAccuracy = true,
-
-    // experimental
-    //roundSub = false,
-
-    minifyD = 0,
-    tolerance = 1,
-    reversePath = false,
-
-    //svg cleanup options
-    minifyRgbColors = true,
-    removePrologue = true,
-    removeHidden = true,
-    removeUnused = true,
-    cleanupDefs = true,
-    cleanupClip = true,
-    cleanupSVGAtts = true,
-
-    stylesToAttributes = false,
-    fixHref = false,
-    legacyHref = false,
-    removeNameSpaced = true,
-
-    //meta 
-    allowMeta = false,
-    allowDataAtts = true,
-    allowAriaAtts = true,
-
-
-    attributesToGroup = false,
-    removeOffCanvas = false,
-    unGroup = false,
-    mergePaths = false,
-
-    // shape conversions
-    shapesToPaths = false,
-
-
-    //toPaths || toShapes
-    shapeConvert = 0,
-    convert_rects = false,
-    convert_ellipses = false,
-    convert_poly = false,
-    convert_lines = false,
-
-
-
-    lineToCubic = false,
-    cleanUpStrokes = true,
-    addViewBox = false,
-    addDimensions = false,
-
-    removeComments = true,
-
-} = {}) {
-
+    //toAbsolute = !toRelative;
 
     // clamp tolerance and scale
     tolerance = Math.max(0.1, tolerance);
     scale = Math.max(0.001, scale)
+    if(fixDirections) keepSmaller = false;
+    if (scale !== 1 || scaleTo || crop || alignToOrigin) {
+        convertTransforms = true;
+        settings.convertTransforms = true
+    }
+
 
     let inputType = detectInputType(input);
     let svg = '';
@@ -182,8 +82,11 @@ export function svgPathSimplify(input = '', {
     // pathdata superset array - containing additional data
     let pathDataPlusArr_global = []
     let paths = []
+    let isPoly = false;
     let polys = []
+    let poly = []
     let dStr = '';
+    let dOriginal = ''
 
     /**
      * normalize input
@@ -207,29 +110,66 @@ export function svgPathSimplify(input = '', {
     arcToCubic = toPolygon ? true : arcToCubic;
     autoClose = false;
     let accuracyArr = []
+    //console.log(inputType);
 
+    // validate point JSON
+    if (inputType === 'json') {
+        let pts = [];
+        let needsQuotes = /([{,]\s*)(x|y)(\s*:)/.test(input)
+        if (needsQuotes) input = input.replaceAll('x:', '"x":').replaceAll('y:', '"y":')
+
+        try {
+            pts = JSON.parse(input)
+        } catch {
+            console.warn('No valid JSON');
+        }
+        if (pts.length) {
+            inputType = 'polyArray'
+            input = normalizePoly(pts);
+            isPoly = true;
+        }
+    }
 
     //console.log('inputType', inputType);
 
+
     // single path or polys
-    if (inputType !== 'svgMarkup') {
+    if (inputType !== 'svgMarkup' && inputType !== 'symbol') {
         if (inputType === 'pathDataString') {
             d = input
         } else if (inputType === 'polyString') {
-            d = 'M' + input
+            splitCompound = false;
+            isPoly = true;
+            poly = normalizePoly(input)
+            d = pathDataFromPoly(poly, closed)
+            //console.log(poly);
+
         }
 
         else if (inputType === 'polyArray' || inputType === 'polyObjectArray' || inputType === 'polyComplexArray' || inputType === 'polyComplexObjectArray') {
+            splitCompound = false;
 
             // normalize poly input to object array
-            let poly = normalizePoly(input)
+            poly = normalizePoly(input)
 
             // convert to pathdata
-            d = pathDataFromPoly(poly)
+            let closed = true;
+
+            isPoly = true;
+            //polys.push(poly)
 
             // calculate size
+            d = pathDataFromPoly(poly, closed)
             dStr = d.map(com => { return `${com.type} ${com.values.join(' ')}` }).join(' ');
+            dOriginal = dStr;
             svgSize = dStr.length;
+
+            /*
+            d=''
+            dOriginal = '';
+            svgSize = input.length;
+            */
+
         }
 
         else if (inputType === 'pathData') {
@@ -238,6 +178,12 @@ export function svgPathSimplify(input = '', {
             // stringify to compare lengths
             dStr = Array.from(d).map(com => { return `${com.type} ${com.values.join(' ')}` }).join(' ');
             svgSize = dStr.length;
+            isPoly = false;
+
+        }
+        // not valid - set dummy path data
+        else {
+            d = 'M0 0 h0'
         }
 
         paths.push({ d, el: null })
@@ -245,6 +191,15 @@ export function svgPathSimplify(input = '', {
 
     // mode:1 – process complete svg DOM
     else {
+
+
+        // convert symbol temporarily to SVG
+        if (inputType === 'symbol') {
+            input = input.replaceAll('<symbol', '<svg').replaceAll('</symbol', '</svg')
+            // ids are mandatory for symbols
+            removeIds = false
+            removeDimensions = true
+        }
 
         // convert all shapes to paths
         if (shapesToPaths) {
@@ -257,28 +212,27 @@ export function svgPathSimplify(input = '', {
 
         //console.log('shapesToPaths', shapesToPaths, 'shapeConvert', shapeConvert, convert_rects, convert_ellipses, convert_poly);
 
-        //sanitize
-        let svgPropObject = cleanUpSVG(input, {
-            removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
-            shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms,
-            allowMeta, allowDataAtts, allowAriaAtts, allowMeta, attributesToGroup
-        }
-        );
+        // sanitize SVG - clone/decouple settings
+        let svgPropObject = cleanUpSVG(input, JSON.parse(JSON.stringify(settings)));
+
+        //console.log('settings', settings);
+        //console.log('svgPropObject', svgPropObject);
 
         let { svgElProps } = svgPropObject
         svg = svgPropObject.svg;
-
+        //console.log(svgPropObject);
 
 
         // collect paths
         let pathEls = svg.querySelectorAll('path')
         //let pathEls2 = svg.getElementsByTagName('path')
-        //console.log(pathEls2);
+        //console.log(pathEls);
 
         pathEls.forEach((path, i) => {
-            paths.push({ d: path.getAttribute('d'), el: path, idx: i })
+            let d = path.getAttribute('d');
+            //console.log(d, path.nodeName, path.id);
+            paths.push({ d, el: path, idx: i })
         })
-
 
         // get viewBox/dimensions
         viewBox = getViewBox(svg, decimals)
@@ -296,14 +250,10 @@ export function svgPathSimplify(input = '', {
     let pathOptions = {
         toRelative,
         toMixed,
-        toAbsolute,
-        toLonghands,
         toShorthands,
         decimals,
     }
-
-    // combinded path data for SVGs with mergePaths enabled
-    let pathData_merged = [];
+    //console.log('pathOptions', pathOptions);
 
 
     for (let i = 0, l = paths.length; l && i < l; i++) {
@@ -312,10 +262,14 @@ export function svgPathSimplify(input = '', {
         let path = paths[i];
         let { d, el } = path;
         let dN = ''
+        let isPoly = false;
 
-
+        // if polygon we already heave absolute coordinates
+        //let isPolyPath = !mode && isPoly && Array.isArray(d)
+        //let pathData = !isPolyPath ? parsePathDataNormalized(d, { quadraticToCubic, arcToCubic }) : d;
         let pathData = parsePathDataNormalized(d, { quadraticToCubic, arcToCubic });
         //console.log('!!!pathData', pathData, arcToCubic);
+        //console.log(isPoly);
 
         // get polygon bbox
         let bb_poly = smoothPoly || toPolygon ? getPolyBBox(getPathDataVertices(pathData)) : null
@@ -354,7 +308,8 @@ export function svgPathSimplify(input = '', {
         // count commands for evaluation
         let comCount = pathData.length
 
-        if (removeOrphanSubpaths) pathData = removeOrphanedM(pathData);
+        if (!isPoly && removeOrphanSubpaths) pathData = removeOrphanedM(pathData);
+
 
 
         /**
@@ -362,7 +317,6 @@ export function svgPathSimplify(input = '', {
          */
         let subPathArr = splitSubpaths(pathData);
         let lenSub = subPathArr.length;
-
         //console.log('subPathArr', subPathArr);
 
 
@@ -372,27 +326,29 @@ export function svgPathSimplify(input = '', {
             //let { pathData, bb } = subPathArr[i];
             let pathDataSub = subPathArr[i];
             let poly = []
-
             let coms = Array.from(new Set(pathDataSub.map(com => com.type))).join('')
-            let isPoly = !(/[acqts]/gi).test(coms)
-            let closed = (/[z]/gi).test(coms)
+            isPoly = !(/[acqts]/gi).test(coms)
+            let closed = isPoly ? true : false;
 
-            if (isPoly) {
+            if (isPoly && !mode) {
 
                 poly = getPathDataVertices(pathDataSub);
-                //console.log(poly);
+                let bb = getPolyBBox(reducePoints(poly, 64))
+                //console.log(poly, bb);
 
                 // simplify polygon
                 if (simplifyRD > 0) {
-                    poly = simplifyPolyRD(poly, { quality: simplifyRD + 'px' })
+                    poly = simplifyPolyRD(poly, { quality: simplifyRD, width: bb.width, height: bb.height })
                 }
 
                 if (simplifyRDP > 0) {
-                    poly = simplifyPolyRDP(poly, { quality: simplifyRDP + 'px' })
+                    poly = simplifyPolyRDP(poly, { quality: simplifyRDP, width: bb.width, height: bb.height })
+                    //poly = simplifyRDP_rel(poly, simplifyRDP, bb.width, bb.height)
                 }
 
+                toPolygon = false;
                 pathDataSub = pathDataFromPoly(poly, closed)
-
+                //pathDataSub[0].bb = bb
             }
 
 
@@ -405,31 +361,23 @@ export function svgPathSimplify(input = '', {
                 smoothPoly = false;
                 harmonizeCpts = false;
 
-                //pathDataSub = normalizePathData(pathDataSub, {arcToCubic:true})
-                //console.log(pathDataSub);
+                pathDataSub = getPathDataVerbose(pathDataSub);
 
-                let pathDataSubPlus = analyzePathData(pathDataSub)
-                let { bb, pathData } = pathDataSubPlus;
-                pathDataSub = pathData;
-
-
-                let polyData = pathDataToPolygon(pathDataSub, {
+                let polyData = pathDataToPolygonOpt(pathDataSub, {
                     precisionPoly,
                     autoAccuracy,
-                    polyFormat,
-                    decimals,
+                    //polyFormat,
+                    //decimals,
                     simplifyRD,
                     simplifyRDP
                 })
 
-
-
-                //poly.push(polyData.poly)
-                polys.push(polyData.poly)
+                //console.log('toPolygon');
+                //polys.push(polyData.poly)
                 pathDataSub = polyData.pathData
+                isPoly = true;
 
             }
-
 
 
             /**
@@ -459,19 +407,20 @@ export function svgPathSimplify(input = '', {
                         simplifyRD,
                         simplifyRDP,
                     }
+
+                    //console.log('smooth');
                     pathDataSub = simplifyPolygonToPathData(poly, optionsPoly)
+                    // flag as non poly as we're smoothing to curves
+                    //isPoly = false
                 }
             }
-
 
 
             // harmonize cpts
             // if (harmonizeCpts) pathDataSub = harmonizeCubicCpts(pathDataSub)
 
-
             // remove zero length linetos
             if (removeColinear || removeZeroLength) pathDataSub = removeZeroLengthLinetos(pathDataSub)
-
 
 
             // sort to top left
@@ -482,8 +431,8 @@ export function svgPathSimplify(input = '', {
             if (removeColinear) pathDataSub = pathDataRemoveColinear(pathDataSub, { tolerance, flatBezierToLinetos: false });
 
             let tMin = 0, tMax = 1;
-            if (addExtremes || addSemiExtremes) pathDataSub = addExtremePoints(pathDataSub,
-                { tMin, tMax, addExtremes, addSemiExtremes, angles: [30] })
+            if (addExtremes) pathDataSub = addExtremePoints(pathDataSub,
+                { tMin, tMax, addExtremes, angles: [30] })
 
 
 
@@ -492,23 +441,39 @@ export function svgPathSimplify(input = '', {
                 pathDataSub = reversePathData(pathDataSub)
             }
 
+            // analyze pathdata to add info about significant properties such as extremes, corners
+            let pathDataPlus = { bb: {}, dimA: 0, pathData: [] }
 
-            // analyze pathdata to add info about signicant properties such as extremes, corners
-            let pathDataPlus = analyzePathData(pathDataSub, {
-                detectSemiExtremes: addSemiExtremes,
-            });
+            if (!isPoly) {
+                pathDataPlus = analyzePathData(pathDataSub);
+            }
+            // we skip detailed analysis for native polygons
+            else {
+                if (!poly.length) {
+                    let pathDataCubic = convertPathData(JSON.parse(JSON.stringify(pathDataSub)), { toLonghands: true, toAbsolute: true, arcToCubic: true, testTypes: true })
+                    pathDataPlus.bb = getPolyBBox(getPathDataVertices(pathDataCubic))
+                }
+                pathDataPlus.dimA = pathDataPlus.bb.width + pathDataPlus.bb.height;
+                pathDataPlus.pathData = getPathDataVerbose(pathDataSub, {
+                    addSquareLength: false,
+                    addArea: false,
+                    addAverageDim: false
+                })
+            }
+
+
 
 
             // simplify beziers
             let { pathData, bb, dimA } = pathDataPlus;
+
             xArr.push(bb.x, bb.x + bb.width)
             yArr.push(bb.y, bb.y + bb.height)
 
 
             if (refineClosing) pathData = refineClosingCommand(pathData, { threshold: dimA * 0.001 })
 
-
-            pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, extrapolateDominant, revertToQuadratics, tolerance }) : pathData;
+            pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, revertToQuadratics, tolerance }) : pathData;
 
 
             // refine extremes
@@ -555,10 +520,6 @@ export function svgPathSimplify(input = '', {
                 //let decimalsSub = Math.max(2, detectAccuracy(pathData));
                 let decimalsSub = detectAccuracy(pathData);
                 accuracyArr.push(decimalsSub);
-                //let decimalsSub = detectAccuracy(pathData);
-
-                // pre round sub path
-                //if(roundSub) pathData = roundPathData(pathData, decimalsSub);
 
             }
 
@@ -566,6 +527,7 @@ export function svgPathSimplify(input = '', {
             pathDataPlusArr.push({ pathData, bb })
 
         } // end sup paths
+
 
         // sort subpaths to top left
         let xMin = Math.min(...xArr)
@@ -580,6 +542,11 @@ export function svgPathSimplify(input = '', {
         //console.log(i, pathDataPlusArr);
 
 
+        // fix path directions - before reordering
+        if (fixDirections) {
+            pathDataPlusArr = fixPathDataDirections(pathDataPlusArr);
+        }
+
 
         // prefer top to bottom priority for portrait aspect ratios 
         if (optimizeOrder) {
@@ -587,15 +554,11 @@ export function svgPathSimplify(input = '', {
         }
 
 
-        // fix path directions
-        if (fixDirections) {
-            pathDataPlusArr = fixPathDataDirections(pathDataPlusArr);
-        }
-
 
 
         // flatten compound paths 
         pathData = [];
+
 
         // add to global array - including multiple path elements
         pathDataPlusArr_global.push(pathDataPlusArr);
@@ -614,99 +577,88 @@ export function svgPathSimplify(input = '', {
             pathOptions.decimals = decimals
         }
 
+        // add simplified poly - if not populated by toPoly conversion
+        if (isPoly) {
+            //console.log('5. isPoly', isPoly);
 
-        // collect for merged svg paths 
-        mergePaths = false
-        if (el && mergePaths) {
-            pathData_merged.push(...pathData)
+            pathDataPlusArr.forEach(sub => {
+                let poly = getPathDataVertices(sub.pathData, false, decimals)
+                if (polyFormat === 'array') {
+                    poly = polyPtsToArray(poly)
+                }
+                polys.push(poly)
+            })
+
         }
-        // single output
-        else {
-
-            // clone pathdata 
-            //pathData = pathData.map(com => ({ type: com.type, values: [...com.values] }));
-            pathData = JSON.parse(JSON.stringify(pathData));
-
-            // optimize path data
-            pathData = convertPathData(pathData, pathOptions)
-
-            // remove zero-length segments introduced by rounding
-            if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
-
-            // realign path to zero origin
-            if (alignToOrigin) {
-
-                pathData[0].values[0] = (pathData[0].values[0] - bb_global.x).toFixed(decimals)
-                pathData[0].values[1] = (pathData[0].values[1] - bb_global.y).toFixed(decimals)
-
-                bb_global.x = 0
-                bb_global.y = 0
-            }
 
 
-            // compare command count
-            let comCountS = pathData.length
-
-            let dOpt = pathDataToD(pathData, minifyD)
-            //svgSizeOpt = new Blob([dOpt]).size;
-            svgSizeOpt = dOpt.length
-
-            compression = +(100 / svgSize * (svgSizeOpt)).toFixed(2)
-
-            path.d = dOpt
-            path.report = {
-                original: comCount,
-                new: comCountS,
-                saved: comCount - comCountS,
-                compression,
-                decimals,
-                //success: comCountS < comCount
-            }
-
-            //console.log('el', el);
-            // apply new path for svgs
-            if (el) {
-                el.setAttribute('d', dOpt)
-            }
+        // split into sub paths - returns svg with multiple paths
+        if (splitCompound && !mode && pathDataPlusArr.length > 1) {
+            let pathDataSplit = splitCompundGroups(pathDataPlusArr, { toRelative, toShorthands, decimals, addDimensions });
+            svg = new DOMParser().parseFromString(pathDataSplit.svg, 'image/svg+xml').querySelector('svg');
+            // switch output type
+            mode = 1;
+            inputType = 'splitPath'
         }
+
+
+        // clone pathdata 
+        pathData = JSON.parse(JSON.stringify(pathData));
+
+        // optimize path data
+        pathData = convertPathData(pathData, pathOptions)
+
+        // remove zero-length segments introduced by rounding
+        if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
+
+        // realign path to zero origin
+        if (alignToOrigin) {
+
+            pathData[0].values[0] = roundTo((pathData[0].values[0] - bb_global.x), decimals)
+            pathData[0].values[1] = roundTo((pathData[0].values[1] - bb_global.y), decimals)
+
+            bb_global.x = 0
+            bb_global.y = 0
+        }
+
+
+        // compare command count
+        let comCountS = pathData.length
+
+        let dOpt = pathDataToD(pathData, minifyD)
+        //svgSizeOpt = new Blob([dOpt]).size;
+        svgSizeOpt = dOpt.length
+
+        compression = +(100 / svgSize * (svgSizeOpt)).toFixed(2)
+
+        path.d = dOpt
+        path.report = {
+            original: comCount,
+            new: comCountS,
+            saved: comCount - comCountS,
+            compression,
+            decimals,
+            //success: comCountS < comCount
+        }
+
+        // apply new path for svgs
+        if (el) {
+            el.setAttribute('d', dOpt)
+        }
+
 
     } // end path array
 
     /**
      *  stringify new SVG
      */
-    if (mode) {
+    if (mode || inputType === 'symbol') {
 
-        //console.log(pathData_merged);
-        if (pathData_merged.length) {
-
-            // optimize path data
-            let pathData = convertPathData(pathData_merged, pathOptions)
-
-            // remove zero-length segments introduced by rounding
-            pathData = removeZeroLengthLinetos(pathData);
-
-            let dOpt = pathDataToD(pathData, minifyD)
-
-            // apply new path for svgs
-            paths[0].el.setAttribute('d', dOpt)
-
-            // remove other paths
-            for (let i = 1; i < paths.length; i++) {
-                let pathEl = paths[i].el
-                if (pathEl) pathEl.remove()
-            }
-
-            // remove empty groups e.g groups
-            removeEmptySVGEls(svg);
-        }
+        //console.log('process', inputType);
 
         // adjust viewBox and width for scale
         if (scale) {
-
             let { x, y, width, height, w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit } = viewBox;
-            //console.log('bb_global', bb_global);
-
             if (crop) {
                 x = bb_global.x
                 y = bb_global.y
@@ -717,14 +669,14 @@ export function svgPathSimplify(input = '', {
             }
 
             if (hasViewBox) {
-                svg.setAttribute('viewBox', [x, y, width, height].map(val => +(val * scale).toFixed(decimals)).join(' '))
+                svg.setAttribute('viewBox', [x, y, width, height].map(val => roundTo(val * scale, decimals)).join(' '))
             }
             if (hasWidth) {
-                svg.setAttribute('width', +(w * scale).toFixed(decimals) + widthUnit)
+                svg.setAttribute('width', roundTo(w * scale, decimals) + widthUnit)
             }
 
             if (hasHeight) {
-                svg.setAttribute('height', +(h * scale).toFixed(decimals) + heightUnit)
+                svg.setAttribute('height', roundTo(h * scale, decimals) + heightUnit)
             }
         }
 
@@ -737,9 +689,12 @@ export function svgPathSimplify(input = '', {
             })
         }
 
+        //console.log(svg);
+        if (removeSVGAttributes.includes('xmlns')) omitNamespace = true;
 
-        svg = stringifySVG(svg, { omitNamespace, removeComments });
 
+        svg = stringifySVG(svg, { omitNamespace, removeComments, format: minifyD });
+        //console.log('!!!svg', svg);
 
         //svgSizeOpt = new Blob([svg]).size
         svgSizeOpt = svg.length;
@@ -749,12 +704,21 @@ export function svgPathSimplify(input = '', {
         svgSize = +(svgSize / 1024).toFixed(3)
         svgSizeOpt = +(svgSizeOpt / 1024).toFixed(3)
 
+
         report = {
             svgSize,
             svgSizeOpt,
             compression,
-            decimals
+            decimals,
         }
+
+        if (keepSmaller && svgSize < svgSizeOpt && !splitCompound) {
+            //console.log('Original is smaller!');
+            svg = input
+            report.node = 'Original is smaller!'
+        }
+
+
 
     } else {
         ({ d, report } = paths[0]);
@@ -764,7 +728,16 @@ export function svgPathSimplify(input = '', {
         polys = polys[0]
     }
 
-    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr: pathDataPlusArr_global, inputType };
+
+    //console.log('---simplify', input);
+    //console.log('5. svg', svg);
+
+    if (polyFormat === 'string' && polys.length) {
+        polys = polys.flat().map(pt => `${pt.x},${pt.y}`).join(' ')
+    }
+
+
+    return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr: pathDataPlusArr_global, inputType, dOriginal };
 
 }
 

@@ -64,8 +64,17 @@ export function polyPtsToArray(pts) {
 // convert flat point value array to point object array
 export function toPointArray(pts) {
     let ptArr = [];
-    for (let i = 1, l = pts.length; i < l; i += 2) {
-        ptArr.push({ x: pts[i - 1], y: pts[i] });
+
+    if(pts[0].length===2){
+        for (let i = 0, l = pts.length; i < l; i ++) {
+            let pt = pts[i]
+            ptArr.push({ x: pt[0], y:pt[1] });
+        }
+
+    }else{
+        for (let i = 1, l = pts.length; i < l; i += 2) {
+            ptArr.push({ x: pts[i - 1], y: pts[i] });
+        }
     }
     return ptArr;
 };

@@ -1,6 +1,11 @@
 //import {inputSampleData} from './samples.js'
 
-import { checkSVGFilesize, loadSVGFiles, simplifyStack, getSVGPreviews, generateSVGZip, getZipObjectUrl } from './app_helpers.js';
+//import { minify } from 'terser';
+import { presetSettings, settingsDefaults } from '../src/pathSimplify-presets.js';
+import { renderSvgExcludeFields } from './app_remove_input.js';
+import { checkSVGFilesize, loadSVGFiles, getSVGPreviews, hasTextSelection, isInFormField, validateInput, isBody, updateConfig, svg2Symbol, symbol2Svg, togglePreview, showMarkersInPreview, adjustViewBox, serializeSVGPretty, minifySVGMarkup, prefixIds } from './app_helpers.js';
+//import { presetSettings } from './app_presets.js';
+import { processFileStack } from './app_process.js';
 
 let settings = {}
 let inputDecimals = document.querySelector('[name=decimals]')
@@ -14,13 +19,98 @@ const WorkerUrl = '../dist/svg-path-simplify.worker.js';
 let useWorker = false;
 
 
+document.addEventListener('settingsChange', (e) => {
+    //console.log('settingschange', settings);
+    //console.log('settingschange', settings.toRelative, settings.decimals, settings.preset);
+
+    //update rendering
+    updateSVG(settings);
+
+    // update new dynamically added fields
+    //enhanceNewFields({ settings })
+
+    // show current settings
+    updateConfig(settings)
+
+})
+
+// secondary events - not triggering optimization
+document.addEventListener('settingsChangeSecondary', (e) => {
+    //console.log('settingschangeSec', settings);
+
+    // toggle markers
+    showMarkersInPreview(previewWrp, settings)
+
+    // toggle preview
+    togglePreview(previewWrp, settings)
+
+    // update new dynamically added fields
+    //enhanceNewFields({ settings })
+
+    // show current settings
+    updateConfig(settings)
+
+
+    //console.log('settingsChangeSecondary');
+
+})
+
+// preset loading and resetting
+bindPresets(settings);
+
+
+// Keyboard shortcut listener
+document.addEventListener('keydown', async (e) => {
+
+    // Check for Ctrl+S (or Cmd+S on Mac)
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        btnDownload.click();
+    }
+
+    //paste
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+
+        if (!isBody(e)) return
+        e.preventDefault();
+
+        try {
+            let str = (await navigator.clipboard.readText()).trim();
+            let inputField = isInFormField();
+
+            if (!inputField && validateInput(str)) {
+                inputSvg.value = str;
+                inputSvg.dispatchEvent(new Event('input'))
+            } else {
+                console.warn('invalid input');
+            }
+
+        } catch (err) {
+            console.error('Paste failed:', err);
+        }
+    }
+
+    //copy
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+
+        if (hasTextSelection()) return;
+        e.preventDefault();
+        console.log('!!!copy');
+        btnCopy.click()
+    }
+});
+
+
+
+
 window.addEventListener('DOMContentLoaded', (e) => {
 
     settings = enhanceInputsSettings;
-    // console.log('settings', settings);
+    //console.log('!!!settings', JSON.parse(JSON.stringify(settings)) );
 
     // check query strings
     let queryParams = getQueryParams();
+
     if (Object.values(queryParams).length) {
 
         // override svg input by sample
@@ -51,66 +141,123 @@ window.addEventListener('DOMContentLoaded', (e) => {
     togglePreview(previewWrp, settings)
 
 
+    // update new dynamically added fields
+    enhanceNewFields({ settings })
+
+
     let inpuMarkerSize = document.getElementById('inpuMarkerSize')
     inpuMarkerSize.value = '0.3'
 
 
-    // secondary events - not triggering optimization
-    document.addEventListener('settingsChangeSecondary', (e) => {
-        //console.log('settingschangeSec', settings);
-
-        // toggle markers
-        showMarkersInPreview(previewWrp, settings)
-
-        // toggle preview
-        togglePreview(previewWrp, settings)
-
-    })
-
-
-    document.addEventListener('settingsChange', (e) => {
-        //console.log('settingschange', settings);
-
-        //update rendering
-        updateSVG(settings);
-
-        // show current settings
-        updateConfig(settings)
-
-    })
-
-
-    inpuMarkerSize.addEventListener('input', e=>{
+    inpuMarkerSize.addEventListener('input', e => {
         let val = +inpuMarkerSize.value
-        previewWrp.style.setProperty('--strokeWidthPrev', val+'%')
+        previewWrp.style.setProperty('--strokeWidthPrev', val + '%')
 
     })
+
 
 })
 
-function updateConfig(settings = {}) {
 
-    let { omitDefaults } = settings || false
 
-    let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults', 'detailsOpen']
+/**
+ * load presets
+ */
 
-    let configs = {}
-    let defaults = settings.defaults;
+function bindPresets() {
+    let inputsPreset = document.querySelectorAll('input[name=preset]')
+    // reset presets on user input
+    let inputsSimplify = document.querySelectorAll('aside .input-wrap input, aside .input-wrap button');
 
-    for (let prop in settings) {
-        if (!excludeProps.includes(prop)) {
-            let value = settings[prop];
-            if (!omitDefaults || value !== defaults[prop]) {
-                configs[prop] = settings[prop]
-            }
-        }
-    }
-    let configJson = 'const options=' + JSON.stringify(configs, null, ' ').replaceAll('"', '')
-    textConfig.value = configJson
-
-    return configs;
-
+    loadpresets(inputsPreset)
+    resetPresets(inputsSimplify, inputsPreset);
 }
+
+function loadpresets(inputsPreset) {
+
+    inputsPreset.forEach(inp => {
+        inp.addEventListener('input', e => {
+            let presetName = document.querySelector('input[name=preset]:checked').value;
+            if (presetName) {
+                let settingsNew = presetSettings[presetName] !== undefined ? presetSettings[presetName] : null
+
+                if (settingsNew) {
+
+                    // update properties
+                    for (let prop in settingsNew) {
+                        settings[prop] = settingsNew[prop]
+                    }
+
+                    // update inputs
+                    setInputValueFromSettings(settingsNew)
+
+                    // update settings without triggering update
+                    let storageName = settings.storageName || null
+                    if (storageName) {
+                        // update localStorage
+                        saveSettingsToLocalStorage({ ...settings, ...settingsNew }, storageName)
+                    }
+
+                    //update rendering 
+                    document.dispatchEvent(new Event('settingsChange'))
+                }
+            }
+        })
+    })
+}
+
+
+function resetPresets(inputsSimplify, inputsPreset) {
+
+    inputsSimplify.forEach(inp => {
+        let { name, type } = inp;
+        if (!name) name = 'button';
+        //let hasProp = settings[name] !== undefined || name === 'button';
+
+        if (name !== 'dInput' && name !== 'preset') {
+
+            inp.addEventListener('click', e => {
+
+                let hasPreset = settings['preset'];
+                if (hasPreset) {
+                    settings['preset'] = 0;
+                    //console.log('!!!reset preset', settings['preset']);
+
+                    if (type === 'button') {
+                        inp = inp.closest('.input-wrap').querySelector('input');
+                    }
+
+                    inputsPreset.forEach(inpPreset => {
+                        if (inpPreset.value === '0') {
+                            inpPreset.checked = true;
+                        } else {
+                            inpPreset.checked = false
+                        }
+                    })
+
+                    // update
+                    document.dispatchEvent(new Event('settingsChange'))
+                }
+
+            }, false)
+        }
+    })
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // delete sample selection
@@ -154,17 +301,18 @@ inputFile.addEventListener('input', async (e) => {
     document.body.classList.add('processing')
     fileStack = await loadSVGFiles(files, fileStack);
 
-    // process
-    processFileStack(fileStack, settings, useWorker, WorkerUrl)
 
     // multi file
     if (l > 1) {
         document.body.classList.add('multiFile')
         //btnDownloadZip.classList.add('processing')
+
+        // process
+        processFileStack(fileStack, settings, useWorker, WorkerUrl)
+
     }
 
     else {
-
 
         let fileItem = fileStack[0]
         lastFileName = fileItem.name;
@@ -182,8 +330,12 @@ inputFile.addEventListener('input', async (e) => {
         settings.dInput = input;
         inputSvg.value = input;
 
+        //console.log('!!!!single file');
         updateSVG(settings);
     }
+
+
+
 
     // timings
     let t1 = performance.now() - t0;
@@ -222,55 +374,14 @@ inputSamples.addEventListener('input', e => {
 })
 
 
-// batch processing
-
-async function processFileStack(fileStack, settings, useWorker = false, WorkerUrl) {
-
-
-    // check total file size
-    let { totalO = 0 } = fileStack[0]
-    totalO = +(totalO / 1024).toFixed(3)
-
-    // process svgs
-    if (useWorker) {
-        console.log('many use worker', totalO)
-        fileStack = await simplifyStackWorker(fileStack, settings, WorkerUrl);
-    } else {
-        fileStack = simplifyStack(fileStack, settings);
-    }
-
-    //return
-
-    // create zips
-    let urlDownload = await generateSVGZip(fileStack);
-
-    // update download link
-    btnDownloadZip.href = urlDownload;
-    btnDownloadZip.classList.remove('processing')
-
-
-    // update preview images
-    let previews = getSVGPreviews(fileStack)
-    //console.log('fileStack', fileStack);
-
-    // render previews
-    svgWrapMulti.innerHTML = previews;
-
-    // update report
-    let { totalS } = fileStack[0];
-
-    totalS = +(totalS / 1024).toFixed(3)
-    let perc = +(100 / totalO * totalS).toFixed(3)
-    pReport.innerHTML = `${perc}&thinsp;% – ${totalS}&thinsp;KB`
-
-    document.body.classList.remove('processing')
-
-}
 
 
 
 // single file
 function updateSVG(settings = {}, processed = false) {
+
+    //console.log('updateSVG', settings.toRelative );
+
 
     // keep multi file mode
     if (fileStack.length) {
@@ -357,27 +468,34 @@ function updateSVG(settings = {}, processed = false) {
     console.log('pathDataOpt', pathDataOpt, 'timing', t1);
 
 
-    let { d, svg, polys, report, inputType } = pathDataOpt;
+    let { d, svg, polys, report, inputType, dOriginal = '' } = pathDataOpt;
 
     // single path or svg
-    let mode = inputType === "svgMarkup" ? 1 : 0;
+    let mode = inputType === "svgMarkup" || inputType === "symbol" || inputType === "splitPath" ? 1 : 0;
+
+    if (polys.length) {
+        document.body.classList.add('poly')
+    } else {
+        document.body.classList.remove('poly')
+
+    }
+
+    if (mode) {
+        document.body.classList.add('svgMarkup')
+    } else {
+        document.body.classList.remove('svgMarkup')
+    }
+
+    document.body.dataset.input = inputType;
 
     let { original, decimals = null } = report;
 
-    /*
-    if(polys.length && settings.polyFormat==='d'){
-        polyOut.value = d
-    }
-    */
 
     if (polys.length) {
         //console.log(polys);
         polyOut.value = JSON.stringify(polys).replaceAll('"', '')
     }
 
-
-
-    //lastFileName
 
     // show auto accuracy
     if (decimals !== null && inputDecimals && settings.autoAccuracy) {
@@ -401,7 +519,7 @@ function updateSVG(settings = {}, processed = false) {
     pReport.innerHTML = reportText
 
     // return path data or svg 
-    outputSvg.value = !mode ? d : svg;
+    outputSvg.value = !mode ? d : (inputType === 'symbol' ? svg2Symbol(svg) : svg);
     //console.log('svg out', svg);
 
 
@@ -420,11 +538,16 @@ function updateSVG(settings = {}, processed = false) {
 
 
         if (inputType === 'polyString') dInput = 'M' + dInput;
+        if (inputType === 'polyArray') dInput = dOriginal;
 
         path1.setAttribute('d', dInput)
         pathS.setAttribute('d', d)
-
         adjustViewBox(svgEl);
+
+
+        if (inputType === 'splitPath') {
+
+        }
 
         // scale element
         svgEl.style.setProperty('--scalePreview', scale)
@@ -437,49 +560,69 @@ function updateSVG(settings = {}, processed = false) {
         svgEl.classList.add('dsp-non')
 
         // prefix ids and refs
-        let svgO = settings.dInput ? prefixIds(settings.dInput, { prefix: '_' }) : '';
+        let svgO = settings.dInput ? settings.dInput : '';
+        if (inputType === 'symbol') svgO = symbol2Svg(svgO)
+
+        // show original in image to prevent style bleeding
+        let previewImg = document.createElement('img')
+        previewImg.src = `data:image/svg+xml,${encodeURIComponent(svgO)}`
+        let svgDomCopy = new DOMParser().parseFromString(svgO, 'image/svg+xml').querySelector('svg');
 
         // optimized svg
         let svg_prev = prefixIds(svg);
 
-        function prefixIds(svg, { prefix = '__' } = {}) {
-            return svg
-                .replaceAll('id="', `id="${prefix}`)
-                .replaceAll('url(#', `url(#${prefix}`)
-                .replaceAll('href="#', `href="#${prefix}`);
+        if (inputType === 'splitPath' && svg) {
+            let svgSplit = svg.startsWith('<svg') ? new DOMParser().parseFromString(svg, 'image/svg+xml').querySelector('svg') : null;
+            if (svgSplit) {
+                let viewBox = svgSplit.hasAttribute("viewBox") ? svgSplit.getAttribute("viewBox") : ''
+                svgO = `<svg viewBox="${viewBox}">
+                <path d="${settings.dInput}" />
+                </svg>`
+            }
         }
 
 
-        //svgWrap.insertAdjacentHTML('beforeend', svg_prev)
-
         // unoptimized
-        svgWrapO.insertAdjacentHTML('beforeend', svgO)
+        //svgWrapO.insertAdjacentHTML('beforeend', svgO)
+        svgWrapO.insertAdjacentElement('beforeend', previewImg)
 
         // optimized
         svgWrapS.insertAdjacentHTML('beforeend', svg_prev)
 
-        //let svgDocEl = svgWrap.querySelector('svg')
-        let svgDocElO = svgWrapO.querySelector('svg')
+        //let svgDocElO = svgWrapO.querySelector('svg')
+        let svgDocElO = svgDomCopy;
         let svgDocEl = svgWrapS.querySelector('svg')
 
+
+        /**
+         * get all SVG elements and
+         * attributes to render 
+         * inputs for selective removal
+         */
+        renderSvgExcludeFields(svgDomCopy, settings)
+
+        /**
+         * preview: 
+         * set viewBox and 
+         * dimensions
+         */
         let viewBox = getViewBox(svgDocEl);
         let viewBoxAtt = svgDocEl.getAttribute('viewBox')
-
-
         if (!viewBoxAtt) {
-
             viewBoxAtt = [viewBox.x, viewBox.y, viewBox.width, viewBox.height].join(' ')
-
-            //console.log('viewBox', viewBox);
             svgDocEl.setAttribute('viewBox', viewBoxAtt)
         }
 
 
-        svgDocElO.removeAttribute('width')
-        svgDocElO.removeAttribute('height')
+        if (svgDocElO) {
+            svgDocElO.removeAttribute('width')
+            svgDocElO.removeAttribute('height')
+        }
 
         svgDocEl.removeAttribute('width')
         svgDocEl.removeAttribute('height')
+
+
 
         /**
          * adjust marker size 
@@ -506,16 +649,34 @@ function updateSVG(settings = {}, processed = false) {
     let svgExport = svg ? svg : null;
     let inIframe = window.self !== window.top;
 
-    //console.log(svgExport);
+
 
     // create standalone svg
+    //console.log(svgExport, settings);
+
     if (!svgExport) {
 
-        let viewBox = svgEl.getAttribute('viewBox').trim().split(' ').map(Number).map((val) => +val.toFixed(decimals))
+        let viewBox = svgEl.getAttribute('viewBox').trim().split(' ').map(Number)
+        if (decimals > -1) {
+            viewBox = viewBox.map((val) => +val.toFixed(decimals))
+        }
+
         let [width, height] = [viewBox[2], viewBox[3]];
         svgExport = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox.join(' ')}"><path d="${d}"/></svg>`
-
     }
+
+
+    // prettify
+    if (+settings.minifyD === 2) {
+        svgExport = serializeSVGPretty(svgExport);
+        //console.log(svgExport);
+    }
+    else if (+settings.minifyD === 0) {
+        svgExport = minifySVGMarkup(svgExport);
+        //console.log(svgExport);
+    }
+
+
 
     let blob = new Blob([svgExport], { type: 'image/svg+xml' });
     let objectUrl = URL.createObjectURL(blob)
@@ -559,113 +720,4 @@ function updateSVG(settings = {}, processed = false) {
 }
 
 
-export function simplifyStackWorker(data = [], settings = {}, workerurl = '') {
-
-    return new Promise((resolve, reject) => {
-        let worker = new Worker(
-            new URL(workerurl, import.meta.url),
-            { type: 'module' }
-        );
-
-        // send request
-        worker.postMessage({ data, settings });
-
-        worker.onmessage = (e) => {
-            let { result, error } = e.data;
-            worker.terminate();
-
-            if (error) reject(new Error(error));
-            else resolve(result);
-        };
-
-        worker.onerror = (err) => {
-            worker.terminate();
-            reject(err);
-        };
-    });
-}
-
-
-
-/**
- * get viewBox 
- * either from explicit attribute or
- * width and height attributes
- */
-/*
-function getViewBox(svg = null, decimals = -1) {
-
-    const getUnit=(val)=>{
-        return val && isNaN(val) ? val.match(/[^\d|.]+/g)[0] : '';
-    }
-
-    // browser default
-    if (!svg) return false
-
-
-    let hasWidth = svg.hasAttribute('width')
-    let hasHeight = svg.hasAttribute('height')
-    let hasViewBox = svg.hasAttribute('viewBox')
-
-
-    let widthAtt = hasWidth ? svg.getAttribute('width') : 0;
-    let heightAtt = hasHeight ? svg.getAttribute('height') : 0;
-
-
-
-    let widthUnit = hasWidth ? getUnit(widthAtt) : false;
-    let heightUnit = hasHeight ? getUnit(widthAtt) : false
-
-    let w = widthAtt ? (!widthAtt.includes('%') ? parseFloat(widthAtt) : 0 ) : 300
-    let h = heightAtt ? (!heightAtt.includes('%') ? parseFloat(heightAtt) : 0 ) : 150
-
-
-    let viewBoxVals =  hasViewBox ? svg.getAttribute('viewBox').split(/,| /).filter(Boolean).map(Number) : [0, 0, w, h];
-
-    // round
-    if (decimals>-1) {
-        [w, h] = [w, h].map(val=>+val.toFixed(decimals))
-        viewBoxVals = viewBoxVals.map(val=>+val.toFixed(decimals))
-    }
-
-    let viewBox = { x:viewBoxVals[0] , y:viewBoxVals[1], width:viewBoxVals[2], height:viewBoxVals[3], w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit };
-
-    return viewBox
-}
-*/
-
-function togglePreview(target, settings = {}) {
-
-    //console.log('showOriginal', settings.showOriginal, settings);
-
-    if (settings.showOriginal === 'show') {
-        //console.log('show');
-        target.classList.add('showOriginal')
-        target.classList.remove('showMarkers')
-
-    } else {
-        //console.log('hide');
-        target.classList.remove('showOriginal')
-    }
-}
-
-
-
-function showMarkersInPreview(target, settings = {}) {
-
-    if (settings.showMarkers) {
-        target.classList.add('showMarkers')
-
-    } else {
-        target.classList.remove('showMarkers')
-    }
-}
-
-
-
-function adjustViewBox(svg) {
-    let bb = svg.getBBox();
-    let [x, y, width, height] = [bb.x, bb.y, bb.width, bb.height];
-    svg.setAttribute("viewBox", [x, y, width, height].join(" "));
-}
 

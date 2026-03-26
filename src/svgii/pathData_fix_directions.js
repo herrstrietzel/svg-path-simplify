@@ -10,6 +10,7 @@ import { getPolygonArea } from "./geometry_area";
 import { getPolyBBox } from "./geometry_bbox";
 import { reversePathData } from "./pathData_reverse";
 import { getPathDataPolyPrecise } from "./pathData_toPolygon";
+import { renderPoint, renderPoly } from "./visualize";
 
 export function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
 
@@ -42,6 +43,7 @@ export function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
             let ptMid = { x: bb.left + bb.width / 2, y: bb.top + bb.height / 2 }
             let inPoly = isPointInPolygon(ptMid, prev.pts, bb0)
 
+
             if (inPoly) {
                 polys[j].inter += 1
                 poly.includedIn.push(i)
@@ -61,9 +63,12 @@ export function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
         if (!includedIn.length && cw && !toClockwise
             || !includedIn.length && !cw && toClockwise
         ) {
+            //console.log('reverse outer');
+
             pathDataArr[i].pathData = reversePathData(pathDataArr[i].pathData);
             polys[i].cw = polys[i].cw ? false : true
             cw = polys[i].cw
+
         }
 
         // reverse inner sub paths
@@ -72,6 +77,7 @@ export function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
             let child = polys[ind];
 
             if (child.cw === cw) {
+                //console.log('reverse', child.cw, cw);
                 pathDataArr[ind].pathData = reversePathData(pathDataArr[ind].pathData);
                 polys[ind].cw = polys[ind].cw ? false : true
             }

@@ -9,9 +9,12 @@
   */
 
 import { harmonizeCubicCpts, harmonizeCubicCptsThird } from "./pathData_simplify_harmonize_cpts";
-import { getAngle, getDistance, getSquareDistance, pointAtT, rotatePoint } from "./svgii/geometry";
+import { checkLineIntersection, getAngle, getDistance, getSquareDistance, pointAtT, reducePoints, rotatePoint } from "./svgii/geometry";
 import { getPolygonArea } from "./svgii/geometry_area";
+import { detectRegularPolygon, getPolyCentroid } from "./svgii/poly_analyze";
 import { renderPath, renderPoint } from "./svgii/visualize";
+
+
 
 
 
@@ -50,17 +53,18 @@ export function fitCurveSchneider(pts, {
 
     // create pathdata
     let pathData = bezierPtsToPathData(beziers)
-
-
-
     let cp1, cp2;
 
     adjustCpts = false
-    harmonize = false;
+    //harmonize = false;
+
+    adjustCpts = true;
+    //harmonize = true;
+
 
     if (adjustCpts) {
 
-        console.log('refine cpts');
+        //console.log('refine cpts');
 
         let len2 = pathData.length;
         let com1 = pathData[0]
@@ -91,13 +95,16 @@ export function fitCurveSchneider(pts, {
             com2.values[3] = cp2.y
         }
 
+        /*
         // harmonize too tight tangents
-        //let harmonize= true;
+        let harmonize = true;
+         harmonize = false;
         if (harmonize) {
             pathData = harmonizeCubicCptsThird([{ type: 'M', values: [pts[0].x, pts[0].y] },
             ...pathData])
             pathData.shift()
         }
+        */
 
     }
 

@@ -55,12 +55,12 @@
           // nested array
           if (Array.isArray(input[0])) {
 
-              if(input[0].length===2){
+              if (input[0].length === 2) {
 
                   return 'polyArray'
               }
 
-              else if (Array.isArray(input[0][0]) && input[0][0].length === 2 ) {
+              else if (Array.isArray(input[0][0]) && input[0][0].length === 2) {
 
                   return 'polyComplexArray'
               }
@@ -71,7 +71,7 @@
           }
 
           // is point array
-          else if (input[0].x!==undefined && input[0].y!==undefined) {
+          else if (input[0].x !== undefined && input[0].y !== undefined) {
 
               return 'polyObjectArray'
           }
@@ -89,11 +89,21 @@
       if (typeof input === "string") {
           input = input.trim();
           let isSVG = input.includes('<svg') && input.includes('</svg');
+          let isSymbol = input.startsWith('<symbol') && input.includes('</symbol');
           let isPathData = input.startsWith('M') || input.startsWith('m');
           let isPolyString = !isNaN(input.substring(0, 1)) && !isNaN(input.substring(input.length - 1, input.length));
+          let isJson = isNumberJson(input);
 
           if (isSVG) {
               type = 'svgMarkup';
+          }
+
+          else if (isJson) {
+              type = 'json';
+          }
+
+          else if (isSymbol) {
+              type = 'symbol';
           }
           else if (isPathData) {
               type = 'pathDataString';
@@ -115,6 +125,21 @@
       let constructor = input.constructor.name;
 
       return (constructor || type).toLowerCase();
+  }
+
+  function isNumberJson(str) {
+
+      str = str.trim();
+
+      let hasNumber = /\d/.test(str);
+      let hasInvalid = /[abcdfghijklmnopqrstuvwz]/gi.test(str);
+      if (!hasNumber || hasInvalid) return false
+
+      // is JSON like
+      let isJson = str.startsWith('[') && str.endsWith(']');
+
+      return isJson
+      
   }
 
   const {
@@ -441,7 +466,36 @@
   /**
    * get vertices from path command final on-path points
    */
-  function getPathDataVertices(pathData) {
+
+  function getPathDataVertices(pathData=[], includeCpts = false, decimals = -1) {
+      let polyPoints = [];
+
+      pathData.forEach((com) => {
+          let { type, values } = com;
+
+          // get final on path point from last 2 values
+          if (values.length) {
+
+              // round
+              if (decimals > -1) values = values.map(val => +val.toFixed(decimals));
+
+              if (includeCpts) {
+
+                  for (let i = 1; i < values.length; i += 2) {
+                      polyPoints.push({ x: values[i - 1], y: values[i] });
+                  }
+
+              } else {
+                  polyPoints.push({ x: values[values.length - 2], y: values[values.length - 1] });
+              }
+
+          }
+      });
+      return polyPoints;
+  }
+
+  /*
+  export function getPathDataVertices(pathData) {
       let polyPoints = [];
       let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
 
@@ -456,22 +510,30 @@
           }
       });
       return polyPoints;
-  }
+  };
+  */
 
   /**
    *  based on @cuixiping;
    *  https://stackoverflow.com/questions/9017100/calculate-center-of-svg-arc/12329083#12329083
    */
-  function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2) {
+
+  function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2, normalize = true
+  ) {
 
       // helper for angle calculation
-      const getAngle = (cx, cy, x, y) => {
-          return atan2(y - cy, x - cx);
+      const getAngle = (cx, cy, x, y, normalize = true) => {
+          let angle = Math.atan2(y - cy, x - cx);
+          if (normalize && angle < 0) angle += Math.PI * 2;
+          return angle
       };
 
       // make sure rx, ry are positive
-      rx = abs(rx);
-      ry = abs(ry);
+      rx = Math.abs(rx);
+      ry = Math.abs(ry);
+
+      // normalize xAxis rotation
+      xAxisRotation = rx === ry ? 0 : (xAxisRotation < 0 && normalize ? xAxisRotation + 360 : xAxisRotation);
 
       // create data object
       let arcData = {
@@ -495,53 +557,11 @@
           throw Error("rx and ry can not be 0");
       }
 
-      let shortcut = true;
-
-      if (rx === ry && shortcut) {
-
-          // test semicircles
-          let diffX = Math.abs(x2 - x1);
-          let diffY = Math.abs(y2 - y1);
-          let r = diffX;
-
-          let xMin = Math.min(x1, x2),
-              yMin = Math.min(y1, y2),
-              PIHalf = Math.PI * 0.5;
-
-          // semi circles
-          if (diffX === 0 && diffY || diffY === 0 && diffX) {
-
-              r = diffX === 0 && diffY ? diffY / 2 : diffX / 2;
-              arcData.rx = r;
-              arcData.ry = r;
-
-              // verical
-              if (diffX === 0 && diffY) {
-                  arcData.cx = x1;
-                  arcData.cy = yMin + diffY / 2;
-                  arcData.startAngle = y1 > y2 ? PIHalf : -PIHalf;
-                  arcData.endAngle = y1 > y2 ? -PIHalf : PIHalf;
-                  arcData.deltaAngle = sweep ? Math.PI : -Math.PI;
-
-              }
-              // horizontal
-              else if (diffY === 0 && diffX) {
-                  arcData.cx = xMin + diffX / 2;
-                  arcData.cy = y1;
-                  arcData.startAngle = x1 > x2 ? Math.PI : 0;
-                  arcData.endAngle = x1 > x2 ? -Math.PI : Math.PI;
-                  arcData.deltaAngle = sweep ? Math.PI : -Math.PI;
-              }
-
-              return arcData;
-          }
-      }
-
       /**
        * if rx===ry x-axis rotation is ignored
        * otherwise convert degrees to radians
        */
-      let phi = rx === ry ? 0 : (xAxisRotation * PI) / 180;
+      let phi = rx === ry ? 0 : xAxisRotation * deg2rad;
       let cx, cy;
 
       let s_phi = !phi ? 0 : Math.sin(phi);
@@ -560,8 +580,9 @@
       //   Step 3: Ensure radii are large enough
       let lambda = (x1_ * x1_) / (rx * rx) + (y1_ * y1_) / (ry * ry);
       if (lambda > 1) {
-          rx = rx * Math.sqrt(lambda);
-          ry = ry * Math.sqrt(lambda);
+          let lambdaRoot = Math.sqrt(lambda);
+          rx = rx * lambdaRoot;
+          ry = ry * lambdaRoot;
 
           // save real rx/ry
           arcData.rx = rx;
@@ -577,7 +598,7 @@
           throw Error("start point can not be same as end point");
       }
       let coe = Math.sqrt(Math.abs((rxry * rxry - sum_of_sq) / sum_of_sq));
-      if (largeArc == sweep) {
+      if (largeArc === sweep) {
           coe = -coe;
       }
 
@@ -597,24 +618,33 @@
        * calculate angles between center point and
        * commands starting and final on path point
        */
-      let startAngle = getAngle(cx, cy, x1, y1);
-      let endAngle = getAngle(cx, cy, x2, y2);
+      let startAngle = getAngle(cx, cy, x1, y1, normalize);
+      let endAngle = getAngle(cx, cy, x2, y2, normalize);
 
       // adjust end angle
-      if (!sweep && endAngle > startAngle) {
 
-          endAngle -= Math.PI * 2;
-      }
-
-      if (sweep && startAngle > endAngle) {
-
-          endAngle = endAngle <= 0 ? endAngle + Math.PI * 2 : endAngle;
+      // Adjust angles based on sweep direction
+      if (sweep) {
+          // Clockwise
+          if (endAngle < startAngle) {
+              endAngle += Math.PI * 2;
+          }
+      } else {
+          // Counterclockwise
+          if (endAngle > startAngle) {
+              endAngle -= Math.PI * 2;
+          }
       }
 
       let deltaAngle = endAngle - startAngle;
+
+      // The rest of your code remains the same
       arcData.startAngle = startAngle;
+      arcData.startAngle_deg = startAngle * rad2Deg;
       arcData.endAngle = endAngle;
+      arcData.endAngle_deg = endAngle * rad2Deg;
       arcData.deltaAngle = deltaAngle;
+      arcData.deltaAngle_deg = deltaAngle * rad2Deg;
 
       return arcData;
   }
@@ -1120,7 +1150,7 @@
       let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
       let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
-      return sqrt(dx * dx + dy * dy);
+      return Math.sqrt(dx * dx + dy * dy);
   }
 
   function getSquareDistance(p1, p2) {
@@ -1640,7 +1670,7 @@
 
       let dim_min = dims.sort();
 
-      let sliceIdx = Math.ceil(dim_min.length / 8);
+      let sliceIdx = Math.ceil(dim_min.length / 6);
       dim_min = dim_min.slice(0, sliceIdx);
       let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
 
@@ -1653,6 +1683,7 @@
   }
 
   function roundTo(num = 0, decimals = 3) {
+      if(decimals<=-1) return num;
       if (!decimals) return Math.round(num);
       let factor = 10 ** decimals;
       return Math.round(num * factor) / factor;
@@ -1663,19 +1694,20 @@
    * floating point accuracy 
    * based on numeric value
    */
-  function autoRound(val, integerThresh = 10){
+  function autoRound(val, integerThresh = 50){
     let decimals=8;  
-
     
-    if(val>integerThresh){
+    if(val>integerThresh*2){
       decimals=0;
     }
-    else if(val>5){
+    else if(val>integerThresh){
       decimals=1;
     }else {
-       decimals=Math.ceil(integerThresh/val).toString().length;
+       decimals=Math.ceil(500/val).toString().length;
+
     }
         
+
     let factor = 10 ** decimals;
     return Math.round(val * factor) / factor;
   }
@@ -2623,20 +2655,24 @@
   * d attribute string 
   */
 
-  function pathDataToD(pathData, optimize = 0) {
+  function pathDataToD(pathData, mode = 0) {
 
-      optimize = parseFloat(optimize);
-
+      mode = parseFloat(mode);
+      /*
+      0 = max minification
+      0.5 = safe
+      1 = verbose
+      2 = beautify
+      */
       let len = pathData.length;
-      let beautify = optimize > 1;
-      let minify = beautify || optimize ? false : true;
 
-      let d = '';
       let valsString = pathData[0].values.join(" ");
-      let separator_command = beautify ? `\n` : (minify ? '' : ' ');
-      let separator_type = !minify ? ' ' : '';
+      let separator_command = mode > 1 ? `\n` :
+          ((mode < 1) ? '' : ' ');
+      let separator_type = mode > 0.5 ? ' ' : '';
 
-      d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
+      // 1st command
+      let d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
 
       for (let i = 1; i < len; i++) {
           let com0 = pathData[i - 1];
@@ -2645,7 +2681,7 @@
           valsString = '';
 
           // Minify Arc commands (A/a) – actually sucks!
-          if (minify && (type === 'A' || type === 'a')) {
+          if (!mode && (type === 'A' || type === 'a')) {
               values = [
                   values[0], values[1], values[2],
                   `${values[3]}${values[4]}${values[5]}`,
@@ -2654,14 +2690,14 @@
           }
 
           // Omit type for repeated commands
-          type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm')
+          type = ((mode < 1) && com0.type === com.type && com.type.toLowerCase() !== 'm')
               ? " "
-              : (minify && com0.type === "M" && com.type === "L"
+              : ((mode < 1) && com0.type === "M" && com.type === "L"
                   ? " "
                   : com.type);
 
           // concatenate subsequent floating point values
-          if (minify) {
+          if (!mode) {
 
               let prevWasFloat = false;
 
@@ -2685,22 +2721,23 @@
                   prevWasFloat = isSmallFloat;
               }
 
-              d += `${type}${separator_type}${valsString}${separator_command}`;
-
           }
           // regular non-minified output
           else {
-              d += `${type}${separator_type}${values.join(' ')}${separator_command}`;
+              valsString = values.join(' ');
           }
+
+          if(i===len-1) separator_command='';
+          d += `${type}${separator_type}${valsString}${separator_command}`;
       }
 
-      if (minify) {
+      if (mode < 1) {
           d = d
               .replace(/[A-Za-z]0(?=\.)/g, m => m[0])
               .replace(/ 0\./g, " .") // Space before small decimals
               .replace(/ -/g, "-")     // Remove space before negatives
               .replace(/-0\./g, "-.")  // Remove leading zero from negative decimals
-              .replace(/Z/g, "z");     // Convert uppercase 'Z' to lowercase
+              .replace(/Z/g, "z");    // Convert uppercase 'Z' to lowercase
       }
 
       return d;
@@ -3577,6 +3614,7 @@
   };
 
   function parsePathDataString(d, debug = true, limit=0) {
+      if(!d) return []
       d = d.trim();
 
       if(limit) console.log('!!!limit', limit);
@@ -3923,6 +3961,7 @@
       hasShorthands = true,
       hasQuadratics = true,
       hasArcs = true,
+      isPoly = false,
       optimizeArcs = true,
       testTypes = false
 
@@ -3943,6 +3982,7 @@
 
       // some params exclude each other
       toRelative = toAbsolute ? false : toRelative;
+
       toShorthands = toLonghands ? false : toShorthands;
 
       if (toAbsolute) pathData = pathDataToAbsolute(pathData);
@@ -5666,26 +5706,20 @@
       return transObj;
   }
 
+  /**
+   * Convert shapes to paths
+   * converts also transforms
+   */
   function shapeElToPath(el, { width = 0,
       height = 0,
-      convert_rects = false,
-      convert_ellipses = false,
-      convert_poly = false,
-      convert_lines = false,
-
-      matrix=null
+      convertShapes = [],
+      matrix = null
 
   } = {}) {
 
       let nodeName = el.nodeName.toLowerCase();
 
-      if (
-          nodeName === 'path' && !matrix ||
-          nodeName === 'rect' && !convert_rects ||
-          (nodeName === 'circle' || nodeName === 'ellipse') && !convert_ellipses ||
-          (nodeName === 'polygon' || nodeName === 'polyline') && !convert_poly ||
-          (nodeName === 'line') && !convert_lines
-      ) return el;
+      if (!convertShapes.includes(nodeName)) return el;
 
       let pathData = getPathDataFromEl(el, { width, height });
 
@@ -5693,8 +5727,9 @@
       let exclude = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'dx', 'dy', 'r', 'rx', 'ry', 'width', 'height', 'points'];
 
       // transform pathData
-      if(matrix && Object.values(matrix).join('')!=='100100'){
+      if (matrix && Object.values(matrix).join('') !== '100100') {
           pathData = transformPathData(pathData, matrix);
+
           exclude.push('transform', 'transform-origin');
       }
 
@@ -5715,13 +5750,6 @@
       return pathN
 
   }
-  /*
-  export function copyAttributes(newEl, oldEl){
-
-      let attributes = [...oldEl.attributes].map(att => att.name);
-
-  }
-  */
 
   // retrieve pathdata from svg geometry elements
   function getPathDataFromEl(el, {
@@ -5752,39 +5780,7 @@
 
           case 'rect':
               ({ x=0, y=0, width=0, height=0, rx=0, ry=0 } = atts);
-
-              if (!rx && !ry) {
-                  pathData = [
-                      { type: "M", values: [x, y] },
-                      { type: "L", values: [x + width, y] },
-                      { type: "L", values: [x + width, y + height] },
-                      { type: "L", values: [x, y + height] },
-                      { type: "Z", values: [] }
-                  ];
-              } else {
-
-                  rx = rx ? rx : ry;
-                  ry = ry ? ry : rx;
-
-                  if (rx > width / 2) {
-                      rx = width / 2;
-                  }
-                  if (ry > height / 2) {
-                      ry = height / 2;
-                  }
-                  pathData = [
-                      { type: "M", values: [x + rx, y] },
-                      { type: "L", values: [x + width - rx, y] },
-                      { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
-                      { type: "L", values: [x + width, y + height - ry] },
-                      { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
-                      { type: "L", values: [x + rx, y + height] },
-                      { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
-                      { type: "L", values: [x, y + ry] },
-                      { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
-                      { type: "Z", values: [] }
-                  ];
-              }
+              pathData = rectToPathData(x, y, width, height, rx, ry);
               break;
 
           case 'circle':
@@ -5844,11 +5840,47 @@
 
   }
 
+  function rectToPathData(x = 0, y = 0, width = 0, height = 0, rx = 0, ry = 0) {
+      let pathData = [];
+
+      if (!rx && !ry) {
+          pathData = [
+              { type: "M", values: [x, y] },
+              { type: "L", values: [x + width, y] },
+              { type: "L", values: [x + width, y + height] },
+              { type: "L", values: [x, y + height] },
+              { type: "Z", values: [] }
+          ];
+      } else {
+
+          rx = rx ? rx : ry;
+          ry = ry ? ry : rx;
+
+          if (rx > width / 2) {
+              rx = width / 2;
+          }
+          if (ry > height / 2) {
+              ry = height / 2;
+          }
+          pathData = [
+              { type: "M", values: [x + rx, y] },
+              { type: "L", values: [x + width - rx, y] },
+              { type: "A", values: [rx, ry, 0, 0, 1, x + width, y + ry] },
+              { type: "L", values: [x + width, y + height - ry] },
+              { type: "A", values: [rx, ry, 0, 0, 1, x + width - rx, y + height] },
+              { type: "L", values: [x + rx, y + height] },
+              { type: "A", values: [rx, ry, 0, 0, 1, x, y + height - ry] },
+              { type: "L", values: [x, y + ry] },
+              { type: "A", values: [rx, ry, 0, 0, 1, x + rx, y] },
+              { type: "Z", values: [] }
+          ];
+      }
+
+      return pathData
+  }
+
   function pathElToShape(el, {
-      convert_rects = false,
-      convert_ellipses = false,
-      convert_poly = false,
-      convert_lines = false
+      convertShapes = [],
   } = {}) {
 
       let pathData = parsePathDataNormalized(el.getAttribute('d'));
@@ -5869,7 +5901,7 @@
       if (isPoly) {
 
           // is line
-          if (pathData.length === 2 && convert_lines) {
+          if (pathData.length === 2 && convertShapes.includes('line')) {
               type = 'line';
               shape = document.createElementNS(svgNs, type);
               let [x1, y1, x2, y2] = [...pathData[0].values, ...pathData[1].values].map(val => roundTo(val, decimals));
@@ -5885,7 +5917,7 @@
               let areaDiff = Math.abs(1 - areaRect / areaPoly);
 
               // is rect
-              if (convert_rects && areaDiff < 0.01) {
+              if (convertShapes.includes('rect') && areaDiff < 0.01) {
                   type = 'rect';
                   shape = document.createElementNS(svgNs, type);
                   let { x, y, width, height } = bb;
@@ -5893,7 +5925,7 @@
 
               }
               // polyline or polygon
-              else if(convert_poly) {
+              else if (convertShapes.includes('polygon') || convertShapes.includes('polyline')) {
                   type = closed ? 'polygon' : 'polyline';
                   shape = document.createElementNS(svgNs, type);
                   let points = vertices.map(pt => { return [pt.x, pt.y] }).flat().map(val => roundTo(val, decimals)).join(' ');
@@ -5902,7 +5934,7 @@
           }
       }
       // circles or ellipses
-      else if (!hasLines && convert_ellipses) {
+      else if (!hasLines && (convertShapes.includes('circle') || convertShapes.includes('ellipse'))) {
 
           // try to convert cubics to arcs
           if (!hasArcs && hasBeziers) {
@@ -5937,11 +5969,11 @@
               rxVals = Array.from(rxVals);
               ryVals = Array.from(ryVals);
 
-              if(cxVals.length===1 && cyVals.length===1 && rxVals.length===1 && ryVals.length===1){
+              if (cxVals.length === 1 && cyVals.length === 1 && rxVals.length === 1 && ryVals.length === 1) {
                   let [rx, ry, cx, cy] = [rxVals[0], ryVals[0], cxVals[0], cyVals[0]];
-                  type = rx===ry ? 'circle' : 'ellipse';
+                  type = rx === ry ? 'circle' : 'ellipse';
                   shape = document.createElementNS(svgNs, type);
-                  attsNew = type==='circle' ? { r:rx, cx, cy } : {rx, ry, cx, cy};
+                  attsNew = type === 'circle' ? { r: rx, cx, cy } : { rx, ry, cx, cy };
               }
           }
       }
@@ -5962,7 +5994,6 @@
                   shape.setAttribute(att, attributes[att]);
               }
           }
-
           // replace
           el = shape;
       }
@@ -6773,8 +6804,17 @@
   // convert flat point value array to point object array
   function toPointArray(pts) {
       let ptArr = [];
-      for (let i = 1, l = pts.length; i < l; i += 2) {
-          ptArr.push({ x: pts[i - 1], y: pts[i] });
+
+      if(pts[0].length===2){
+          for (let i = 0, l = pts.length; i < l; i ++) {
+              let pt = pts[i];
+              ptArr.push({ x: pt[0], y:pt[1] });
+          }
+
+      }else {
+          for (let i = 1, l = pts.length; i < l; i += 2) {
+              ptArr.push({ x: pts[i - 1], y: pts[i] });
+          }
       }
       return ptArr;
   }
@@ -6830,33 +6870,63 @@
       autoRoundValues = false,
       minifyRgbColors = false,
       removeInvalid = true,
+      allowDataAtts=true,
+      allowAriaAtts=true,
       removeDefaults = true,
       cleanUpStrokes = true,
       normalizeTransforms = true,
-      removeIds=false,
-      removeClassNames=false,
+      removeIds = false,
+      removeClassNames = false,
 
-      include=[],
+      include = [],
       exclude = [],
       width = 0,
       height = 0,
+      stylesheetProps = {}
   } = {}) {
 
       let nodeName = el.nodeName.toLowerCase();
       let attProps = getSvgPresentationAtts(el);
-      let cssProps = getSvgCssProps(el);
+      let inlineCssProps = getSvgCssProps(el);
+
+      // get CSS properties from SVG style element
+      let cssRuleSelectors = el.cssRules || [];
+      let cssProps = {};
+
+      cssRuleSelectors.forEach(selector => {
+          for (let prop in stylesheetProps[selector]) {
+              let val = stylesheetProps[selector][prop];
+
+              // check CSS vars
+              if (val.startsWith('var(')) {
+                  let varName = val.replace(/[var\(|\)]/g, '').trim();
+
+                  if (stylesheetProps[':root']) {
+                      val = `var(${varName}, ${stylesheetProps[':root'][varName]})`;
+                  }
+              }
+              cssProps[prop] = val;
+          }
+      });
 
       /**
-       * merge props
-       * CSS has higher specificity
+       * merge props by specificity
+       * 1. attributes
+       * 2. CSS rules
+       * 3. inline CSS
        */
       let props = {
           ...attProps,
           ...cssProps,
+          ...inlineCssProps,
       };
 
+      // obsolete/not style relevant anymore
       delete props['style'];
-      exclude.push('style');
+      delete props['class'];
+      delete props['id'];
+
+      exclude.push('style', 'class', 'id');
 
       let remove = ['style'];
       let transformsStandalone = ['scale', 'translate', 'rotate'];
@@ -6867,9 +6937,10 @@
        */
 
       if (removeInvalid || removeDefaults || removeNameSpaced) {
-          let propsFilteredObj = filterSvgElProps(nodeName, props, { removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false });
+          let propsFilteredObj = filterSvgElProps(nodeName, props, {allowDataAtts, allowAriaAtts, removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false });
           props = propsFilteredObj.propsFiltered;
           remove.push(...propsFilteredObj.remove);
+
       }
 
       // sanitized prop array
@@ -6888,11 +6959,14 @@
 
           // minify rgb values
           if (minifyRgbColors && colorProps.includes(prop)) {
+
               let color = parseColor(valueStr);
+
               if (color.mode === 'rgba' || color.mode === 'rgb') {
                   let hex = rgba2Hex(color);
                   valueStr = hex;
               }
+
           }
 
           if (prop === 'transform') {
@@ -6932,7 +7006,6 @@
           else {
 
               item.values = parseValue(valueStr);
-
           }
 
           if (item.values.length) {
@@ -7007,6 +7080,7 @@
 
                               if (autoRoundValues && isNumeric) {
                                   valAbs = autoRound(valAbs);
+
                               }
 
                           }
@@ -7205,20 +7279,20 @@
       allowAriaAtts = false,
       cleanUpStrokes = true,
 
-      include=[],
-      removeIds=false, 
-      removeClassNames=false,
+      include = [],
+      removeIds = false,
+      removeClassNames = false,
       exclude = [],
   } = {}) {
       let propsFiltered = {};
       let remove = [];
 
-      if(!removeIds) include.push('id');
-      if(!removeClassNames) include.push('class');
+      if (!removeIds) include.push('id');
+      if (!removeClassNames) include.push('class');
 
       // allow defaults for nested
 
-      let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined) : false;
+      let noStrokeColor = cleanUpStrokes ? (props['stroke'] === undefined || props['stroke'][0] === 'none') : false;
 
       for (let prop in props) {
           let values = props[prop];
@@ -7233,9 +7307,11 @@
           if (prop === 'transform' && value === 'matrix(1 0 0 1 0 0)') isValid = false;
 
           // allow data attributes
-          let isDataAtt = allowDataAtts ? prop.startsWith('data-') : false;
-          let isMeta = allowMeta && prop === 'title';
-          let isAria = allowAriaAtts && prop.startsWith('aria-');
+          let isDataAtt = prop.startsWith('data-') ? true : false;
+          let isMeta = prop === 'title';
+          let isAria = prop.startsWith('aria-');
+
+          if( (allowDataAtts && isDataAtt) || (allowAriaAtts && isAria) || (allowMeta && isMeta ) ) continue
 
           // filter out defaults
           let isDefault = removeDefaults ?
@@ -7247,13 +7323,6 @@
           if (isDefault || isDataAtt || isMeta || isAria || isFutileStroke) isValid = false;
           if (include.includes(prop)) isValid = true;
 
-          /*
-          if (isDataAtt || include.includes(prop)) isValid = true;
-          if (isDefault) isValid = false
-          if (exclude.length && exclude.includes(prop)) isValid = false;
-          if (noStrokeColor && strokeAtts.includes(prop)) isValid = false
-          */
-
           if (isValid) {
               propsFiltered[prop] = props[prop];
           }
@@ -7263,20 +7332,13 @@
           }
       }
 
-      /*
-      // set explicit stroke width when disabled by stroke color
-      if (propsFiltered['stroke'] && propsFiltered['stroke'][0] === 'none') {
-          propsFiltered['stroke-width'] = [1]
-          remove.push('stroke', 'stroke-width')
-          console.log('remove', remove);
-      }
-      */
-
       return { propsFiltered, remove }
   }
 
   function parseValue(valStr = '') {
-      let valArr = valStr.split(/,| /);
+
+      valStr = valStr.replace('!important', '');
+      let valArr = (valStr.includes("'") || valStr.includes('(') || valStr.includes(')')) ? [valStr] : valStr.split(/,| /).filter(Boolean);
 
       for (let i = 0; i < valArr.length; i++) {
 
@@ -7360,25 +7422,712 @@
   function toCamelCase(str) {
     return str
       .split(/[-| ]/)
-      .map((e,i) => i
+      .map((e, i) => i
         ? e.charAt(0).toUpperCase() + e.slice(1).toLowerCase()
         : e.toLowerCase()
       )
       .join('')
   }
 
-  function toShortStr(str){
-    if(isNumericValue(str)) return str
-    let strShort = str.split('-').map(str=>{return str.replace(/a|e|i|o|u/g,'') }).join('-');
+  function toShortStr(str) {
+    if (isNumericValue(str)) return str
+    let strShort = str.split('-').map(str => { return str.replace(/a|e|i|o|u/g, '') }).join('-');
     strShort = toCamelCase(strShort);
     return strShort
   }
 
-  function removeEmptySVGEls(svg) {
-    let els = svg.querySelectorAll('g, defs');
+  function stringifySVG(svg, {
+    omitNamespace = false,
+    removeComments = true,
+    format = 0,
+  } = {}) {
+
+    let markup = '';
+
+    if (format < 2) {
+      markup = new XMLSerializer().serializeToString(svg);
+
+      markup = minifySVGMarkup(markup, { removeComments });
+      
+    } else {
+      markup = serializeSVGPretty(svg);
+    }
+
+    if (omitNamespace) {
+      markup = markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '');
+    }
+
+    if (removeComments) {
+      markup = markup
+        .replace(/(<!--.*?-->)|(<!--[\S\s]+?-->)|(<!--[\S\s]*?$)/g, '');
+    }
+
+    /*
+    markup = markup
+      .replace(/\t/g, "")
+      .replace(/[\n\r|]/g, "\n")
+      .replace(/\n\s*\n/g, '\n')
+      .replace(/ +/g, ' ')
+
+      .replace(/> </g, '><')
+      .trim()
+      // sanitize linebreaks within pathdata
+      .replaceAll('&#10;', '\n');
+    */
+
+    return markup
+  }
+
+  function minifySVGMarkup(svg, {
+    removeComments = true,
+  } = {}) {
+
+    if (removeComments) {
+      svg = svg.replace(/<!--[\s\S]*?-->/g, '');
+    }
+
+    // Remove whitespace between tags
+    svg = svg.replace(/>\s+</g, '><')
+      // Trim leading/trailing whitespace
+      .trim()
+      // Remove extra whitespace within tags (attributes)
+      .replace(/\s+([=])\s+/g, '$1')
+      .replace(/\s+(?=[^<]*>)/g, ' ')
+      // Collapse multiple spaces to single space
+      .replace(/\s{2,}/g, ' ')
+      // Remove spaces around = signs in attributes
+      .replace(/\s*=\s*/g, '=');
+
+    return svg
+  }
+
+  function serializeSVGPretty(xmlDoc, {
+    indentSize = 2 } = {}) {
+    if (typeof xmlDoc === 'string') {
+      xmlDoc = new DOMParser().parseFromString(xmlDoc, 'image/svg+xml').querySelector('svg');
+    }
+    return formatXMLNode(xmlDoc, 0, indentSize);
+  }
+
+  function formatXMLNode(node, level, indentSize) {
+    let indent = " ".repeat(level * indentSize);
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      let text = node.textContent.trim();
+      return text ? text : "";
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      let hasChildren = node.children.length > 0;
+      let hasTextContent = node.textContent.trim().length > 0 && node.children.length === 0;
+
+      let result = `${indent}<${node.nodeName}`;
+
+      // Add attributes
+      for (let i = 0; i < node.attributes.length; i++) {
+        let att = node.attributes[i];
+        result += ` ${att.name}="${att.value}"`;
+      }
+
+      if (!hasChildren && !hasTextContent) {
+        return result + " />\n";
+      }
+
+      result += ">";
+
+      if (hasChildren) {
+        result += "\n";
+        for (let child of node.children) {
+          result += formatXMLNode(child, level + 1, indentSize);
+        }
+        result += `${indent}</${node.nodeName}>\n`;
+      } else if (hasTextContent) {
+        result += node.textContent.trim();
+        result += `</${node.nodeName}>\n`;
+      } else {
+        result += `</${node.nodeName}>\n`;
+      }
+
+      return result;
+    }
+
+    return "";
+  }
+
+  function removeHiddenSvgEls(svg) {
+    let els = svg.querySelectorAll('*');
     els.forEach(el => {
-      if (!el.children.length) el.remove();
+      el.nodeName.toLowerCase();
+      let style = el.getAttribute('style') || '';
+      let isHiddenByStyle = style ? style.trim().includes('display:none') : false;
+      let isHidden = (el.getAttribute('display') && el.getAttribute('display') === 'none') || isHiddenByStyle;
+      if (isHidden) el.remove();
     });
+
+  }
+
+  function removeSvgEls(svg, {
+    removeElements = [],
+    removeNameSpaced = true,
+  } = {}) {
+
+    // always remove scripts
+    removeElements.push('script');
+
+    let els = svg.querySelectorAll('*');
+    let allowMeta = !removeElements.includes('metadata');
+
+    els.forEach(el => {
+      let nodeName = el.nodeName;
+      let isMeta = allowMeta && el.closest('metadata');
+      if (
+        !isMeta &&
+        ((removeNameSpaced && nodeName.includes(':')) ||
+          removeElements.includes(nodeName))
+      ) {
+        el.remove();
+      }
+    });
+  }
+
+  /*export function removeSvgEls(svg, remove = []) {
+    // remove elements
+    if (remove.length) {
+      let selector = remove.join(', ').replaceAll(':', '\\:');
+      svg.querySelectorAll(selector).forEach(el => {
+        el.remove()
+      })
+    }
+  }
+  */
+
+  function removeSvgAtts(svg, remove = []) {
+    remove.forEach(att => {
+      svg.removeAttribute(att);
+    });
+  }
+
+  function removeSvgChildAtts(svg, remove = []) {
+    if (remove.length) {
+      let selector = remove.map(att => { return `[${att}]` }).join(', ')
+        // escape name spaced
+        .replaceAll(':', '\\:');
+
+      svg.querySelectorAll(selector).forEach(el => {
+        remove.forEach(att => {
+          el.removeAttribute(att);
+        });
+      });
+    }
+  }
+
+  /**
+   * general clean up to remove bullshit like
+   * version or enable background
+   */
+
+  function cleanupSVGAttributes(svg, {
+    removeIds = false,
+    removeClassNames = false,
+    removeDimensions = false,
+    stylesToAttributes = false,
+    allowMeta = false,
+    allowAriaAtts = false,
+    allowDataAtts = false,
+  } = {}) {
+
+    let allowed = new Set(['viewBox', 'xmlns', 'width', 'height']);
+
+    if (!removeIds) allowed.add('id');
+    if (!removeClassNames) allowed.add('class');
+    if (removeDimensions) {
+      allowed.delete('width');
+      allowed.delete('height');
+    }
+
+    allowed = Array.from(allowed);
+    if (!stylesToAttributes) {
+      allowed.push('fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-family', 'font-style', 'style');
+    }
+
+    removeExcludedAttribues(svg, { allowed, allowMeta, allowAriaAtts, allowDataAtts });
+  }
+
+  function removeExcludedAttribues(el, {
+    allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class'],
+    allowAriaAtts = true,
+    allowDataAtts = true,
+    allowMeta = false
+  } = {}) {
+    let atts = [...el.attributes].map((att) => att.name);
+    atts.forEach((att) => {
+
+      let isMeta = allowMeta && (att === 'title');
+      let isAria = allowAriaAtts && att.startsWith('aria-');
+      let isData = allowDataAtts && att.startsWith('data-');
+
+      if (
+        !allowed.includes(att) &&
+        !isAria && !isData && !isMeta
+      ) {
+        el.removeAttribute(att);
+      }
+    });
+  }
+
+  function removeElAtts(el, exclude = [], include = []) {
+    let atts = [...el.attributes].map((att) => att.name);
+    atts.forEach((att) => {
+      if (exclude.includes(att) && !include.includes(att)) {
+        el.removeAttribute(att);
+      }
+    });
+  }
+
+  /*
+
+  function cleanSvgPrologue(svgString) {
+    return (
+      svgString
+        // Remove XML prologues like <?xml ... ?>
+        .replace(/<\?xml[\s\S]*?\?>/gi, "")
+        // Remove DOCTYPE declarations
+        .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+        // Remove comments <!-- ... -->
+        .replace(/<!--[\s\S]*?-->/g, "")
+        // Trim extra whitespace
+        .trim()
+    );
+  }
+  */
+
+  function convertPathLengthAtt(el, {
+      styleProps = {}
+  }={}) {
+
+      let pathLength = el.getAttribute('pathLength') ? +el.getAttribute('pathLength') : 0;
+
+      if (pathLength && (styleProps['stroke-dasharray'] || styleProps['stroke-dashoffset'])) {
+          let elLength = getElementLength(el, {
+              pathLength,
+              props: styleProps
+          });
+
+          let scale = elLength / pathLength;
+
+          styleProps = scaleProps(styleProps, { props: ['stroke-dasharray', 'stroke-dashoffset'], scale });
+          [styleProps['stroke-dasharray'], styleProps['stroke-dashoffset']];
+
+          // tag for removal
+          delete styleProps['pathLength'];
+          styleProps.remove.push('pathLength');
+          el.removeAttribute('pathLength');
+
+      }
+
+      return styleProps;
+
+  }
+
+  function ungroupElements(groups) {
+    groups.forEach((g, i) => {
+      let children = [...g.children];
+
+      children.forEach(child => {
+        g.parentNode.insertBefore(child, g);
+      });
+      g.remove();
+    });
+  }
+
+  /**
+   * Parse nested CSS text into a flat object structure
+   * Supports arbitrary nesting depth and & parent selector reference
+   * Respects !important modifiers and handles data URLs
+   */
+  function parseSvgCss(css, {
+    parent=null,
+    removeUnused=true,
+    flatten = true
+  }={}) {
+    
+    let type = typeof css;
+    if(type==='string') removeUnused = false;
+    
+    // get style element text content
+    if(type!=='string' ){
+      if(css.nodeName==='style'){
+        css = css.innerHTML;
+      }
+      else if(css.nodeName==='svg'){
+        let styleEl = css.querySelector('style');
+        if(!styleEl) return {}
+        parent = css;
+        css = styleEl.innerHTML;
+      }
+
+      else {
+       console.warn('invalid CSS input');
+       return {}
+      }
+    }
+    
+    css = css.trim();
+    if (!css) return {};
+
+    // Remove comments
+    css = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    function parseBlock(text, parentSelector = "") {
+      let i = 0;
+      let rules = {};
+      let l = text.length;
+
+      while (i < l) {
+        // Skip whitespace
+        while (/\s/.test(text[i])) i++;
+        if (i >= l) break;
+
+        // Peek ahead to check if this is a selector or a declaration
+        let peekIdx = i;
+        let isSelector = false;
+
+        // Look for '{' before ';' to determine if it's a selector
+        while (peekIdx < l && text[peekIdx] !== ";") {
+          if (text[peekIdx] === "{") {
+            isSelector = true;
+            break;
+          }
+          peekIdx++;
+        }
+
+        if (!isSelector) {
+          // It's a declaration, skip it (will be handled below)
+          i = peekIdx + 1;
+          continue;
+        }
+
+        // Read selector (up to '{')
+        let selector = "";
+        while (i < l && text[i] !== "{") {
+          selector += text[i];
+          i++;
+        }
+
+        selector = selector.trim();
+        if (!selector || text[i] !== "{") continue;
+
+        i++; // skip '{'
+
+        // Find matching closing brace
+        let blockContent = "";
+        let depth = 1;
+
+        while (i < l && depth > 0) {
+          if (text[i] === "{") depth++;
+          else if (text[i] === "}") depth--;
+
+          if (depth > 0) blockContent += text[i];
+          i++;
+        }
+
+        // Compose full selector
+        let fullSelector = selector;
+        if (parentSelector) {
+          if (selector.includes("&")) {
+            fullSelector = selector.replace(/&/g, parentSelector);
+          } else {
+            fullSelector = parentSelector + " " + selector;
+          }
+        }
+        fullSelector = fullSelector.replace(/\s+/g, " ").trim();
+
+        // Separate declarations from nested rules
+        let { declarations, hasNested } = extractDeclarations(blockContent);
+
+        // Add declarations for this selector (respect !important)
+        if (Object.keys(declarations).length) {
+          if (!rules[fullSelector]) {
+            rules[fullSelector] = declarations;
+          } else {
+            // Merge declarations, preserving !important
+            for (let prop in declarations) {
+              let existingValue = rules[fullSelector][prop];
+              let newValue = declarations[prop];
+
+              // Only override if existing doesn't have !important, or new has !important
+              let existingHasImportant =
+                existingValue && existingValue.includes("!important");
+              let newHasImportant = newValue.includes("!important");
+
+              if (!existingHasImportant || newHasImportant) {
+                rules[fullSelector][prop] = newValue;
+              }
+            }
+          }
+        }
+
+        // If block contains nested rules, parse them recursively
+        if (hasNested) {
+          parseBlock(blockContent, fullSelector);
+        }
+      }
+      
+      return rules
+      
+    }
+
+    function extractDeclarations(content) {
+      let declarations = {};
+      let i = 0;
+      let l= content.length;
+      let hasNested = false;
+
+      while (i < l) {
+        // Skip whitespace
+        while (i < l && /\s/.test(content[i])) i++;
+        if (i >= l) break;
+
+        // Check if next thing is a nested selector or a declaration
+        let checkIdx = i;
+        let isNested = false;
+
+        // Scan until we hit ':' or '{' or ';'
+        while (checkIdx < l) {
+          if (content[checkIdx] === "{") {
+            isNested = true;
+            break;
+          }
+          if (content[checkIdx] === ":") {
+            // It's a declaration
+            break;
+          }
+          if (content[checkIdx] === ";") {
+            // Empty or malformed
+            break;
+          }
+          checkIdx++;
+        }
+
+        if (isNested) {
+          // Skip nested rule (will be handled by recursive call)
+          hasNested = true;
+          // Skip to closing brace of this nested rule
+          let depth = 0;
+          while (i < l) {
+            if (content[i] === "{") depth++;
+            if (content[i] === "}") depth--;
+            i++;
+            if (depth === 0) break;
+          }
+        } else {
+          // It's a declaration, read until ';' (but respect url() and quotes)
+          let decl = "";
+          let inUrl = false;
+          let inQuotes = false;
+          let quoteChar = "";
+
+          while (i < l) {
+            let char = content[i];
+            let nextChar = content[i + 1];
+
+            // Track if we're inside url()
+            if (
+              char === "u" &&
+              nextChar === "r" &&
+              content.slice(i, i + 4) === "url("
+            ) {
+              inUrl = true;
+            }
+
+            // Track quotes
+            if (
+              (char === '"' || char === "'") &&
+              (i === 0 || content[i - 1] !== "\\")
+            ) {
+              if (!inQuotes) {
+                inQuotes = true;
+                quoteChar = char;
+              } else if (char === quoteChar) {
+                inQuotes = false;
+                quoteChar = "";
+              }
+            }
+
+            // Check for end of url()
+            if (inUrl && char === ")" && !inQuotes) {
+              inUrl = false;
+            }
+
+            // Only break on semicolon if we're not inside url() or quotes
+            if (char === ";" && !inUrl && !inQuotes) {
+              i++; // skip ';'
+              break;
+            }
+
+            decl += char;
+            i++;
+          }
+
+          decl = decl.trim();
+          if (decl) {
+            let colonIdx = decl.indexOf(":");
+            if (colonIdx > -1) {
+              let prop = decl.substring(0, colonIdx).trim();
+              let value = decl.substring(colonIdx + 1).trim();
+              if (prop && value) {
+
+                declarations[prop] = value;
+              }
+            }
+          }
+        }
+      }
+
+      return { declarations, hasNested };
+    }
+
+    let rules = parseBlock(css);
+    if(parent && removeUnused) rules = removeUnusedSelectors(parent, rules);
+    if(flatten) rules = flattenCssProps(rules);
+
+    // emulate specificity: prioritize ids and important
+    let rulesID = {};
+    let rulesImportant = {};
+    for(let rule in rules){
+      if(rule.startsWith('#')){
+        rulesID[rule] = rules[rule];
+        delete rules[rule];
+      }
+
+      for(let prop in rules[rule]){
+        let val = rules[rule][prop];
+        if(val.includes('!important')){
+          if(!rulesImportant[rule]) rulesImportant[rule]={};
+          rulesImportant[rule][prop] = val;
+        }
+      }
+    }
+
+    rules= {
+      ...rules,
+      ...rulesID,
+      ...rulesImportant
+    };
+
+    return rules;
+  }
+
+  function flattenCssProps(rules) {
+    for (let selector in rules) {
+      let targets = selector.split(/,/).map((sel) => sel.trim());
+      rules[selector];
+      if (targets.length > 1) {
+        targets.forEach((target) => {
+          let props = rules[target];
+          for (let prop in props) {
+            let value = props[prop];
+            if (!value.includes("!important")) {
+              rules[target][prop] = value;
+            }
+          }
+        });
+        delete rules[selector];
+      }
+    }
+    return rules;
+  }
+
+  function removeUnusedSelectors(parent=null, props={}){
+    let selectors = Object.keys(props);  
+    selectors.forEach(selector=>{
+      let el = parent.querySelector(selector);
+      // remove
+      if(!el && selector!==':root') {
+
+        delete props[selector];
+      }
+    });
+    return props
+  }
+
+  function setNormalizedTransformsToEl(el, {
+    styleProps = {},
+  } = {}) {
+    let { remove, matrix, transComponents } = styleProps;
+    let name = el.nodeName.toLowerCase();
+
+    if(!matrix) return styleProps;
+
+    let { rotate, scaleX, scaleY, skewX, translateX, translateY } = transComponents;
+
+    // scale attributes instead of transform
+    let hasRot = rotate !== 0 || skewX !== 0;
+    let unProportional = scaleX !== scaleY;
+    let scalableByAtt = ['circle', 'ellipse', 'rect'];
+
+    let needsTrans = (hasRot) || unProportional;
+    needsTrans = true;
+
+    if (!needsTrans && scalableByAtt.includes(name)) {
+
+      if (name === 'circle' || name === 'ellipse') {
+        styleProps.cx[0] = [styleProps.cx[0] * scaleX + translateX];
+        styleProps.cy[0] = [styleProps.cy[0] * scaleX + translateY];
+
+        if (styleProps.r) styleProps.r[0] = [styleProps.r[0] * scaleX];
+        if (styleProps.rx) styleProps.rx[0] = [styleProps.rx[0] * scaleX];
+        if (styleProps.ry) styleProps.ry[0] = [styleProps.ry[0] * scaleX];
+
+      }
+      else if (name === 'rect') {
+        let x = styleProps.x ? styleProps.x[0] + translateX : translateX;
+        let y = styleProps.y ? styleProps.y[0] + translateY : translateY;
+
+        let rx = styleProps.rx ? styleProps.rx[0] * scaleX : 0;
+        let ry = styleProps.ry ? styleProps.ry[0] * scaleY : 0;
+
+        styleProps.x = [x];
+        styleProps.y = [y];
+
+        styleProps.rx = [rx];
+        styleProps.ry = [ry];
+
+        styleProps.width = [styleProps.width[0] * scaleX];
+        styleProps.height = [styleProps.height[0] * scaleX];
+      }
+
+      // remove now obsolete transform properties
+      delete styleProps.matrix;
+      delete styleProps.transformArr;
+      delete styleProps.transComponents;
+
+      // mark transform attribute for removal
+      styleProps.remove.push('transform');
+
+      // scale props like stroke width or dash-array
+      styleProps = scaleProps$1(styleProps, { props: ['stroke-width', 'stroke-dasharray'], scale: scaleX });
+
+    } else {
+      el.setAttribute('transform', transComponents.matrixAtt);
+
+    }
+
+    return styleProps
+
+  }
+
+  function scaleProps$1(styleProps = {}, { props = [], scale = 1 } = {}, round = true) {
+    if (scale === 1 || !props.length) return props;
+
+    for (let i = 0; i < props.length; i++) {
+      let prop = props[i];
+
+      if (styleProps[prop] !== undefined) {
+        styleProps[prop] = styleProps[prop].map(val => round ? roundTo(val * scale, 2) : val * scale);
+      }
+    }
+    return styleProps
   }
 
   function cleanUpSVG(svgMarkup, {
@@ -7409,6 +8158,8 @@
 
     cleanupSVGAtts = true,
     removeNameSpaced = true,
+    removeNameSpacedAtts = true,
+    convertPathLength = false,
 
     // meta
     allowMeta = false,
@@ -7416,10 +8167,14 @@
     allowAriaAtts = true,
 
     shapeConvert = false,
-    convert_rects = false,
-    convert_ellipses = false,
-    convert_poly = false,
-    convert_lines = false,
+    convertShapes = [],
+
+    // remove elements
+    removeElements = [],
+
+    // remove attributes
+    removeSVGAttributes = [],
+    removeElAttributes = [],
 
     convertTransforms = false,
     removeDefaults = true,
@@ -7428,7 +8183,11 @@
     excludedEls = [],
   } = {}) {
 
-    if (attributesToGroup) stylesToAttributes = true;
+    // resolve dependencies
+    if (unGroup || convertTransforms || minifyRgbColors || attributesToGroup) 
+    stylesToAttributes = true;
+
+    if(stylesToAttributes) cleanUpStrokes = true;
 
     // replace namespaced refs 
     if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
@@ -7439,75 +8198,7 @@
 
     let viewBox = getViewBox(svg);
     let { x, y, width, height } = viewBox;
-
-    // get svg styles
-    let propOptions = {
-      width: width,
-      height: height,
-      normalizeTransforms,
-      removeDefaults: false,
-      cleanUpStrokes: false,
-      allowMeta,
-      allowDataAtts,
-      allowAriaAtts,
-      autoRoundValues,
-      removeIds,
-      removeClassNames,
-      minifyRgbColors,
-    };
-
-    // root svg properties
-    let stylePropsSVG = parseStylesProperties(svg, propOptions);
-
-    // add svg font size for scaling relative
-    propOptions.fontSize = stylePropsSVG['font-size'] ? stylePropsSVG['font-size'][0] : 16;
-
-    /**
-     * get group styles
-     * especially transformations to
-     * be inherited by children
-     */
-    let groups = svg.querySelectorAll('g');
-
-    groups.forEach(g => {
-      let stylePropsG = parseStylesProperties(g, propOptions);
-      let children = g.querySelectorAll(`${renderedEls.join(', ')}`);
-
-      // store parent styles to child property
-      children.forEach(child => {
-        if (child.parentStyleProps === undefined) {
-          child.parentStyleProps = [];
-        }
-        child.parentStyleProps.push(stylePropsG);
-      });
-    });
-
-    if (cleanupSVGAtts) {
-
-      let allowed = new Set(['viewBox', 'xmlns', 'width', 'height']);
-
-      if (!removeIds) allowed.add('id');
-      if (!removeClassNames) allowed.add('class');
-      if (removeDimensions) {
-        allowed.delete('width');
-        allowed.delete('height');
-      }
-
-      allowed = Array.from(allowed);
-      if (!stylesToAttributes) {
-        allowed.push('fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-family', 'font-style', 'style');
-      }
-
-      removeExcludedAttribues(svg, { allowed, allowMeta, allowAriaAtts, allowDataAtts });
-    }
-
-    // remove meta
-    if (!allowMeta) {
-      let metaEls = svg.querySelectorAll('meta, metadata, desc, title');
-      metaEls.forEach(meta => {
-        meta.remove();
-      });
-    }
+    let remove = [];
 
     // add viewBox
     if (addViewBox) addSvgViewBox(svg, { x, y, width, height });
@@ -7522,44 +8213,120 @@
     // remove off canvas
     if (removeOffCanvas) removeOffCanvasEls(svg, { x, y, width, height });
 
-    // always remove scripts
+    /**
+     * collect svg styles
+     * and properties
+     */
+    let propOptions = {
+      width,
+      height,
+      normalizeTransforms,
+      removeDefaults: false,
+      cleanUpStrokes: false,
 
-    let removeEls = ['script', ...excludedEls];
+      allowMeta,
+      allowDataAtts,
+      allowAriaAtts,
+      autoRoundValues,
+      removeIds,
+      removeClassNames,
+      minifyRgbColors,
+      stylesheetProps: {},
+      exclude:[]
+    };
 
-    removeSVGEls(svg, { remove: removeEls, removeNameSpaced });
+    // root svg inline style properties
+    let stylePropsSVG = parseStylesProperties(svg, propOptions);
 
-    // an array of all elements' properties
+    let styleEl = svg.querySelector('style');
+    let cssStylePropsSVG = {};
+
+    if (styleEl) {
+      cssStylePropsSVG = parseSvgCss(styleEl, { parent: svg });
+
+      for (let selector in cssStylePropsSVG) {
+        let els = svg.querySelectorAll(`${selector}`);
+        els.forEach(el => {
+          if (!el['cssRules']) el['cssRules'] = [];
+          el['cssRules'].push(selector);
+
+          // remove class names only used for styling
+          if (stylesToAttributes) {
+            let className = selector.substring(1);
+            el.classList.remove(className);
+          }
+        });
+      }
+
+      // remove style element from element
+      if (stylesToAttributes) {
+        styleEl.remove();
+      }
+    }
+    // remove style element from root SVG
+    if (stylesToAttributes) svg.removeAttribute('style');
+
+    // add stylesheet props
+    propOptions.stylesheetProps = cssStylePropsSVG;
+
+    // add svg font size for scaling relative
+    propOptions.fontSize = stylePropsSVG['font-size'] ? stylePropsSVG['font-size'][0] : 16;
+
+    /**
+     * get group styles
+     * especially transformations to
+     * be inherited by children
+     */
+    let groups = svg.querySelectorAll('g');
+
+    groups.forEach(g => {
+
+      let stylePropsG = parseStylesProperties(g, propOptions);
+      let children = g.querySelectorAll(`${renderedEls.join(', ')}`);
+
+      // store parent styles to child property
+      children.forEach(child => {
+        if (child.parentStyleProps === undefined) {
+          child.parentStyleProps = [];
+        }
+        child.parentStyleProps.push(stylePropsG);
+      });
+    });
+
+    // collect all elements' properties
     let svgElProps = [];
     let els = svg.querySelectorAll(`${renderedEls.join(', ')}`);
 
+    /**
+     * loop all geometry elements
+     */
     for (let i = 0; i < els.length; i++) {
       let el = els[i];
 
       let name = el.nodeName.toLowerCase();
 
-      // 1. remove hidden elements
-      let style = el.getAttribute('style') || '';
-      let isHiddenByStyle = style ? style.trim().includes('display:none') : false;
-      let isHidden = (el.getAttribute('display') && el.getAttribute('display') === 'none') || isHiddenByStyle;
-      if (name.includes(':') || removeEls.includes(name) || (removeHidden && isHidden)) {
-        el.remove();
-        continue;
-      }
-
       /**
-       * get all style properties
+       * get all element style properties
        * convert relative or physical units
        * to user units
        */
       let styleProps = parseStylesProperties(el, propOptions);
       let stylePropsFiltered = {};
 
+      // convert pathLength before transforming
+      if (convertPathLength) {
+        styleProps = convertPathLengthAtt(el, { styleProps });
+        remove = [...new Set([...remove, ...styleProps.remove])];
+      }
+
       // get parent styles
       let { parentStyleProps = [] } = el;
       let inheritedProps = {};
       let transFormInherited = [];
 
-      /** inherit transforms 
+      /** 
+       * consolidate all properties:
+       * merge with inherited transforms 
        * and styles from group 
        */
       parentStyleProps.forEach(props => {
@@ -7574,146 +8341,95 @@
         };
       });
 
+      // merge all transforms
       transFormInherited = [...transFormInherited, ...styleProps.transformArr];
       styleProps.transformArr = transFormInherited;
 
-      // merge with svg props
+      // don't inherit class from SVG
+      if (stylePropsSVG['class']) delete stylePropsSVG['class'];
+      if (stylePropsSVG['id']) delete stylePropsSVG['id'];
 
+      // merge with svg props
       styleProps = {
         ...stylePropsSVG,
         ...inheritedProps,
         ...styleProps
       };
 
-      // dont inherit class
-      if (stylePropsSVG['class'] === styleProps['class']) {
-        delete styleProps['class'];
-      }
-
       // add combined transforms
       addTransFormProps(styleProps, transFormInherited);
 
-      let { remove, matrix, transComponents } = styleProps;
+      remove = [...new Set([...remove, ...styleProps.remove])];
 
-      // styles to atts
-      if (unGroup || convertTransforms || minifyRgbColors) stylesToAttributes = true;
+      /**
+       * remove els and attributes
+       */
+
+      // remove meta
+      if (!allowMeta) removeElements.push('meta', 'metadata', 'desc', 'title');
+
+      if (removeClassNames) {
+        removeSVGAttributes.push('class');
+        removeElAttributes.push('class');
+      }
+
+      if (removeIds) {
+        removeSVGAttributes.push('id');
+        removeElAttributes.push('id');
+      }
+
+      // remove hidden elements
+      removeHiddenSvgEls(svg);
+
+      // remove SVG elements
+      removeSvgEls(svg, { removeElements, removeNameSpaced });
+
+      // remove SVG attributes
+      removeSvgAtts(svg, removeSVGAttributes);
+
+      // remove SVG child element attributes
+      removeSvgChildAtts(svg, removeElAttributes);
+
+      // general cleanup
+      if (cleanupSVGAtts) cleanupSVGAttributes(svg, { removeIds, removeClassNames, removeDimensions, stylesToAttributes, allowMeta, allowAriaAtts, allowDataAtts });
 
       if (stylesToAttributes) {
 
         /**
          * normalize transforms
          */
-        if (normalizeTransforms && matrix) {
-          let { rotate, scaleX, scaleY, skewX, translateX, translateY } = transComponents;
+        if (normalizeTransforms) {
+          styleProps = setNormalizedTransformsToEl(el, { styleProps });
 
-          // scale attributes instead of transform
-          let hasRot = rotate !== 0 || skewX !== 0;
-          let unProportional = scaleX !== scaleY;
-          let scalableByAtt = ['circle', 'ellipse', 'rect'];
-          let needsTrans = convertTransforms || (name === 'g') || (hasRot) || unProportional;
+          remove = [...new Set([...remove, ...styleProps.remove])];
 
-          if (!needsTrans && scalableByAtt.includes(name)) {
-
-            if (name === 'circle' || name === 'ellipse') {
-              styleProps.cx[0] = [styleProps.cx[0] * scaleX + translateX];
-              styleProps.cy[0] = [styleProps.cy[0] * scaleX + translateY];
-
-              if (styleProps.r) styleProps.r[0] = [styleProps.r[0] * scaleX];
-              if (styleProps.rx) styleProps.rx[0] = [styleProps.rx[0] * scaleX];
-              if (styleProps.ry) styleProps.ry[0] = [styleProps.ry[0] * scaleX];
-
-            }
-            else if (name === 'rect') {
-              let x = styleProps.x ? styleProps.x[0] + translateX : translateX;
-              let y = styleProps.y ? styleProps.y[0] + translateY : translateY;
-
-              let rx = styleProps.rx ? styleProps.rx[0] * scaleX : 0;
-              let ry = styleProps.ry ? styleProps.ry[0] * scaleY : 0;
-
-              styleProps.x = [x];
-              styleProps.y = [y];
-
-              styleProps.rx = [rx];
-              styleProps.ry = [ry];
-
-              styleProps.width = [styleProps.width[0] * scaleX];
-              styleProps.height = [styleProps.height[0] * scaleX];
-            }
-
-            // remove now obsolete transform properties
-            delete styleProps.matrix;
-            delete styleProps.transformArr;
-            delete styleProps.transComponents;
-
-            // mark transform attribute for removal
-            remove.push('transform');
-
-            // scale props like stroke width or dash-array
-            styleProps = scaleProps(styleProps, { props: ['stroke-width', 'stroke-dasharray'], scale: scaleX });
-
-          } else {
-            el.setAttribute('transform', transComponents.matrixAtt);
-
-          }
         }
 
         /**
          * apply consolidated 
          * element attributes
+         * remove non-supported element props
          */
         stylePropsFiltered = filterSvgElProps(name, styleProps,
           { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds });
 
-        remove = [...remove, ...stylePropsFiltered.remove];
+        remove = [...new Set([...remove, ...stylePropsFiltered.remove])];
 
         for (let prop in stylePropsFiltered.propsFiltered) {
           let values = styleProps[prop];
           let val = values.length ? values.join(' ') : values[0];
           el.setAttribute(prop, val);
-
-        }
-
-        // remove obsolete attributes
-        for (let i = 0; i < remove.length; i++) {
-          let att = remove[i];
-          if (!stylesToAttributes && att === 'style') continue
-
-          el.removeAttribute(att);
         }
 
         /**
-         * remove group styles
-         * copied to children
-         * or remove nesting
+         * remove obsolete 
+         * attributes
          */
 
-        if (unGroup) {
-          groups.forEach((g, i) => {
-            let children = [...g.children];
+        for (let i = 0; i < remove.length; i++) {
+          let att = remove[i];
 
-            children.forEach(child => {
-              g.parentNode.insertBefore(child, g);
-            });
-            g.remove();
-          });
-        } else {
-          groups.forEach((g, i) => {
-
-            let atts = Object.keys(getElementAtts(g));
-
-            atts.forEach(att => {
-
-              let isData = !allowDataAtts && att.startsWith('data-');
-              let isAria = !allowAriaAtts && att.startsWith('aria-');
-
-              remove.push('transform', 'style');
-
-              if (remove.includes(att) || isData || isAria) {
-                g.removeAttribute(att);
-              }
-            });
-          });
-
+          el.removeAttribute(att);
         }
 
       } // endof style processing
@@ -7727,10 +8443,7 @@
       // force shape conversion when transform conversion is enabled
       if (convertTransforms) {
         shapeConvert = 'toPaths';
-        convert_rects = true;
-        convert_ellipses = true;
-        convert_poly = true;
-        convert_lines = true;
+        convertShapes = ['path', 'rect', 'ellipse', 'circle', 'line', 'polygon', 'polyline'];
       }
 
       // convert shapes to paths
@@ -7738,8 +8451,8 @@
 
         let { matrix = null, transComponents = null } = styleProps;
 
+        // scale props like stroke width or dash-array before conversion
         if (matrix && transComponents) {
-          // scale props like stroke width or dash-array before conversion
           ['stroke-width', 'stroke-dasharray'].forEach(att => {
             let attVal = el.getAttribute(att);
             let vals = attVal ? attVal.split(' ').filter(Boolean).map(Number).map(val => val * transComponents.scaleX) : [];
@@ -7750,9 +8463,8 @@
         // convert paths only if a matrix transform is required
         if (matrix ? geometryEls.includes(name) : shapeEls.includes(name)) {
 
-          let path = shapeElToPath(el, { width, height, convert_rects, convert_ellipses, convert_poly, convert_lines, matrix });
+          let path = shapeElToPath(el, { width, height, convertShapes, matrix });
           el.replaceWith(path);
-
           name = 'path';
           el = path; // required for node
 
@@ -7760,22 +8472,24 @@
 
       }
 
-      // convert paths to shapes 
+      /**
+       * Reverse conversion:  
+       * paths to shapes 
+       */
       else if (shapeConvert === 'toShapes') {
         let paths = svg.querySelectorAll('path');
         paths.forEach(path => {
-          let shape = pathElToShape(path, { convert_rects, convert_ellipses, convert_poly, convert_lines });
-
+          let shape = pathElToShape(path, { convertShapes });
+          path.replaceWith(shape);
           path = shape;
-        });
 
+        });
       }
 
       /**
        * combine styles
        * store in node property
        */
-
       if (mergePaths || attributesToGroup) {
 
         let options = { allowMeta, allowAriaAtts, removeIds, removeClassNames, allowDataAtts };
@@ -7785,7 +8499,7 @@
          * adjacent path merging 
          * e.g ignore classnames or ids
          */
-        if(mergePaths){
+        if (mergePaths) {
           options.removeIds = true;
           options.removeClassNames = true;
           options.allowAriaAtts = false;
@@ -7801,196 +8515,222 @@
           let values = stylePropsFiltered[prop];
           let val = values.length ? values.join(' ') : values[0];
 
-          let propShort = toShortStr(prop);
-          let valShort = toShortStr(val);
-          let propStr = `${propShort}-${valShort}`;
+          if(prop!=='class' && prop!=='id'){
 
-          // store in node property
-          if (!el.styleSet) el.styleSet = new Set();
-          el.styleSet.add(propStr);
+            let propShort = toShortStr(prop);
+            let valShort = toShortStr(val);
+            let propStr = `${propShort}-${valShort}`;
+    
+            // store in node property
+            if (!el.styleSet) el.styleSet = new Set();
+            if(propStr) el.styleSet.add(propStr);
+          }
         }
 
       }
 
     }//endof element loop
 
+    /**
+     * remove group styles
+     * copied to children
+     * or remove nesting
+     */
+
+    if (unGroup) {
+      ungroupElements(groups);
+    } else {
+
+      if (stylesToAttributes) {
+        groups.forEach(g => {
+          removeElAtts(g, ['style', 'transform']);
+        });
+      }
+
+    }
+
+    // styles to group
+    if (attributesToGroup) sharedAttributesToGroup(svg);
+
     /** 
      * merge paths with same styles
      */
     if (mergePaths) {
-      let paths = svg.querySelectorAll('path');
-      let len = paths.length;
-
-      if (len) {
-        let path0 = paths[0];
-        let d0 = path0.getAttribute('d');
-        let stylePrev = path0.styleSet !== undefined ? [...path0.styleSet].join('_') : '';
-
-        for (let i = 1; i < len; i++) {
-          let path = paths[i];
-          let style = path.styleSet !== undefined ? [...path.styleSet].join('_') : '';
-          let isSibling = path.previousElementSibling === path0;
-          let d = path.getAttribute('d');
-          let isAbs = d.startsWith('M');
-
-          if (isSibling && style === stylePrev) {
-            let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
-
-            d0 += dAbs;
-            path0.setAttribute('d', d0);
-            path.remove();
-
-          } else {
-            path0 = path;
-            d0 = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
-          }
-
-          // update style
-          stylePrev = style;
-        }
-      }
-
-      /** 
-      * shared styles to group
-      */
-
-      if (attributesToGroup) {
-        let els = svg.querySelectorAll(geometryEls.join(', '));
-        let len = els.length;
-
-        let el0 = els[0] || null;
-        let stylePrev = el0.styleSet !== undefined ? [...el0.styleSet].join('_') : '';
-
-        // all props
-        let allProps = {};
-
-        // find attributes shared by all
-        let globalAtts = [];
-
-        if (len) {
-
-          let groups = [[el0]];
-          let idx = 0;
-          let elPrev = el0;
-
-          for (let i = 0; i < len; i++) {
-            let el = els[i];
-            let atts = getElementAtts(el);
-            for (let att in atts) {
-              let att_str = `${att}_${atts[att]}`;
-
-              if (!allProps[att_str]) {
-                allProps[att_str] = [];
-              }
-              allProps[att_str].push(el);
-              //
-              if (allProps[att_str].length === len) {
-                globalAtts.push(att);
-              }
-            }
-          }
-
-          // apply global to parent SVG
-          if (globalAtts.length) {
-            let atts0 = getElementAtts(el0);
-            for (let att in atts0) {
-              // && 
-              if (globalAtts.includes(att) && att !== 'transform') {
-                svg.setAttribute(att, atts0[att]);
-              }
-            }
-          }
-
-          // detect groups
-          for (let i = 1; i < len; i++) {
-            let el = els[i];
-            let styleArr = el.styleSet !== undefined ? [...el.styleSet] : [];
-            let style = styleArr.length ? styleArr.join('_') : '';
-
-            // same style add to group
-            if (style === stylePrev && elPrev.nextElementSibling === el) {
-              groups[idx].push(el);
-            }
-            // start new group
-            else {
-              groups.push([el]);
-              idx++;
-            }
-            // update style
-            stylePrev = style;
-            elPrev = el;
-
-          }// endof el loop
-
-          // create groups
-          for (let i = 0; i < groups.length; i++) {
-            let children = groups[i];
-            let child0 = children[0];
-            let atts = getElementAtts(child0);
-            let groupEl = child0.parentNode.closest('g');
-
-            if (children.length === 1) {
-              if (globalAtts.length) {
-                let globalTransform = globalAtts.includes('transform');
-                if (globalTransform) {
-
-                  groupEl.setAttribute('transform', atts['transform']);
-                }
-
-                for (let att in atts) {
-
-                  if (globalAtts.includes(att)) {
-                    child0.removeAttribute(att);
-                  }
-                }
-              }
-              continue
-            }
-
-            // create new group
-            if (!groupEl) {
-
-              groupEl = document.createElementNS(svgNs, 'g');
-              child0.parentNode.insertBefore(groupEl, child0);
-              groupEl.append(...children);
-            }
-
-            // move attributes to group
-            for (let att in atts) {
-              let val = atts[att];
-
-              if (!geometryProps.includes(att)) {
-                if (!globalAtts.includes(att) || att === 'transform') {
-                  groupEl.setAttribute(att, val);
-                }
-                children.forEach(child => {
-                  child.removeAttribute(att);
-                });
-              }
-            }
-
-          } // endof groups
-
-        }
-      }
-
+      mergePathsWithSameProps(svg);
     }
 
     // remove futile clip-paths
     if (cleanupClip) removeFutileClipPaths(svg, { x, y, width, height });
 
     // replace href attributes with namespace - required by many older applications
-    if (legacyHref) {
-      svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink");
-      let hrefs = svg.querySelectorAll('[href]');
-      hrefs.forEach(el => {
-        let href = el.getAttribute('href');
-        el.setAttribute('xlink:href', href);
-        el.removeAttribute('href');
-      });
-    }
+    if (legacyHref) hrefToXlink(svg);
 
+    // remove empty class attributes
+    removeEmptyClassAtts(svg);
     return { svg, svgElProps }
+
+  }
+
+  function removeEmptyClassAtts(svg) {
+    let emptyClassEls = svg.querySelectorAll('[class=""');
+    emptyClassEls.forEach(el => {
+      el.removeAttribute('class');
+    });
+  }
+
+  /** 
+  * shared styles to group
+  */
+  function sharedAttributesToGroup(svg) {
+
+    let els = svg.querySelectorAll(renderedEls.join(', '));
+    let len = els.length;
+    if(len===1) return;
+
+    let el0 = els[0] || null;
+    let stylePrev = el0.styleSet !== undefined ? [...el0.styleSet].join('_') : '';
+
+    // all props
+    let allProps = {};
+
+    // find attributes shared by all
+    let globalAtts = [];
+
+    if (len) {
+
+      let groups = [[el0]];
+      let idx = 0;
+      let elPrev = el0;
+
+      for (let i = 0; i < len; i++) {
+        let el = els[i];
+        let atts = getElementAtts(el);
+        for (let att in atts) {
+          let att_str = `${att}_${atts[att]}`;
+
+          if (!allProps[att_str]) {
+            allProps[att_str] = [];
+          }
+          allProps[att_str].push(el);
+          //
+          if (allProps[att_str].length === len) {
+            globalAtts.push(att);
+          }
+        }
+      }
+
+      // apply global to parent SVG
+      if (globalAtts.length) {
+        let atts0 = getElementAtts(el0);
+        for (let att in atts0) {
+          if (globalAtts.includes(att) && att !== 'transform') {
+            svg.setAttribute(att, atts0[att]);
+          }
+        }
+      }
+
+      // detect groups
+      for (let i = 1; i < len; i++) {
+        let el = els[i];
+        let styleArr = el.styleSet !== undefined ? [...el.styleSet] : [];
+        let style = styleArr.length ? styleArr.join('_') : '';
+
+        // same style add to group
+        if (style === stylePrev && elPrev.nextElementSibling === el) {
+          groups[idx].push(el);
+        }
+        // start new group
+        else {
+          groups.push([el]);
+          idx++;
+        }
+        // update style
+        stylePrev = style;
+        elPrev = el;
+
+      }// endof el loop
+
+      // create groups
+      for (let i = 0; i < groups.length; i++) {
+        let children = groups[i];
+        let child0 = children[0];
+        let atts = getElementAtts(child0);
+        let groupEl = child0.parentNode.closest('g');
+
+        // only 1 child - nothing to group
+        if (children.length === 1) continue
+
+        // create new group
+        if (!groupEl || groups.length>1) {
+
+          groupEl = document.createElementNS(svgNs, 'g');
+          child0.parentNode.insertBefore(groupEl, child0);
+          groupEl.append(...children);
+        }
+
+        // move attributes to group
+        for (let att in atts) {
+          let val = atts[att];
+
+          let excludeAtts = ['id', 'class'];
+          if (!geometryProps.includes(att) && !excludeAtts.includes(att)) {
+            if (!globalAtts.includes(att) || att === 'transform') {
+              groupEl.setAttribute(att, val);
+            }
+            children.forEach(child => {
+              child.removeAttribute(att);
+            });
+          }
+        }
+
+      } // endof groups
+
+    }
+  }
+
+  // merge adjacent paths
+  function mergePathsWithSameProps(svg) {
+    let paths = svg.querySelectorAll('path');
+    let len = paths.length;
+
+    if (len) {
+      let path0 = paths[0];
+      let d0 = path0.getAttribute('d');
+      let stylePrev = path0.styleSet !== undefined ? [...path0.styleSet].join(' ') : '';
+
+      let remove = [];
+
+      for (let i = 1; i < len; i++) {
+        let path = paths[i];
+        let style = path.styleSet !== undefined ? [...path.styleSet].join(' ') : '';
+        let isSibling = path.previousElementSibling === path0;
+        let d = path.getAttribute('d');
+        let isAbs = d.startsWith('M');
+
+        if (isSibling && style === stylePrev) {
+          let dAbs = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
+
+          d0 += dAbs;
+          path0.setAttribute('d', d0);
+
+          remove.push(path);
+
+        } else {
+          path0 = path;
+
+          d0 = isAbs ? d : parsePathDataString(d).pathData.map(com => `${com.type} ${com.values.join(' ')}`).join(' ');
+
+        }
+
+        // update style
+        stylePrev = style;
+      }
+
+      remove.forEach(el => {
+        el.remove();
+      });
+
+    }
 
   }
 
@@ -8051,8 +8791,6 @@
       }
     });
 
-    // remove futile clip-paths
-
   }
 
   function removeFutileClipPaths(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
@@ -8104,90 +8842,14 @@
 
   }
 
-  function scaleProps(styleProps = {}, { props = [], scale = 1 } = {}) {
-    if (scale === 1 || !props.length) return props;
+  function hrefToXlink(svg) {
+    svg.setAttribute('xmlns:xlink', "http://www.w3.org/1999/xlink");
+    let hrefs = svg.querySelectorAll('[href]');
+    hrefs.forEach(el => {
+      let href = el.getAttribute('href');
+      el.setAttribute('xlink:href', href);
 
-    for (let i = 0; i < props.length; i++) {
-      let prop = props[i];
-
-      if (styleProps[prop] !== undefined) {
-        styleProps[prop] = styleProps[prop].map(val => val * scale);
-      }
-    }
-    return styleProps
-  }
-
-  function removeSVGEls(svg, {
-    remove = ['metadata', 'script'],
-    removeNameSpaced = true,
-  } = {}) {
-
-    let els = svg.querySelectorAll('*');
-
-    let allowMeta = !remove.includes('metadata');
-
-    els.forEach(el => {
-      let nodeName = el.nodeName;
-      let isMeta = allowMeta && el.closest('metadata');
-      if (
-        !isMeta &&
-        ((removeNameSpaced && nodeName.includes(':')) ||
-          remove.includes(nodeName))
-      ) {
-        el.remove();
-      }
     });
-  }
-
-  function removeExcludedAttribues(el, {
-    allowed = ['viewBox', 'xmlns', 'width', 'height', 'id', 'class'],
-    allowAriaAtts = true,
-    allowDataAtts = true,
-    allowMeta = false
-  } = {}) {
-    let atts = [...el.attributes].map((att) => att.name);
-    atts.forEach((att) => {
-
-      let isMeta = allowMeta && (att === 'title');
-      let isAria = allowAriaAtts && att.startsWith('aria-');
-      let isData = allowDataAtts && att.startsWith('data-');
-
-      if (
-        !allowed.includes(att) &&
-        !isAria && !isData && !isMeta
-      ) {
-        el.removeAttribute(att);
-      }
-    });
-  }
-
-  function stringifySVG(svg, {
-    omitNamespace = false,
-    removeComments = true,
-  } = {}) {
-    let markup = new XMLSerializer().serializeToString(svg);
-
-    if (omitNamespace) {
-      markup = markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '');
-    }
-
-    if (removeComments) {
-      markup = markup
-        .replace(/(<!--.*?-->)|(<!--[\S\s]+?-->)|(<!--[\S\s]*?$)/g, '');
-    }
-
-    markup = markup
-      .replace(/\t/g, "")
-      .replace(/[\n\r|]/g, "\n")
-      .replace(/\n\s*\n/g, '\n')
-      .replace(/ +/g, ' ')
-
-      .replace(/> </g, '><')
-      .trim()
-      // sanitize linebreaks within pathdata
-      .replaceAll('&#10;', '\n');
-
-    return markup
   }
 
   function refineRoundedCorners(pathData, {
@@ -8759,61 +9421,69 @@
       return pathData
   }
 
-  function harmonizeCubicCptsThird(pathData = [], t = 0.666) {
+  function fixIntersectingCpts(pathData = []) {
 
       let l = pathData.length;
-      for (let i = 0; i < l; i++) {
+      let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
+      let p = p0;
+
+      for (let i = 1; i < l; i++) {
           let com = pathData[i];
           let comPrev = pathData[i - 1] || null;
           let { type, values } = com;
           pathData[i + 1] ? pathData[i + 1] : null;
-          let adjust = false;
 
           if (type === 'C') {
+              let tx = 1.2;
               let cp1 = { x: values[0], y: values[1] };
+              p = { x: values[4], y: values[5] };
               let cp2 = { x: values[2], y: values[3] };
-              let valuesL = comPrev.values.slice(-2);
-              let p0 = { x: valuesL[0], y: valuesL[1] };
-              let p = { x: values[4], y: values[5] };
 
-              let dist0 = getDistManhattan(p0, p);
-              getDistManhattan(p0, cp1);
-              getDistManhattan(p, cp2);
-              let dist3 = getDistManhattan(cp1, cp2);
+              interpolate(p0, cp1,   tx );
+              let cp2_ex = interpolate( p, cp2,   tx);
 
-              let ptIV = checkLineIntersection(p0, cp1, p, cp2, false);
+              comPrev.values.slice(-2);
 
-              if (ptIV) {
+              // extend tangents
 
-                  // exact intersection
-                  let ptI = ptIV ? checkLineIntersection(p0, cp1, p, cp2, true) : null;
+              let ptI = checkLineIntersection(p0, cp1, p, cp2_ex, true, true);
 
-                  // cpts are intersection
-                  if (ptI) {
-                      adjust = true;
-                  }
+              
+              /*
+              renderPoly(markers, [p0, cp1], 'orange',  '0.75')
+              renderPoly(markers, [p, cp2], 'blue',  '0.75')
+              renderPoly(markers, [p, cp2_ex], 'magenta',  '0.75')
 
-                  else if (dist3 < dist0 / 5) {
-                      adjust = true;
-                  }
-              }
+              renderPoint(markers, p0, 'orange',  '0.75')
+              renderPoint(markers, cp1, 'magenta', '0.75')
+              renderPoint(markers, cp1_ex, 'blue', '0.5')
+   
+              renderPoint(markers, cp2, 'cyan', '0.75')
+              */
 
-              if (adjust) {
-                  cp1 = pointAtT([p0, ptIV], t);
-                  cp2 = pointAtT([p, ptIV], t);
+              
 
-                  pathData[i].values[0] = cp1.x;
-                  pathData[i].values[1] = cp1.y;
-                  pathData[i].values[2] = cp2.x;
-                  pathData[i].values[3] = cp2.y;
+              /*
+              renderPoint(markers, p0, 'orange')
+              renderPoint(markers, p, 'magenta', '0.5')
+              */
+
+              if (ptI) {
+                  let t = 0.666;
+                  cp1 = interpolate(p0, ptI, t);
+                  cp2 = interpolate(p, ptI, t);
+                  com.values = [cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y];
+
               }
 
           }
 
+          if (values.length) {
+              p0 = p;
+          }
       }
 
-      return pathData
-
+      return pathData;
   }
 
   function simplifyPolyRDP(pts, {quality = 0.9, width = 0, height = 0}={}) {
@@ -8829,7 +9499,7 @@
           quality = parseFloat(quality);
       }
 
-      if (pts.length < 4 || (!isAbsolute && quality) >= 1) return pts;
+      if (pts.length < 4 ) return pts;
 
       // convert quality to squaredistance tolerance
       let tolerance = quality;
@@ -8930,7 +9600,8 @@
       }
 
       // nothing to do - exit
-      if (pts.length < 4 || (!isAbsolute && quality) >= 1) return pts;
+
+      if (pts.length < 4 ) return pts;
 
       let p0 = pts[0];
       let pt;
@@ -8942,7 +9613,7 @@
       if (!isAbsolute) {
 
           // quality to tolerance
-          tolerance = 1 - quality;
+          tolerance = quality;
 
           /**
            * approximate dimensions
@@ -8989,14 +9660,15 @@
 
       // complex polygon
       if (Array.isArray(pts[0])) {
-          pts.forEach(sub => {            
+          pts.forEach(sub => {
               subPath = [
                   { type: 'M', values: [sub[0].x, sub[0].y] },
                   ...sub.slice(1).map(pt => { return { type: 'L', values: [pt.x, pt.y] } })
               ];
+              if (closed) subPath.push({ type: 'Z', values: [] });
               pathData.push(...subPath);
           });
-      }else {
+      } else {
           pathData = [
               { type: 'M', values: [pts[0].x, pts[0].y] },
               ...pts.slice(1).map(pt => { return { type: 'L', values: [pt.x, pt.y] } })
@@ -9006,6 +9678,40 @@
       if (closed) pathData.push({ type: 'Z', values: [] });
       return pathData
 
+  }
+
+  function getPolyCentroid(pts) {
+
+      let l = pts.length;
+      let x = 0, y = 0;
+      for (let i = 0; l && i < l; i++) {
+          let pt = pts[i];
+          x += pt.x;
+          y += pt.y;
+      }
+
+      let centroid = {x: x/l, y:y/l};
+      return centroid
+
+  }
+
+  function detectRegularPolygon(pts, centroid={x:0, y:0}) {
+      let rSq = getSquareDistance(pts[0], centroid);
+      let isRegular = true;
+
+      for (let i = 1, l = pts.length; i < l; i++) {
+          let pt1 = pts[i];
+          let dist = getSquareDistance(pt1, centroid);
+
+          let diff = Math.abs(rSq-dist);
+          let diffRel = diff/rSq;
+
+          if (diffRel > 0.05) {
+              return false;
+          }
+
+      }
+      return isRegular;
   }
 
   function analyzePoly(pts, {
@@ -9274,15 +9980,13 @@
 
       // create pathdata
       let pathData = bezierPtsToPathData(beziers);
-
       let cp1, cp2;
 
       adjustCpts = false;
-      harmonize = false;
+
+      adjustCpts = true;
 
       if (adjustCpts) {
-
-          console.log('refine cpts');
 
           let len2 = pathData.length;
           let com1 = pathData[0];
@@ -9312,13 +10016,16 @@
               com2.values[3] = cp2.y;
           }
 
+          /*
           // harmonize too tight tangents
-
+          let harmonize = true;
+           harmonize = false;
           if (harmonize) {
               pathData = harmonizeCubicCptsThird([{ type: 'M', values: [pts[0].x, pts[0].y] },
-              ...pathData]);
-              pathData.shift();
+              ...pathData])
+              pathData.shift()
           }
+          */
 
       }
 
@@ -9822,6 +10529,104 @@
       return pathData
   }
 
+  function simplifyRC(pts, quality = 1, shiftStart = true) {
+
+      if (pts.length < 4) return pts;
+
+      let l = pts.length;
+
+      // starting point
+      let M = pts[0];
+
+      // last point
+      let Z = pts[l - 1];
+
+      // remove unnecessary closing point
+      if (M.x === Z.x && M.y === Z.y) {
+          pts.pop();
+          l--;
+          Z = pts[l - 1];
+      }
+
+      // init new point array
+      let ptsSmp = [M];
+      let pt0 = M;
+      let pt1, pt2;
+
+      // loop through vertices by triangles
+      for (let i = 2; i < l; i++) {
+          pt1 = pts[i - 1];
+          pt2 = pts[i];
+          let isLast = i === l - 1;
+
+          /**
+           * 1. Skip zero-length segments
+           */
+          if ((pt1.x === pt0.x && pt1.y === pt0.y) || (pt1.x === pt2.x && pt1.y === pt2.y)) {
+              continue;
+          }
+
+          /**
+           * 2. Check for perfectly flat
+           * vertical/horizontal segments
+           */
+          let isVertical = (pt0.x === pt1.x);
+          let isHorizontal = (pt0.y === pt1.y);
+
+          if (isVertical || isHorizontal) {
+
+              let isVertical2 = (pt1.x === pt2.x);
+              let isHorizontal2 = (pt1.y === pt2.y);
+
+              if (((isVertical && isVertical2) || (isHorizontal && isHorizontal2))) {
+
+                  // perfectly flat segment - skip
+                  if (!isLast) continue;
+
+                  // flat but last – add last and skip colinearity check
+                  if (isLast && M.x !== pt2.x && M.y !== pt2.y) {
+
+                      ptsSmp.push(pt2);
+                      continue
+                  }
+
+              }
+          }
+
+          // check area
+          let area = getPolygonArea([pt0, pt1, pt2], true);
+          let thresh = getSquareDistance(pt0, pt2) * 0.005;
+
+          // flat
+          if ( area <= thresh && i<l-1) {
+
+              pt0 = pt1;
+              continue
+          }
+
+          // no simplification - add mid pt 
+          ptsSmp.push(pt1);
+
+          // add last point if not first
+          if (isLast && M.x !== pt2.x && M.y !== pt2.y) {
+              // console.log('add last', M, pt2);
+              ptsSmp.push(pt2);
+          }
+
+          // update previous point
+          pt0 = pt1;
+
+      }
+
+      // 1st and last are colinear
+      let area0 = getPolygonArea([ptsSmp[1], M, ptsSmp[ptsSmp.length-1]], true);
+      let thresh0 = getSquareDistance (ptsSmp[1], ptsSmp[ptsSmp.length-1]) * 0.005;
+      // remove first point
+      if(area0 < thresh0) ptsSmp.shift();
+
+      return ptsSmp;
+  }
+
   function simplifyPolygonToPathData(pts, {
       debug = false,
       width = 0,
@@ -9838,29 +10643,80 @@
       simplifyRDP = 1,
   } = {}) {
 
-      /*
-      // denoise via RDP
-      if (denoise && denoise !== 1) {
-          pts = simplifyPolyRDP(pts, {
-              width,
-              height,
-              quality: denoise,
-              manhattan,
-              absolute
-          })
-      }
-      */
+      let polyPath = [];
+      let l = pts.length;
+      let M = pts[0];
+      let Z = pts[l - 1];
 
-      /*
-      // simplify polygon
-      if (simplifyRD != 1) {
-          pts = simplifyPolyRD(pts, { quality: simplifyRD+'px' })
+      // triangle
+      if (pts.length === 3) {
+
+          let pM1 = interpolate(M, pts[1], 0.5);
+          let pM2 = interpolate(pts[1], Z, 0.5);
+          let pM3 = interpolate(Z, pts[0], 0.5);
+
+          /*
+          console.log('triangle');
+          renderPoint(markers, M)
+          renderPoint(markers, pM1)
+          renderPoint(markers, pM2)
+          renderPoint(markers, pM3)
+          */
+
+          if (closed) {
+              let t = 0.6666;
+              let cp1_1 = interpolate(pM1, pts[1], t);
+              let cp2_1 = interpolate(pM2, pts[1], t);
+              let cp1_2 = interpolate(pM2, Z, t);
+              let cp2_2 = interpolate(pM3, Z, t);
+              let cp1_3 = interpolate(pM3, M, t);
+              let cp2_3 = interpolate(pM1, M, t);
+
+              polyPath = [
+                  { type: 'M', values: [pM1.x, pM1.y] },
+                  { type: 'C', values: [cp1_1.x, cp1_1.y, cp2_1.x, cp2_1.y, pM2.x, pM2.y] },
+                  { type: 'C', values: [cp1_2.x, cp1_2.y, cp2_2.x, cp2_2.y, pM3.x, pM3.y] },
+                  { type: 'C', values: [cp1_3.x, cp1_3.y, cp2_3.x, cp2_3.y, pM1.x, pM1.y] },
+                  { type: 'Z', values: [] },
+              ];
+
+          } else {
+              polyPath = [
+
+                  { type: 'M', values: [M.x, M.y] },
+                  { type: 'C', values: [pts[1].x, pts[1].y, pts[1].x, pts[1].y, Z.x, Z.y] },
+              ];
+          }
+          return polyPath;
       }
 
-      if (simplifyRDP != 1) {
-          pts = simplifyPolyRDP(pts, { quality: simplifyRDP+'px' })
+      // remove colinear
+
+      /**
+       * detect regular polygon
+       * curved path is a circle
+       */
+      let centroid = getPolyCentroid(simplifyRC(pts));
+      let isRegularPolygon = detectRegularPolygon(pts, centroid);
+
+      if (isRegularPolygon) {
+
+          let ptAd = rotatePoint(pts[0], centroid.x, centroid.y, Math.PI);
+          let sweep = getPolygonArea(pts) > 0 ? 1 : 0;
+
+          polyPath = [
+              { type: 'M', values: [pts[0].x, pts[0].y] },
+              { type: 'A', values: [1, 1, 0, 0, sweep, ptAd.x, ptAd.y] },
+              { type: 'A', values: [1, 1, 0, 0, sweep, pts[0].x, pts[0].y] }
+          ];
+
+          if (closed) {
+              polyPath.push({ type: 'Z', values: [] });
+          }
+          return polyPath;
       }
-      */
+
+      // remove colinear
 
       // get topology of poly
       let polyAnalyzed = !keepExtremes && !keepCorners ? pts : analyzePoly(pts, {
@@ -9874,11 +10730,14 @@
       // Schneider curve fit
       let threshold = width && height ? (width + height) / 2 * 0.004 * tolerance : 2.5;
 
-      let polyPath = simplifyPolyChunks(chunks, {
+      polyPath = simplifyPolyChunks(chunks, {
           closed,
           tolerance: threshold,
-          keepCorners
+          keepCorners,
+          keepExtremes: true,
       });
+
+      polyPath = fixIntersectingCpts(polyPath);
 
       return polyPath;
   }
@@ -9937,7 +10796,7 @@
    * creates precise polygon approximation from pathdata
    * converts arc to cubis
    */
-  function pathDataToPolygon(pathData, {
+  function pathDataToPolygonOpt(pathData, {
       precisionPoly = 1,
       autoAccuracy=false,
       polyFormat='points',
@@ -10012,11 +10871,11 @@
 
       // simplify polygon
       if(simplifyRD>0){
-          pts2 = simplifyPolyRD(pts2, {quality:simplifyRD+'px'});
+          pts2 = simplifyPolyRD(pts2, {quality:simplifyRD});
       }
 
       if(simplifyRDP>0){
-          pts2 = simplifyPolyRDP(pts2, {quality:simplifyRDP+'px'});
+          pts2 = simplifyPolyRDP(pts2, {quality:simplifyRDP});
       }
 
       pathDataPoly = pathDataFromPoly(pts2);
@@ -10024,7 +10883,6 @@
       
       if(autoAccuracy){
           decimals = detectAccuracyPoly(pts);
-
       }
 
       let poly = decimals>-1 ? pts2.map(pt => { return { x: roundTo(pt.x, decimals), y: roundTo(pt.y, decimals) } }) : pts2.map(pt => { return { x: pt.x, y: pt.y } });
@@ -10170,9 +11028,11 @@
           if (!includedIn.length && cw && !toClockwise
               || !includedIn.length && !cw && toClockwise
           ) {
+
               pathDataArr[i].pathData = reversePathData(pathDataArr[i].pathData);
               polys[i].cw = polys[i].cw ? false : true;
               cw = polys[i].cw;
+
           }
 
           // reverse inner sub paths
@@ -10181,6 +11041,7 @@
               let child = polys[ind];
 
               if (child.cw === cw) {
+
                   pathDataArr[ind].pathData = reversePathData(pathDataArr[ind].pathData);
                   polys[ind].cw = polys[ind].cw ? false : true;
               }
@@ -10191,122 +11052,404 @@
 
   }
 
-  function svgPathSimplify(input = '', {
+  let settingsDefaults = {
 
-      // return svg markup or object
-      getObject = false,
+      // SVG elements
+      removeComments: true,
+      removeOffCanvas: false,
 
-      toAbsolute = false,
-      toRelative = true,
-      toMixed = false,
-      toShorthands = true,
-      toLonghands = false,
+      // attributes
+      removeDimensions: false,
+      removeIds: false,
+      removeClassNames: false,
+      omitNamespace: false,
+      cleanUpStrokes: true,
+      addViewBox: true,
+      addDimensions: false,
+      removePrologue: true,
+      removeHidden: true,
+      removeUnused: true,
+      cleanupDefs: true,
+      cleanupClip: true,
+      cleanupSVGAtts: true,
+      removeNameSpaced: true,
+      removeNameSpacedAtts: true,
+      attributesToGroup: false,
+      minifyRgbColors: true,
+      stylesToAttributes: false,
+      fixHref: false,
+      legacyHref: false,
+      allowMeta: false,
+      allowDataAtts: true,
+      allowAriaAtts: true,
 
-      // not necessary unless you need cubics only
-      quadraticToCubic = true,
+      convertPathLength: false,
 
-      // mostly a fallback if arc calculations fail      
-      arcToCubic = false,
-      cubicToArc = false,
+      // custom removal
+      removeElements: [],
+      removeSVGAttributes: [],
+      removeElAttributes: [],
 
-      simplifyBezier = true,
-      optimizeOrder = true,
-      autoClose = false,
-      removeZeroLength = true,
-      refineClosing = true,
-      removeColinear = true,
-      flatBezierToLinetos = true,
-      revertToQuadratics = true,
-
-      refineExtremes = true,
-      simplifyCorners = false,
-      removeDimensions = false,
-      removeIds = false,
-      removeClassNames = false,
-      omitNamespace = false,
-
-      fixDirections = false,
-
-      keepExtremes = true,
-      keepCorners = true,
-      extrapolateDominant = true,
-      keepInflections = false,
-      addExtremes = false,
-      addSemiExtremes = false,
-
-      toPolygon = false,
-      smoothPoly = false,
-      polyFormat = 'points',
-      precisionPoly = 1,
-
-      simplifyRD = 1,
-      simplifyRDP = 1,
-
-      harmonizeCpts = false,
-
-      removeOrphanSubpaths = false,
-      simplifyRound = false,
-
-      scale = 1,
-      scaleTo = 0,
-      crop = false,
-      alignToOrigin = false,
-
-      // flatten transforms
-      convertTransforms = false,
-
-      decimals = 3,
-      autoAccuracy = true,
-
-      // experimental
-
-      minifyD = 0,
-      tolerance = 1,
-      reversePath = false,
-
-      minifyRgbColors = true,
-      removePrologue = true,
-      removeHidden = true,
-      removeUnused = true,
-      cleanupDefs = true,
-      cleanupClip = true,
-      cleanupSVGAtts = true,
-
-      stylesToAttributes = false,
-      fixHref = false,
-      legacyHref = false,
-      removeNameSpaced = true,
-
-      allowMeta = false,
-      allowDataAtts = true,
-      allowAriaAtts = true,
-
-      attributesToGroup = false,
-      removeOffCanvas = false,
-      unGroup = false,
-      mergePaths = false,
+      // merging/splitting
+      unGroup: false,
+      mergePaths: false,
+      splitCompound: false,
 
       // shape conversions
-      shapesToPaths = false,
+      shapesToPaths: false,
+      shapeConvert: 0,
+      convertShapes: ['rect', 'ellipse', 'circle', 'line', 'polygon', 'polyline'],
 
-      shapeConvert = 0,
-      convert_rects = false,
-      convert_ellipses = false,
-      convert_poly = false,
-      convert_lines = false,
+      // simplify
+      keepSmaller: true,
+      simplifyBezier: true,
+      optimizeOrder: true,
+      autoClose: false,
+      removeZeroLength: true,
+      refineClosing: true,
+      removeColinear: true,
+      flatBezierToLinetos: true,
+      revertToQuadratics: true,
+      refineExtremes: false,
+      simplifyCorners: false,
+      keepExtremes: true,
+      keepCorners: true,
+      keepInflections: false,
+      addExtremes: false,
 
-      lineToCubic = false,
-      cleanUpStrokes = true,
-      addViewBox = false,
-      addDimensions = false,
+      // draw direction 
+      fixDirections: false,
+      reversePath: false,
 
-      removeComments = true,
+      // pathdata
+      toAbsolute: false,
+      toRelative: true,
+      toMixed: false,
+      toShorthands: true,
+      toLonghands: false,
+      quadraticToCubic: true,
+      arcToCubic: false,
+      cubicToArc: false,
+      lineToCubic: false,
 
+      // minification
+      decimals: 3,
+      autoAccuracy: true,
+      minifyD: 0,
+      tolerance: 1,
+
+      // polygon
+      toPolygon: false,
+      smoothPoly: false,
+      polyFormat: 'object',
+      precisionPoly: 1,
+      simplifyRD: 0,
+      simplifyRDP: 0,
+      harmonizeCpts: false,
+      removeOrphanSubpaths: false,
+      simplifyRound: false,
+
+      scale: 1,
+      scaleTo: 0,
+      crop: false,
+      alignToOrigin: false,
+
+      // flatten transforms
+      convertTransforms: false,
+
+  };
+
+  const settingsNull = {};
+
+  for (let prop in settingsDefaults) {
+      let val = settingsDefaults[prop];
+      let isBoolean = val === false || val === true;
+      let isNum = !isNaN(val);
+      let isArray = Array.isArray(val);
+
+      if (isBoolean) val = false;
+      else if (!isArray && isNum) val = val===1 ? 1 : (prop==='decimals'? -1 : 0);
+      else if (isArray) val = [];
+      settingsNull[prop] = val;
+  }
+
+  const presetSettings = {
+      default: settingsDefaults,
+
+      education: {
+          ...settingsDefaults,
+          ...{
+              keepSmaller: false,
+              toRelative: false,
+              toMixed: false,
+              toShorthands: false,
+              fixHref: true,
+              legacyHref: false,
+              addViewBox: true,
+              addDimensions: true,
+              removeComments: false,
+              decimals: 3,
+              minifyD: 2
+          }
+      },
+
+      null: settingsNull,
+
+      editor: {
+          ...settingsDefaults,
+          ...{
+              keepSmaller: false,
+              toRelative: true,
+              toMixed: true,
+              toShorthands: true,
+
+              legacyHref: true,
+              addViewBox: true,
+              addDimensions: true,
+              removeComments: true,
+              autoAccuracy: true,
+
+              minifyD: 0.5
+          }
+      },
+
+      noSimplification: {
+          ...settingsDefaults,
+          ...{
+              simplifyBezier: false,
+              quadraticToCubic: false,
+              toRelative: true,
+              toShorthands: true,
+              fixHref: true,
+              optimizeOrder: false,
+              removeZeroLength: false,
+              refineExtremes: false,
+              refineClosing: false,
+              removeColinear: false,
+              flatBezierToLinetos: false,
+
+              addDimensions: false,
+              removeComments: true,
+              minifyD: 0
+          }
+
+      },
+      path: {
+          ...settingsDefaults,
+          ...{
+              shapeConvert: 'toPaths',
+              convertShapes: ['rect', 'ellipse', 'circle', 'line', 'polygon', 'polyline'],
+              addViewBox: true,
+              minifyD: 0.5
+          }
+      },
+
+      poly: {
+          ...settingsDefaults,
+          ...{
+              toPolygon: true,
+          }
+      },
+
+      curvefit: {
+          ...settingsDefaults,
+          ...{
+              smoothPoly: true,
+          }
+      },
+
+      detransform: {
+          ...settingsDefaults,
+          ...{
+              convertTransforms: true,
+              addViewBox: true,
+              minifyD: 0.5
+          }
+      },
+
+      high: {
+          ...settingsDefaults,
+          ...{
+              tolerance: 1.2,
+              toMixed: true,
+              refineExtremes: true,
+              simplifyCorners: true,
+              simplifyRound: true,
+              removeClassNames: true,
+              cubicToArc: true,
+              removeComments: true,
+              removeHidden: true,
+              removeOffCanvas: true,
+              addViewBox: true,
+              removeDimensions: true,
+              minifyD: 0
+          }
+      }
+
+  };
+
+  function splitCompundGroups(pathDataPlusArr = [], {
+      toRelative = true,
+      toShorthands = true,
+      minifyD = 0,
+      decimals = 3,
+      addDimensions = false
   } = {}) {
+      pathDataPlusArr = JSON.parse(JSON.stringify(pathDataPlusArr));
+      let len = pathDataPlusArr.length;
+
+      let xArr = [];
+      let yArr = [];
+
+      // refine bbox and add cpt polygon
+      for (let i = 0; i < len; i++) {
+          let sub = pathDataPlusArr[i];
+          let { pathData, bb } = sub;
+
+          // console.log(bb);
+          // include control points for better overlapping approximation
+
+          if (bb.width && bb.height) ; else {
+              let poly = getPathDataVertices(pathData, true);
+              bb = getPolyBBox(poly);
+              pathDataPlusArr[i].bb = bb;
+
+          }
+
+          xArr.push(bb.left, bb.right);
+          yArr.push(bb.top, bb.bottom);
+          sub.includes = [];
+      }
+
+      /**
+       * check overlapping 
+       * sub paths
+       */
+      for (let i = 0, l = pathDataPlusArr.length; i < l; i++) {
+          let sub1 = pathDataPlusArr[i];
+          let { bb, poly } = sub1;
+
+          for (let j = 0; j < l; j++) {
+
+              let sub1 = pathDataPlusArr[j];
+              if (i === j) continue;
+
+              let bb1 = sub1.bb;
+
+              // test sample on-path points
+              let ptM = { x: bb1.x + bb1.width * 0.5, y: bb1.y + bb1.height * 0.5 };
+              if (ptM.x >= bb.x && ptM.y >= bb.y && ptM.x <= bb.right && ptM.y <= bb.bottom) {
+                  pathDataPlusArr[i].includes.push(j);
+              }
+
+          }
+      }
+
+      /**
+       * combine overlapping 
+       * compound paths
+       */
+      for (let i = 0, l = pathDataPlusArr.length; i < l; i++) {
+          let sub = pathDataPlusArr[i];
+          let { includes } = sub;
+
+          includes.forEach(s => {
+              let pathData = pathDataPlusArr[s].pathData;
+              if (pathData.length) {
+                  pathDataPlusArr[i].pathData.push(...pathData);
+                  pathDataPlusArr[s].pathData = [];
+              }
+          });
+      }
+
+      // remove empty els due to grouping
+      pathDataPlusArr = pathDataPlusArr.filter(sub => sub.pathData.length);
+
+      // try to find row left to right order
+
+      pathDataPlusArr = pathDataPlusArr.sort((a, b) => ((a.bb.x ) - (b.bb.x)));
+
+      // create SVG
+      let x = Math.min(...xArr);
+      let y = Math.min(...yArr);
+      let right = Math.max(...xArr);
+      let bottom = Math.max(...yArr);
+      let width = right - x;
+      let height = bottom - y;
+
+      [x, y, width, height] = [x, y, width, height].map(val => roundTo(val, decimals));
+
+      let dimensionAtts = addDimensions ? `width="${width}" height="${height}"` : '';
+      let svgSplit = `<svg ${dimensionAtts} viewBox="${x} ${y} ${width} ${height}" xmlns="${svgNs}">`;
+
+      pathDataPlusArr.forEach(sub => {
+          let { pathData } = sub;
+
+          pathData = convertPathData(pathData, { toRelative, toShorthands, decimals });
+          let d = pathDataToD(pathData, minifyD);
+          svgSplit += `<path d="${d}"/>`;
+
+      });
+
+      svgSplit += '</svg>';
+
+      let splitObj = { pathData: pathDataPlusArr, svg: svgSplit };
+
+      return splitObj
+
+  }
+
+  /*
+  function checkBBoxIntersections2(bb, bb1) {
+      let [x, y, width, height, right, bottom] = [
+          bb.x,
+          bb.y,
+          bb.width,
+          bb.height,
+          bb.x + bb.width,
+          bb.y + bb.height
+      ];
+      let [x1, y1, width1, height1, right1, bottom1] = [
+          bb1.x,
+          bb1.y,
+          bb1.width,
+          bb1.height,
+          bb1.x + bb1.width,
+          bb1.y + bb1.height
+      ];
+      let intersects = false;
+
+      if (x < x1 && right > right1 && y < y1 && bottom > bottom1) {
+          intersects = true;
+      }
+
+      console.log('???', intersects, 'dims', width, height, '2', width1, height1);
+
+      return intersects;
+  }
+  */
+
+  function svgPathSimplify(input = '', settings = {}) {
+
+      let preset = settings['preset'] !== undefined && settings['preset'] ? settings['preset'] : null;
+      let defaults = preset && presetSettings[preset] !== undefined ? presetSettings[preset] : presetSettings['default'];
+
+      // merge settings
+      settings = {
+          ...defaults,
+          ...settings
+      };
+
+      let { getObject = false, removeComments, removeOffCanvas, unGroup, mergePaths, removeElements, removeDimensions, removeIds, removeClassNames, omitNamespace, cleanUpStrokes, addViewBox, addDimensions, removePrologue, removeHidden, removeUnused, cleanupDefs, cleanupClip, cleanupSVGAtts, removeNameSpaced, removeNameSpacedAtts, attributesToGroup, minifyRgbColors, stylesToAttributes, fixHref, legacyHref, allowMeta, allowDataAtts, allowAriaAtts, convertPathLength, removeSVGAttributes, removeElAttributes, shapesToPaths, shapeConvert, convertShapes, simplifyBezier, optimizeOrder, autoClose, removeZeroLength, refineClosing, removeColinear, flatBezierToLinetos, revertToQuadratics, refineExtremes, simplifyCorners, fixDirections, keepExtremes, keepCorners, keepInflections, addExtremes, reversePath, toAbsolute, toRelative, toMixed, toShorthands, toLonghands, quadraticToCubic, arcToCubic, cubicToArc, lineToCubic, decimals, autoAccuracy, minifyD, tolerance, toPolygon, smoothPoly, polyFormat, precisionPoly, simplifyRD, simplifyRDP, harmonizeCpts, removeOrphanSubpaths, simplifyRound, scale, scaleTo, crop, alignToOrigin, convertTransforms, keepSmaller, splitCompound } = settings;
 
       // clamp tolerance and scale
       tolerance = Math.max(0.1, tolerance);
       scale = Math.max(0.001, scale);
+      if(fixDirections) keepSmaller = false;
+      if (scale !== 1 || scaleTo || crop || alignToOrigin) {
+          convertTransforms = true;
+          settings.convertTransforms = true;
+      }
 
       let inputType = detectInputType(input);
       let svg = '';
@@ -10321,7 +11464,9 @@
       let pathDataPlusArr_global = [];
       let paths = [];
       let polys = [];
+      let poly = [];
       let dStr = '';
+      let dOriginal = '';
 
       /**
        * normalize input
@@ -10345,25 +11490,55 @@
       autoClose = false;
       let accuracyArr = [];
 
+      // validate point JSON
+      if (inputType === 'json') {
+          let pts = [];
+          let needsQuotes = /([{,]\s*)(x|y)(\s*:)/.test(input);
+          if (needsQuotes) input = input.replaceAll('x:', '"x":').replaceAll('y:', '"y":');
+
+          try {
+              pts = JSON.parse(input);
+          } catch {
+              console.warn('No valid JSON');
+          }
+          if (pts.length) {
+              inputType = 'polyArray';
+              input = normalizePoly(pts);
+          }
+      }
+
       // single path or polys
-      if (inputType !== 'svgMarkup') {
+      if (inputType !== 'svgMarkup' && inputType !== 'symbol') {
           if (inputType === 'pathDataString') {
               d = input;
           } else if (inputType === 'polyString') {
-              d = 'M' + input;
+              splitCompound = false;
+              poly = normalizePoly(input);
+              d = pathDataFromPoly(poly, closed);
+
           }
 
           else if (inputType === 'polyArray' || inputType === 'polyObjectArray' || inputType === 'polyComplexArray' || inputType === 'polyComplexObjectArray') {
+              splitCompound = false;
 
               // normalize poly input to object array
-              let poly = normalizePoly(input);
+              poly = normalizePoly(input);
 
               // convert to pathdata
-              d = pathDataFromPoly(poly);
+              let closed = true;
 
               // calculate size
+              d = pathDataFromPoly(poly, closed);
               dStr = d.map(com => { return `${com.type} ${com.values.join(' ')}` }).join(' ');
+              dOriginal = dStr;
               svgSize = dStr.length;
+
+              /*
+              d=''
+              dOriginal = '';
+              svgSize = input.length;
+              */
+
           }
 
           else if (inputType === 'pathData') {
@@ -10372,6 +11547,11 @@
               // stringify to compare lengths
               dStr = Array.from(d).map(com => { return `${com.type} ${com.values.join(' ')}` }).join(' ');
               svgSize = dStr.length;
+
+          }
+          // not valid - set dummy path data
+          else {
+              d = 'M0 0 h0';
           }
 
           paths.push({ d, el: null });
@@ -10379,6 +11559,14 @@
 
       // mode:1 – process complete svg DOM
       else {
+
+          // convert symbol temporarily to SVG
+          if (inputType === 'symbol') {
+              input = input.replaceAll('<symbol', '<svg').replaceAll('</symbol', '</svg');
+              // ids are mandatory for symbols
+              removeIds = false;
+              removeDimensions = true;
+          }
 
           // convert all shapes to paths
           if (shapesToPaths) {
@@ -10389,19 +11577,17 @@
               convert_lines = true;
           }
 
-          let svgPropObject = cleanUpSVG(input, {
-              removeIds, removeClassNames, removeDimensions, cleanupSVGAtts, cleanUpStrokes, removeHidden, removeUnused, removeNameSpaced, stylesToAttributes, removePrologue, fixHref, mergePaths, convertTransforms, legacyHref, cleanupDefs, cleanupClip, addViewBox, removeOffCanvas, addDimensions,
-              shapeConvert, convert_rects, convert_ellipses, convert_poly, convert_lines, minifyRgbColors, unGroup, convertTransforms,
-              allowMeta, allowDataAtts, allowAriaAtts, allowMeta, attributesToGroup
-          }
-          );
+          // sanitize SVG - clone/decouple settings
+          let svgPropObject = cleanUpSVG(input, JSON.parse(JSON.stringify(settings)));
           svg = svgPropObject.svg;
 
           // collect paths
           let pathEls = svg.querySelectorAll('path');
 
           pathEls.forEach((path, i) => {
-              paths.push({ d: path.getAttribute('d'), el: path, idx: i });
+              let d = path.getAttribute('d');
+
+              paths.push({ d, el: path, idx: i });
           });
 
           // get viewBox/dimensions
@@ -10418,20 +11604,18 @@
       let pathOptions = {
           toRelative,
           toMixed,
-          toAbsolute,
-          toLonghands,
           toShorthands,
           decimals,
       };
-
-      // combinded path data for SVGs with mergePaths enabled
-      let pathData_merged = [];
 
       for (let i = 0, l = paths.length; l && i < l; i++) {
 
           let pathDataPlusArr = [];
           let path = paths[i];
           let { d, el } = path;
+          let isPoly = false;
+
+          // if polygon we already heave absolute coordinates
 
           let pathData = parsePathDataNormalized(d, { quadraticToCubic, arcToCubic });
 
@@ -10470,7 +11654,7 @@
           // count commands for evaluation
           let comCount = pathData.length;
 
-          if (removeOrphanSubpaths) pathData = removeOrphanedM(pathData);
+          if (!isPoly && removeOrphanSubpaths) pathData = removeOrphanedM(pathData);
 
           /**
            * get sub paths
@@ -10483,24 +11667,26 @@
 
               let pathDataSub = subPathArr[i];
               let poly = [];
-
               let coms = Array.from(new Set(pathDataSub.map(com => com.type))).join('');
-              let isPoly = !(/[acqts]/gi).test(coms);
-              let closed = (/[z]/gi).test(coms);
+              isPoly = !(/[acqts]/gi).test(coms);
+              let closed = isPoly ? true : false;
 
-              if (isPoly) {
+              if (isPoly && !mode) {
 
                   poly = getPathDataVertices(pathDataSub);
+                  let bb = getPolyBBox(reducePoints(poly, 64));
 
                   // simplify polygon
                   if (simplifyRD > 0) {
-                      poly = simplifyPolyRD(poly, { quality: simplifyRD + 'px' });
+                      poly = simplifyPolyRD(poly, { quality: simplifyRD, width: bb.width, height: bb.height });
                   }
 
                   if (simplifyRDP > 0) {
-                      poly = simplifyPolyRDP(poly, { quality: simplifyRDP + 'px' });
+                      poly = simplifyPolyRDP(poly, { quality: simplifyRDP, width: bb.width, height: bb.height });
+
                   }
 
+                  toPolygon = false;
                   pathDataSub = pathDataFromPoly(poly, closed);
 
               }
@@ -10514,21 +11700,18 @@
                   smoothPoly = false;
                   harmonizeCpts = false;
 
-                  let pathDataSubPlus = analyzePathData(pathDataSub);
-                  let { bb, pathData } = pathDataSubPlus;
-                  pathDataSub = pathData;
+                  pathDataSub = getPathDataVerbose(pathDataSub);
 
-                  let polyData = pathDataToPolygon(pathDataSub, {
+                  let polyData = pathDataToPolygonOpt(pathDataSub, {
                       precisionPoly,
                       autoAccuracy,
-                      polyFormat,
-                      decimals,
+
                       simplifyRD,
                       simplifyRDP
                   });
 
-                  polys.push(polyData.poly);
                   pathDataSub = polyData.pathData;
+                  isPoly = true;
 
               }
 
@@ -10558,7 +11741,10 @@
                           simplifyRD,
                           simplifyRDP,
                       };
+
                       pathDataSub = simplifyPolygonToPathData(poly, optionsPoly);
+                      // flag as non poly as we're smoothing to curves
+
                   }
               }
 
@@ -10575,27 +11761,43 @@
               if (removeColinear) pathDataSub = pathDataRemoveColinear(pathDataSub, { tolerance, flatBezierToLinetos: false });
 
               let tMin = 0, tMax = 1;
-              if (addExtremes || addSemiExtremes) pathDataSub = addExtremePoints(pathDataSub,
-                  { tMin, tMax, addExtremes, addSemiExtremes, angles: [30] });
+              if (addExtremes) pathDataSub = addExtremePoints(pathDataSub,
+                  { tMin, tMax, addExtremes, angles: [30] });
 
               // reverse
               if (reversePath) {
                   pathDataSub = reversePathData(pathDataSub);
               }
 
-              // analyze pathdata to add info about signicant properties such as extremes, corners
-              let pathDataPlus = analyzePathData(pathDataSub, {
-                  detectSemiExtremes: addSemiExtremes,
-              });
+              // analyze pathdata to add info about significant properties such as extremes, corners
+              let pathDataPlus = { bb: {}, dimA: 0, pathData: [] };
+
+              if (!isPoly) {
+                  pathDataPlus = analyzePathData(pathDataSub);
+              }
+              // we skip detailed analysis for native polygons
+              else {
+                  if (!poly.length) {
+                      let pathDataCubic = convertPathData(JSON.parse(JSON.stringify(pathDataSub)), { toLonghands: true, toAbsolute: true, arcToCubic: true, testTypes: true });
+                      pathDataPlus.bb = getPolyBBox(getPathDataVertices(pathDataCubic));
+                  }
+                  pathDataPlus.dimA = pathDataPlus.bb.width + pathDataPlus.bb.height;
+                  pathDataPlus.pathData = getPathDataVerbose(pathDataSub, {
+                      addSquareLength: false,
+                      addArea: false,
+                      addAverageDim: false
+                  });
+              }
 
               // simplify beziers
               let { pathData, bb, dimA } = pathDataPlus;
+
               xArr.push(bb.x, bb.x + bb.width);
               yArr.push(bb.y, bb.y + bb.height);
 
               if (refineClosing) pathData = refineClosingCommand(pathData, { threshold: dimA * 0.001 });
 
-              pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, extrapolateDominant, revertToQuadratics, tolerance }) : pathData;
+              pathData = simplifyBezier ? simplifyPathDataCubic(pathData, { simplifyBezier, keepInflections, keepExtremes, keepCorners, revertToQuadratics, tolerance }) : pathData;
 
               // refine extremes
               if (refineExtremes) {
@@ -10635,8 +11837,6 @@
                   let decimalsSub = detectAccuracy(pathData);
                   accuracyArr.push(decimalsSub);
 
-                  // pre round sub path
-
               }
 
               // update
@@ -10653,14 +11853,14 @@
           bb_global = { x: xMin, y: yMin, width: xMax - xMin, height: yMax - yMin };
           let isPortrait = bb_global.height > bb_global.width;
 
+          // fix path directions - before reordering
+          if (fixDirections) {
+              pathDataPlusArr = fixPathDataDirections(pathDataPlusArr);
+          }
+
           // prefer top to bottom priority for portrait aspect ratios 
           if (optimizeOrder) {
               pathDataPlusArr = isPortrait ? pathDataPlusArr.sort((a, b) => a.bb.y - b.bb.y || a.bb.x - b.bb.x) : pathDataPlusArr.sort((a, b) => a.bb.x - b.bb.x || a.bb.y - b.bb.y);
-          }
-
-          // fix path directions
-          if (fixDirections) {
-              pathDataPlusArr = fixPathDataDirections(pathDataPlusArr);
           }
 
           // flatten compound paths 
@@ -10681,57 +11881,69 @@
               pathOptions.decimals = decimals;
           }
 
-          // collect for merged svg paths 
-          mergePaths = false;
-          if (el && mergePaths) {
-              pathData_merged.push(...pathData);
+          // add simplified poly - if not populated by toPoly conversion
+          if (isPoly) {
+
+              pathDataPlusArr.forEach(sub => {
+                  let poly = getPathDataVertices(sub.pathData, false, decimals);
+                  if (polyFormat === 'array') {
+                      poly = polyPtsToArray(poly);
+                  }
+                  polys.push(poly);
+              });
+
           }
-          // single output
-          else {
 
-              // clone pathdata 
+          // split into sub paths - returns svg with multiple paths
+          if (splitCompound && !mode && pathDataPlusArr.length > 1) {
+              let pathDataSplit = splitCompundGroups(pathDataPlusArr, { toRelative, toShorthands, decimals, addDimensions });
+              svg = new DOMParser().parseFromString(pathDataSplit.svg, 'image/svg+xml').querySelector('svg');
+              // switch output type
+              mode = 1;
+              inputType = 'splitPath';
+          }
 
-              pathData = JSON.parse(JSON.stringify(pathData));
+          // clone pathdata 
+          pathData = JSON.parse(JSON.stringify(pathData));
 
-              // optimize path data
-              pathData = convertPathData(pathData, pathOptions);
+          // optimize path data
+          pathData = convertPathData(pathData, pathOptions);
 
-              // remove zero-length segments introduced by rounding
-              if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
+          // remove zero-length segments introduced by rounding
+          if (removeZeroLength) pathData = removeZeroLengthLinetos(pathData);
 
-              // realign path to zero origin
-              if (alignToOrigin) {
+          // realign path to zero origin
+          if (alignToOrigin) {
 
-                  pathData[0].values[0] = (pathData[0].values[0] - bb_global.x).toFixed(decimals);
-                  pathData[0].values[1] = (pathData[0].values[1] - bb_global.y).toFixed(decimals);
+              pathData[0].values[0] = roundTo((pathData[0].values[0] - bb_global.x), decimals);
+              pathData[0].values[1] = roundTo((pathData[0].values[1] - bb_global.y), decimals);
 
-                  bb_global.x = 0;
-                  bb_global.y = 0;
-              }
+              bb_global.x = 0;
+              bb_global.y = 0;
+          }
 
-              // compare command count
-              let comCountS = pathData.length;
+          // compare command count
+          let comCountS = pathData.length;
 
-              let dOpt = pathDataToD(pathData, minifyD);
+          let dOpt = pathDataToD(pathData, minifyD);
 
-              svgSizeOpt = dOpt.length;
+          svgSizeOpt = dOpt.length;
 
-              compression = +(100 / svgSize * (svgSizeOpt)).toFixed(2);
+          compression = +(100 / svgSize * (svgSizeOpt)).toFixed(2);
 
-              path.d = dOpt;
-              path.report = {
-                  original: comCount,
-                  new: comCountS,
-                  saved: comCount - comCountS,
-                  compression,
-                  decimals,
+          path.d = dOpt;
+          path.report = {
+              original: comCount,
+              new: comCountS,
+              saved: comCount - comCountS,
+              compression,
+              decimals,
 
-              };
+          };
 
-              // apply new path for svgs
-              if (el) {
-                  el.setAttribute('d', dOpt);
-              }
+          // apply new path for svgs
+          if (el) {
+              el.setAttribute('d', dOpt);
           }
 
       } // end path array
@@ -10739,36 +11951,11 @@
       /**
        *  stringify new SVG
        */
-      if (mode) {
-
-          if (pathData_merged.length) {
-
-              // optimize path data
-              let pathData = convertPathData(pathData_merged, pathOptions);
-
-              // remove zero-length segments introduced by rounding
-              pathData = removeZeroLengthLinetos(pathData);
-
-              let dOpt = pathDataToD(pathData, minifyD);
-
-              // apply new path for svgs
-              paths[0].el.setAttribute('d', dOpt);
-
-              // remove other paths
-              for (let i = 1; i < paths.length; i++) {
-                  let pathEl = paths[i].el;
-                  if (pathEl) pathEl.remove();
-              }
-
-              // remove empty groups e.g groups
-              removeEmptySVGEls(svg);
-          }
+      if (mode || inputType === 'symbol') {
 
           // adjust viewBox and width for scale
           if (scale) {
-
               let { x, y, width, height, w, h, hasViewBox, hasWidth, hasHeight, widthUnit, heightUnit } = viewBox;
-
               if (crop) {
                   x = bb_global.x;
                   y = bb_global.y;
@@ -10779,14 +11966,14 @@
               }
 
               if (hasViewBox) {
-                  svg.setAttribute('viewBox', [x, y, width, height].map(val => +(val * scale).toFixed(decimals)).join(' '));
+                  svg.setAttribute('viewBox', [x, y, width, height].map(val => roundTo(val * scale, decimals)).join(' '));
               }
               if (hasWidth) {
-                  svg.setAttribute('width', +(w * scale).toFixed(decimals) + widthUnit);
+                  svg.setAttribute('width', roundTo(w * scale, decimals) + widthUnit);
               }
 
               if (hasHeight) {
-                  svg.setAttribute('height', +(h * scale).toFixed(decimals) + heightUnit);
+                  svg.setAttribute('height', roundTo(h * scale, decimals) + heightUnit);
               }
           }
 
@@ -10799,7 +11986,9 @@
               });
           }
 
-          svg = stringifySVG(svg, { omitNamespace, removeComments });
+          if (removeSVGAttributes.includes('xmlns')) omitNamespace = true;
+
+          svg = stringifySVG(svg, { omitNamespace, removeComments, format: minifyD });
 
           svgSizeOpt = svg.length;
 
@@ -10812,8 +12001,14 @@
               svgSize,
               svgSizeOpt,
               compression,
-              decimals
+              decimals,
           };
+
+          if (keepSmaller && svgSize < svgSizeOpt && !splitCompound) {
+
+              svg = input;
+              report.node = 'Original is smaller!';
+          }
 
       } else {
           ({ d, report } = paths[0]);
@@ -10823,7 +12018,11 @@
           polys = polys[0];
       }
 
-      return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr: pathDataPlusArr_global, inputType };
+      if (polyFormat === 'string' && polys.length) {
+          polys = polys.flat().map(pt => `${pt.x},${pt.y}`).join(' ');
+      }
+
+      return !getObject ? (d ? d : svg) : { svg, d, polys, report, pathDataPlusArr: pathDataPlusArr_global, inputType, dOriginal };
 
   }
 

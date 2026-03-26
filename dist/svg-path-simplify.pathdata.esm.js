@@ -13,12 +13,12 @@ function detectInputType(input) {
         // nested array
         if (Array.isArray(input[0])) {
 
-            if(input[0].length===2){
+            if (input[0].length === 2) {
 
                 return 'polyArray'
             }
 
-            else if (Array.isArray(input[0][0]) && input[0][0].length === 2 ) {
+            else if (Array.isArray(input[0][0]) && input[0][0].length === 2) {
 
                 return 'polyComplexArray'
             }
@@ -29,7 +29,7 @@ function detectInputType(input) {
         }
 
         // is point array
-        else if (input[0].x!==undefined && input[0].y!==undefined) {
+        else if (input[0].x !== undefined && input[0].y !== undefined) {
 
             return 'polyObjectArray'
         }
@@ -47,11 +47,21 @@ function detectInputType(input) {
     if (typeof input === "string") {
         input = input.trim();
         let isSVG = input.includes('<svg') && input.includes('</svg');
+        let isSymbol = input.startsWith('<symbol') && input.includes('</symbol');
         let isPathData = input.startsWith('M') || input.startsWith('m');
         let isPolyString = !isNaN(input.substring(0, 1)) && !isNaN(input.substring(input.length - 1, input.length));
+        let isJson = isNumberJson(input);
 
         if (isSVG) {
             type = 'svgMarkup';
+        }
+
+        else if (isJson) {
+            type = 'json';
+        }
+
+        else if (isSymbol) {
+            type = 'symbol';
         }
         else if (isPathData) {
             type = 'pathDataString';
@@ -74,6 +84,24 @@ function detectInputType(input) {
 
     return (constructor || type).toLowerCase();
 }
+
+function isNumberJson(str) {
+
+    str = str.trim();
+
+    let hasNumber = /\d/.test(str);
+    let hasInvalid = /[abcdfghijklmnopqrstuvwz]/gi.test(str);
+    if (!hasNumber || hasInvalid) return false
+
+    // is JSON like
+    let isJson = str.startsWith('[') && str.endsWith(']');
+
+    return isJson
+    
+}
+
+const rad2Deg = 180/Math.PI;  
+const deg2rad = Math.PI/180;
 
 function renderPoint(
     svg,
@@ -384,7 +412,36 @@ function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, returnArray
 /**
  * get vertices from path command final on-path points
  */
-function getPathDataVertices(pathData) {
+
+function getPathDataVertices(pathData=[], includeCpts = false, decimals = -1) {
+    let polyPoints = [];
+
+    pathData.forEach((com) => {
+        let { type, values } = com;
+
+        // get final on path point from last 2 values
+        if (values.length) {
+
+            // round
+            if (decimals > -1) values = values.map(val => +val.toFixed(decimals));
+
+            if (includeCpts) {
+
+                for (let i = 1; i < values.length; i += 2) {
+                    polyPoints.push({ x: values[i - 1], y: values[i] });
+                }
+
+            } else {
+                polyPoints.push({ x: values[values.length - 2], y: values[values.length - 1] });
+            }
+
+        }
+    });
+    return polyPoints;
+}
+
+/*
+export function getPathDataVertices(pathData) {
     let polyPoints = [];
     let p0 = { x: pathData[0].values[0], y: pathData[0].values[1] };
 
@@ -399,22 +456,30 @@ function getPathDataVertices(pathData) {
         }
     });
     return polyPoints;
-}
+};
+*/
 
 /**
  *  based on @cuixiping;
  *  https://stackoverflow.com/questions/9017100/calculate-center-of-svg-arc/12329083#12329083
  */
-function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2) {
+
+function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2, normalize = true
+) {
 
     // helper for angle calculation
-    const getAngle = (cx, cy, x, y) => {
-        return atan2(y - cy, x - cx);
+    const getAngle = (cx, cy, x, y, normalize = true) => {
+        let angle = Math.atan2(y - cy, x - cx);
+        if (normalize && angle < 0) angle += Math.PI * 2;
+        return angle
     };
 
     // make sure rx, ry are positive
-    rx = abs(rx);
-    ry = abs(ry);
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+
+    // normalize xAxis rotation
+    xAxisRotation = rx === ry ? 0 : (xAxisRotation < 0 && normalize ? xAxisRotation + 360 : xAxisRotation);
 
     // create data object
     let arcData = {
@@ -438,53 +503,11 @@ function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2,
         throw Error("rx and ry can not be 0");
     }
 
-    let shortcut = true;
-
-    if (rx === ry && shortcut) {
-
-        // test semicircles
-        let diffX = Math.abs(x2 - x1);
-        let diffY = Math.abs(y2 - y1);
-        let r = diffX;
-
-        let xMin = Math.min(x1, x2),
-            yMin = Math.min(y1, y2),
-            PIHalf = Math.PI * 0.5;
-
-        // semi circles
-        if (diffX === 0 && diffY || diffY === 0 && diffX) {
-
-            r = diffX === 0 && diffY ? diffY / 2 : diffX / 2;
-            arcData.rx = r;
-            arcData.ry = r;
-
-            // verical
-            if (diffX === 0 && diffY) {
-                arcData.cx = x1;
-                arcData.cy = yMin + diffY / 2;
-                arcData.startAngle = y1 > y2 ? PIHalf : -PIHalf;
-                arcData.endAngle = y1 > y2 ? -PIHalf : PIHalf;
-                arcData.deltaAngle = sweep ? Math.PI : -Math.PI;
-
-            }
-            // horizontal
-            else if (diffY === 0 && diffX) {
-                arcData.cx = xMin + diffX / 2;
-                arcData.cy = y1;
-                arcData.startAngle = x1 > x2 ? Math.PI : 0;
-                arcData.endAngle = x1 > x2 ? -Math.PI : Math.PI;
-                arcData.deltaAngle = sweep ? Math.PI : -Math.PI;
-            }
-
-            return arcData;
-        }
-    }
-
     /**
      * if rx===ry x-axis rotation is ignored
      * otherwise convert degrees to radians
      */
-    let phi = rx === ry ? 0 : (xAxisRotation * PI) / 180;
+    let phi = rx === ry ? 0 : xAxisRotation * deg2rad;
     let cx, cy;
 
     let s_phi = !phi ? 0 : Math.sin(phi);
@@ -503,8 +526,9 @@ function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2,
     //   Step 3: Ensure radii are large enough
     let lambda = (x1_ * x1_) / (rx * rx) + (y1_ * y1_) / (ry * ry);
     if (lambda > 1) {
-        rx = rx * Math.sqrt(lambda);
-        ry = ry * Math.sqrt(lambda);
+        let lambdaRoot = Math.sqrt(lambda);
+        rx = rx * lambdaRoot;
+        ry = ry * lambdaRoot;
 
         // save real rx/ry
         arcData.rx = rx;
@@ -520,7 +544,7 @@ function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2,
         throw Error("start point can not be same as end point");
     }
     let coe = Math.sqrt(Math.abs((rxry * rxry - sum_of_sq) / sum_of_sq));
-    if (largeArc == sweep) {
+    if (largeArc === sweep) {
         coe = -coe;
     }
 
@@ -540,24 +564,33 @@ function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2,
      * calculate angles between center point and
      * commands starting and final on path point
      */
-    let startAngle = getAngle(cx, cy, x1, y1);
-    let endAngle = getAngle(cx, cy, x2, y2);
+    let startAngle = getAngle(cx, cy, x1, y1, normalize);
+    let endAngle = getAngle(cx, cy, x2, y2, normalize);
 
     // adjust end angle
-    if (!sweep && endAngle > startAngle) {
 
-        endAngle -= Math.PI * 2;
-    }
-
-    if (sweep && startAngle > endAngle) {
-
-        endAngle = endAngle <= 0 ? endAngle + Math.PI * 2 : endAngle;
+    // Adjust angles based on sweep direction
+    if (sweep) {
+        // Clockwise
+        if (endAngle < startAngle) {
+            endAngle += Math.PI * 2;
+        }
+    } else {
+        // Counterclockwise
+        if (endAngle > startAngle) {
+            endAngle -= Math.PI * 2;
+        }
     }
 
     let deltaAngle = endAngle - startAngle;
+
+    // The rest of your code remains the same
     arcData.startAngle = startAngle;
+    arcData.startAngle_deg = startAngle * rad2Deg;
     arcData.endAngle = endAngle;
+    arcData.endAngle_deg = endAngle * rad2Deg;
     arcData.deltaAngle = deltaAngle;
+    arcData.deltaAngle_deg = deltaAngle * rad2Deg;
 
     return arcData;
 }
@@ -1063,7 +1096,7 @@ function getDistance(p1, p2, isArray = false) {
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
-    return sqrt(dx * dx + dy * dy);
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 function getSquareDistance(p1, p2) {
@@ -1412,7 +1445,7 @@ function detectAccuracy(pathData) {
 
     let dim_min = dims.sort();
 
-    let sliceIdx = Math.ceil(dim_min.length / 8);
+    let sliceIdx = Math.ceil(dim_min.length / 6);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
 
@@ -1425,6 +1458,7 @@ function detectAccuracy(pathData) {
 }
 
 function roundTo(num = 0, decimals = 3) {
+    if(decimals<=-1) return num;
     if (!decimals) return Math.round(num);
     let factor = 10 ** decimals;
     return Math.round(num * factor) / factor;
@@ -1843,20 +1877,24 @@ function getPolygonArea(points, absolute=false) {
 * d attribute string 
 */
 
-function pathDataToD(pathData, optimize = 0) {
+function pathDataToD(pathData, mode = 0) {
 
-    optimize = parseFloat(optimize);
-
+    mode = parseFloat(mode);
+    /*
+    0 = max minification
+    0.5 = safe
+    1 = verbose
+    2 = beautify
+    */
     let len = pathData.length;
-    let beautify = optimize > 1;
-    let minify = beautify || optimize ? false : true;
 
-    let d = '';
     let valsString = pathData[0].values.join(" ");
-    let separator_command = beautify ? `\n` : (minify ? '' : ' ');
-    let separator_type = !minify ? ' ' : '';
+    let separator_command = mode > 1 ? `\n` :
+        ((mode < 1) ? '' : ' ');
+    let separator_type = mode > 0.5 ? ' ' : '';
 
-    d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
+    // 1st command
+    let d = `${pathData[0].type}${separator_type}${valsString}${separator_command}`;
 
     for (let i = 1; i < len; i++) {
         let com0 = pathData[i - 1];
@@ -1865,7 +1903,7 @@ function pathDataToD(pathData, optimize = 0) {
         valsString = '';
 
         // Minify Arc commands (A/a) – actually sucks!
-        if (minify && (type === 'A' || type === 'a')) {
+        if (!mode && (type === 'A' || type === 'a')) {
             values = [
                 values[0], values[1], values[2],
                 `${values[3]}${values[4]}${values[5]}`,
@@ -1874,14 +1912,14 @@ function pathDataToD(pathData, optimize = 0) {
         }
 
         // Omit type for repeated commands
-        type = (minify && com0.type === com.type && com.type.toLowerCase() !== 'm')
+        type = ((mode < 1) && com0.type === com.type && com.type.toLowerCase() !== 'm')
             ? " "
-            : (minify && com0.type === "M" && com.type === "L"
+            : ((mode < 1) && com0.type === "M" && com.type === "L"
                 ? " "
                 : com.type);
 
         // concatenate subsequent floating point values
-        if (minify) {
+        if (!mode) {
 
             let prevWasFloat = false;
 
@@ -1905,22 +1943,23 @@ function pathDataToD(pathData, optimize = 0) {
                 prevWasFloat = isSmallFloat;
             }
 
-            d += `${type}${separator_type}${valsString}${separator_command}`;
-
         }
         // regular non-minified output
         else {
-            d += `${type}${separator_type}${values.join(' ')}${separator_command}`;
+            valsString = values.join(' ');
         }
+
+        if(i===len-1) separator_command='';
+        d += `${type}${separator_type}${valsString}${separator_command}`;
     }
 
-    if (minify) {
+    if (mode < 1) {
         d = d
             .replace(/[A-Za-z]0(?=\.)/g, m => m[0])
             .replace(/ 0\./g, " .") // Space before small decimals
             .replace(/ -/g, "-")     // Remove space before negatives
             .replace(/-0\./g, "-.")  // Remove leading zero from negative decimals
-            .replace(/Z/g, "z");     // Convert uppercase 'Z' to lowercase
+            .replace(/Z/g, "z");    // Convert uppercase 'Z' to lowercase
     }
 
     return d;
@@ -2797,6 +2836,7 @@ const sanitizeArc = (val='', valueIndex=0) => {
 };
 
 function parsePathDataString(d, debug = true, limit=0) {
+    if(!d) return []
     d = d.trim();
 
     if(limit) console.log('!!!limit', limit);
@@ -3139,6 +3179,7 @@ function convertPathData(pathData, {
     hasShorthands = true,
     hasQuadratics = true,
     hasArcs = true,
+    isPoly = false,
     optimizeArcs = true,
     testTypes = false
 
@@ -3159,6 +3200,7 @@ function convertPathData(pathData, {
 
     // some params exclude each other
     toRelative = toAbsolute ? false : toRelative;
+
     toShorthands = toLonghands ? false : toShorthands;
 
     if (toAbsolute) pathData = pathDataToAbsolute(pathData);

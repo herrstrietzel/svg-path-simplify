@@ -1,3 +1,124 @@
+
+
+// avoid conflicts with symbol ids in UI
+export function prefixIds(svg, { prefix = '__' } = {}) {
+    return svg
+        .replaceAll('id="', `id="${prefix}`)
+        .replaceAll('url(#', `url(#${prefix}`)
+        .replaceAll('href="#', `href="#${prefix}`);
+}
+
+export function svg2Symbol(svg) {
+    return svg.replaceAll('<svg ', '<symbol ').replaceAll('</svg', '</symbol').replaceAll(' xmlns="http://www.w3.org/2000/svg"', '');
+}
+
+export function symbol2Svg(svg) {
+    return svg.replaceAll('<symbol ', '<svg ').replaceAll('</symbol', '</svg');
+}
+
+
+export function togglePreview(target, settings = {}) {
+
+    //console.log('showOriginal', settings.showOriginal, settings);
+
+    if (settings.showOriginal === 'show') {
+        //console.log('show');
+        target.classList.add('showOriginal')
+        target.classList.remove('showMarkers')
+
+    } else {
+        //console.log('hide');
+        target.classList.remove('showOriginal')
+    }
+}
+
+
+
+export function showMarkersInPreview(target, settings = {}) {
+    //console.log('showMarkersInPreview', settings.showMarkers);
+    if (settings.showMarkers) {
+        target.classList.add('showMarkers')
+
+    } else {
+        target.classList.remove('showMarkers')
+    }
+}
+
+
+
+export function adjustViewBox(svg) {
+    let bb = svg.getBBox();
+    let [x, y, width, height] = [bb.x, bb.y, bb.width, bb.height];
+    svg.setAttribute("viewBox", [x, y, width, height].join(" "));
+}
+
+
+
+
+
+
+/** prevent focus in extension */
+export function isBody(e) {
+    if (!e.target) return false;
+    let nodeName = e.target.nodeName.toLowerCase()
+    let isBody = nodeName === 'body'
+    return isBody
+}
+
+
+// Check if focus is in a form field
+// Function to check if there's any text selection in the document
+export function hasTextSelection() {
+    let selection = window.getSelection();
+
+    // Check if there's a selection and it's not empty
+    if (selection && selection.toString().trim().length > 0) {
+        return true;
+    }
+
+    // Check if there's a selection in input/textarea elements
+    let activeElement = document.activeElement;
+    if (activeElement) {
+        if (activeElement.tagName.toLowerCase() === 'input' ||
+            activeElement.tagName.toLowerCase() === 'textarea') {
+
+            // Check if text is selected in the input
+            if (activeElement.selectionStart !== activeElement.selectionEnd) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+
+// Check if focus is in a form field
+export function isInFormField() {
+    let activeElement = document.activeElement;
+    if (!activeElement) return false;
+    let tagName = activeElement.tagName.toLowerCase();
+    let isFormField = tagName === 'input';
+    return isFormField
+}
+
+
+export function validateInput(str) {
+    if (!str) return false;
+    str = str.trim();
+    let isSVG = str.startsWith('<svg') && str.includes('</svg')
+    let isSymbol = str.startsWith('<symbol') && str.includes('</symbol')
+    let isPathData = str.startsWith('M') || str.startsWith('m');
+    let hasScript = str.includes('<script')
+    let isValid = false
+
+    if ((isSVG || isSymbol || isPathData) && !hasScript) isValid = true;
+    return isValid
+}
+
+
+
+
 export async function checkSVGFilesize(files) {
     let fileStack = [];
     let totalSize = 0;
@@ -16,7 +137,7 @@ export async function checkSVGFilesize(files) {
         totalSize += size
     }
 
-    if(fileStack[0]){
+    if (fileStack[0]) {
         fileStack[0].totalO = totalSize
         fileStack[0].totalS = 0
     }
@@ -88,40 +209,6 @@ export async function loadSVGFiles__(files) {
 }
 
 
-export function simplifyStack(fileStack = [], settings) {
-    let l = fileStack.length;
-    //let totalO = 0;
-    let totalS = 0;
-
-    for (let i = 0; i < l; i++) {
-        let item = fileStack[i];
-        let { svg, size } = item
-
-        // use original as fallback
-        let simplifiedObj = { svg }
-        let error = false;
-
-        try {
-            simplifiedObj = svgPathSimplify(svg, settings)
-
-        } catch {
-            console.warn('couldn not be processed');
-            error = false;
-        }
-
-        //totalO += size
-        totalS += simplifiedObj.svg.length
-        fileStack[i].simplified = simplifiedObj;
-        fileStack[i].error = error;
-
-    }
-
-    // add new file size
-    fileStack[0].totalS = totalS;
-    return fileStack;
-}
-
-
 
 export function getSVGPreviews(fileStack = []) {
     let previews = [];
@@ -148,116 +235,105 @@ export function getSVGPreviews(fileStack = []) {
 }
 
 
+export function updateConfig(settings = {}) {
 
-export async function generateSVGZip(fileStack = []) {
+    let { omitDefaults } = settings || false
 
-    let zipObj = {}
+    let excludeProps = ['dInput', 'dOutput', 'storageName', 'defaults', 'config', 'showNav', 'showMarkers', 'data', 'getObject', 'samples', 'omitDefaults', 'detailsOpen', 'showNav0', 'showOriginal', 'preset', 'markerSize', 'showTransparency', 'toAbsolute', 'toLonghands']
 
-    for (let item of fileStack) {
-        let { name, simplified } = item;
+    let configs = {}
+    let defaults = settings.defaults;
+    //console.log(defaults);
 
-        // add to zip
-        zipObj[`${name}`] = simplified.svg;
-
+    for (let prop in settings) {
+        if (!excludeProps.includes(prop)) {
+            let value = settings[prop];
+            if (!omitDefaults || ( defaults[prop]!==undefined && value !== defaults[prop]) ) {
+                //console.log('add', prop, value, defaults[prop], 'defaults', defaults);
+                configs[prop] = settings[prop]
+            }
+        }
     }
-
-    let url = await getZipObjectUrl(zipObj);
-    return url;
+    let configJson = 'const options=' + JSON.stringify(configs, null, ' ').replaceAll('"', '')
+    textConfig.value = configJson
+    return configs;
 
 }
 
 
-// create zip
-export async function getZipObjectUrl(files = {}) {
+export function minifySVGMarkup(svg, {
+    removeComments = true,
+} = {}) {
 
-    const fetchBinary = async (url) => {
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.warn("could't fetch resource");
-            return null;
-        }
-        return new Uint8Array(await res.arrayBuffer());
-    };
-
-    const encoder = new TextEncoder();
-
-    for (let name in files) {
-        let val = files[name];
-
-        let isString = typeof val === 'string';
-        let ext = isString && !val.includes('<') && !val.includes('>') ? val.split('.').slice(-1)[0].toLowerCase() : '';
-        let isUrl = isString && (val.startsWith('http') || val.startsWith('.') || (ext && ext.length < 5));
-
-        if (isString) {
-            if (isUrl) {
-                let binary = await fetchBinary(val);
-                if (binary) {
-                    files[name] = binary;
-                } else {
-                    delete files[name];
-                }
-            }
-            else {
-                files[name] = encoder.encode(val);
-            }
-        }
+    if (removeComments) {
+        svg = svg.replace(/<!--[\s\S]*?-->/g, '')
     }
 
-    let zip = UZIP.encode(files);
-    let blob = new Blob([zip]);
-    let url = URL.createObjectURL(blob);
-    return url
+    // Remove whitespace between tags
+    svg = svg.replace(/>\s+</g, '><')
+        // Trim leading/trailing whitespace
+        .trim()
+        // Remove extra whitespace within tags (attributes)
+        .replace(/\s+([=])\s+/g, '$1')
+        .replace(/\s+(?=[^<]*>)/g, ' ')
+        // Collapse multiple spaces to single space
+        .replace(/\s{2,}/g, ' ')
+        // Remove spaces around = signs in attributes
+        .replace(/\s*=\s*/g, '=');
+
+    return svg
 }
 
-/*
-    function getParamNames(func) {
-
-        const STRIP_COMMENTS = /((\/\/.*$)|(\/\*.*\*\/))/mg;
-        const STRIP_KEYWORDS = /(\s*async\s*|\s*function\s*)+/;
-        const ARGUMENT_NAMES = /\(([^)]+)\)\s*=>|([a-zA-Z_$]+)\s*=>|[a-zA-Z_$]+\(([^)]+)\)|\(([^)]+)\)/;
-        const ARGUMENT_SPLIT = /[ ,\n\r\t]+/;
-    
-
-        const fnStr = func.toString()
-            .replace(STRIP_COMMENTS, "")
-            .replace(STRIP_KEYWORDS, "")
-            .replaceAll('\r', '\n')
-            .replaceAll('\n\n', '\n')
-            .trim();
-        const matches = ARGUMENT_NAMES.exec(fnStr);
-        var match;
-        if (matches) {
-            for (var i = 1; i < matches.length; i++) {
-                if (matches[i]) {
-                    match = matches[i];
-                    break;
-                } 
-            }
-        }
-        if (match === undefined) {
-            return [];
-        }
-        let res = match.split(ARGUMENT_SPLIT).filter(part => part !== "").filter(val=>val!=='{' && val!=='}' && val!=='{}');
-
-        let props={}
-        for (let i=2; i<res.length; i+=3){
-
-            let [prop, del, val] = [res[i-2], res[i-1], res[i]]
-            console.log(prop, del, val);
-            props[prop]=val
-        }
-
-        //res=res.join('')
-console.log(props);
-        return res
-        return props 
+export function serializeSVGPretty(xmlDoc, {
+    indentSize = 2 } = {}) {
+    if (typeof xmlDoc === 'string') {
+        xmlDoc = new DOMParser().parseFromString(xmlDoc, 'image/svg+xml').querySelector('svg')
     }
-    
+    return formatXMLNode(xmlDoc, 0, indentSize);
+}
 
 
-    let args = getParamNames(svgPathSimplify)
+function formatXMLNode(node, level, indentSize) {
+    let indent = " ".repeat(level * indentSize);
 
+    if (node.nodeType === Node.TEXT_NODE) {
+        let text = node.textContent.trim();
+        return text ? text : "";
+    }
 
-    console.log( args);
+    if (node.nodeType === Node.ELEMENT_NODE) {
+        let hasChildren = node.children.length > 0;
+        let hasTextContent = node.textContent.trim().length > 0 && node.children.length === 0;
 
-    */
+        let result = `${indent}<${node.nodeName}`;
+
+        // Add attributes
+        for (let i = 0; i < node.attributes.length; i++) {
+            let att = node.attributes[i];
+            result += ` ${att.name}="${att.value}"`;
+        }
+
+        if (!hasChildren && !hasTextContent) {
+            return result + " />\n";
+        }
+
+        result += ">";
+
+        if (hasChildren) {
+            result += "\n";
+            for (let child of node.children) {
+                result += formatXMLNode(child, level + 1, indentSize);
+            }
+            result += `${indent}</${node.nodeName}>\n`;
+        } else if (hasTextContent) {
+            result += node.textContent.trim();
+            result += `</${node.nodeName}>\n`;
+        } else {
+            result += `</${node.nodeName}>\n`;
+        }
+
+        return result;
+    }
+
+    return "";
+}
