@@ -15,7 +15,7 @@ While this library reduces SVG markup sizes significantly by removing commands i
 Unlike most existing approaches (e.g in graphic applications), it checks where simplifications are suitable and stops simplification at the right »point« (literally).
 
 ![simplification](./demo/img/splash.png)    
-*Fira Sans (based on truetype/glyph quadratic commands) converted to cubic Béziers. Right:Original; Left:optimized*
+*Fira Sans (based on truetype/glyph quadratic commands) converted to cubic Béziers. Left:Original; Right:optimized*
 
 ## Features 
 ### Path simplification
