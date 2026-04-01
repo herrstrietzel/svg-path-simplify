@@ -15,7 +15,7 @@
         content="https://herrstrietzel.github.io/svg-path-simplify/demo/img/repository-open-graph-template.png">
 
 
-        <!-- 
+    <!-- 
     <script type="application/ld+json">
         {
         "@context": "https://schema.org",
@@ -70,7 +70,11 @@
     <script src="demo/samples.js" defer></script>
 
     <!-- Md parser -->
+    <!--
     <script src="https://cdn.jsdelivr.net/gh/UmemotoCtrl/mdpjs@0.1.4/js/mdp.min.js" defer></script>
+  -->
+
+    <script src="https://cdn.jsdelivr.net/npm/mdpjs@0.0.5/dist/mdpjs.min.js"></script>
 
     <!-- Zip creation -->
     <script src="https://cdn.jsdelivr.net/npm/uzip@0.20201231.0/UZIP.min.js" async></script>
@@ -95,7 +99,7 @@
         <script src="https://cdn.jsdelivr.net/npm/svg-path-simplify@0.1.2/dist/svg-path-simplify.min.js" defer></script>
     -->
 
-    <script src="dist/svg-path-simplify.min.js" defer></script>
+    <script src="dist/svg-path-simplify.js" defer></script>
     <link rel="stylesheet" href="demo/css/app.css">
 
     <script src="demo/lib/elzoomo/elzoomo.js" defer></script>
@@ -239,9 +243,6 @@
                     <summary class="h3">SVG style optimization</summary>
                     <p>
                         <!-- 
-                            <label><input type="checkbox" data-type="checkbox-switch" name="convertPathLength"
-                                    aria-description="Converts  pathLength attribute to absolute dasharray values – many graphic apps han't handle pathLength">convertPathLength</label>
-        
                         -->
                         <label><input type="checkbox" data-type="checkbox-switch" name="stylesToAttributes"
                                 aria-description="replaces inline styles with SVG atributes and removes obsolete attributes and styles">stylesToAttributes</label>
@@ -260,6 +261,22 @@
                     </p>
 
                 </details>
+
+                <details open>
+                    <summary class="h3">Unit conversion</summary>
+
+                    <p>
+                        <label><input type="checkbox" data-type="checkbox-switch" name="convertPathLength"
+                                aria-description="Converts  pathLength attribute to absolute dasharray values – many graphic apps han't handle pathLength">convertPathLength</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch" name="toAbsoluteUnits"
+                                aria-description="Converts relative units to absolute">toAbsoluteUnits</label>
+                    </p>
+
+
+
+                </details>
+
 
 
                 <details open class="detailsRemoveElAttributes">
@@ -492,6 +509,15 @@
                         <label><input type="checkbox" data-type="checkbox-switch"
                                 aria-description="replaces Bézier segments enclosed by linetos with single quadratic commands – handy to reduce overly complex tiny corner roundings"
                                 name="simplifyCorners">simplifyCorners</label>
+
+                        <label><input type="checkbox" data-type="checkbox-switch"
+                                aria-description="Will disable curve adjustment for quadratic corner roundings – usually more compact but less accurate"
+                                name="simplifyQuadraticCorners">simplifyQuadraticCorners</label>
+
+
+
+
+
                         <label><input type="checkbox" data-type="checkbox-switch"
                                 name="simplifyRound">simplifyRound</label>
                         <label><input type="checkbox" data-type="checkbox-switch"
@@ -614,7 +640,7 @@
                     </p>
 
                     <p>
-                        <label class="wdt-100">decimals <input type="number" name="decimals" min="-1" value="1"
+                        <label class="wdt-100">decimals <input type="number" name="decimals" min="-1" value="1" step="0.5"
                                 aria-description="Manual floating point rounding precision – overriden when autoAccuracy is enabled: -1 means no rounding"></label>
                     </p>
                 </details>
@@ -677,6 +703,10 @@
                     <a href="#" class="a-dialog" data-dialog="#privacy" data-dialog-title="privacy"
                         data-icon="finger-print" title="Privacy"></a>
 
+                    <!-- file info -->
+                    <a href="#" class="a-dialog" id="btnFileInfo" data-dialog="#fileInfo" data-dialog-title="File info"
+                        data-icon="light-bulb" title="File info and recommendations"></a>
+
 
                     <!-- presets -->
                     <button type="button" class="btn btn-presets" title="Presets" data-icon="gear"
@@ -719,7 +749,7 @@
                                     <label><input type="checkbox" data-type="checkbox-switch" name="showMarkers"
                                             data-secondary="true" checked>showMarkers</label>
                                     <button type="button" class="btn btn-info btn-inline btn-menu btnConfig"
-                                        title="Edit marker size" data-icon="gear" data-menu-anchor="menu1"></button>
+                                        title="Edit marker size" data-icon="ellipsis-horizontal" data-menu-anchor="menu1"></button>
 
                                 </span>
 
@@ -852,17 +882,6 @@
 
 
 
-    <dialog class="--dialog sr-only" id="about">
-        <div class="md-cnt" data-md="./docs/api.md">
-        </div>
-    </dialog>
-
-    <dialog class="sr-only" id="privacy">
-        <div class="md-cnt" data-md="./docs/privacy-webapp.md">
-        </div>
-    </dialog>
-
-
     <!-- menu presets -->
     <div class="menu menu-presets menu-right-top  pdd-1em --menu-active" data-menu="menu2">
         <p class="h4">Presets</p>
@@ -971,6 +990,23 @@
 
 
     </div>
+
+
+    <!-- dialogs -->
+    <dialog class="--dialog sr-only" id="about">
+        <div class="md-cnt" data-md="./docs/api.md">
+        </div>
+    </dialog>
+
+    <dialog class="sr-only" id="privacy">
+        <div class="md-cnt" data-md="./docs/privacy-webapp.md">
+        </div>
+    </dialog>
+
+    <dialog class="sr-only fileInfo" id="fileInfo">
+        <div class="--md-cnt" id="fileInfoReport">
+        </div>
+    </dialog>
 
 
 

@@ -19,8 +19,21 @@ let svgMarkup =
 </g>
 </svg>`
 
+
+/*
+let document = new DOMParser().parseFromString(svgMarkup, 'image/svg+xml');
+let svg = document.querySelector('svg');
+let path = svg.querySelector('path');
+let els = svg.querySelectorAll('path')
+let d = path.getAttribute('d').substring(0, 10)
+console.log(d);
+*/
+
+
+
+
 // try to simplify
-let svgOpt = svgPathSimplify(svgMarkup, {scaleTo:24});
+let svgOpt = svgPathSimplify(svgMarkup, {preset:'high'});
 
 // simplified pathData
 console.log(svgOpt)

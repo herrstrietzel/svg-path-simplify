@@ -1,4 +1,4 @@
-import { getDistance } from "./geometry";
+import { getDistance, getDistManhattan } from "./geometry";
 
 // Legendre Gauss weight and abscissa values
 export const waArr_global = [];
@@ -172,6 +172,22 @@ export function getPolygonLength(pts=[], isPoly=false){
     }
     if(isPoly){
         len += getDistance(pts[l-1], pts[0])
+    }
+    return len
+}
+
+export function getPolygonLengthManhattan(pts=[], isPoly=false){
+
+    let len = 0;
+    let l=pts.length;
+
+    for(let i=1; i<l; i++){
+        let p1 = pts[i-1]
+        let p2 = pts[i]
+        len += getDistManhattan(p1, p2)
+    }
+    if(isPoly){
+        len += getDistManhattan(pts[l-1], pts[0])
     }
     return len
 }

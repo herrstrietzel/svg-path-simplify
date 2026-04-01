@@ -29,8 +29,6 @@ const stripConsoleLogs = () => ({
     }
 });
 
-
-
 export default [
     // IIFE Build
     {

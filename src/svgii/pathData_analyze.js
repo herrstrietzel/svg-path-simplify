@@ -67,6 +67,7 @@ export function analyzePathData(pathData = [], {
         let { type, values, p0, p, cp1 = null, cp2 = null, squareDist = 0, cptArea = 0, dimA = 0 } = com;
 
         //next command
+        let comPrev = pathData[c-2];
         let comN = pathData[c] || null;
 
 
@@ -93,6 +94,7 @@ export function analyzePathData(pathData = [], {
 
         // bezier types
         let isBezier = type === 'Q' || type === 'C';
+        let isArc = type === 'A';
         let isBezierN = comN && (comN.type === 'Q' || comN.type === 'C');
 
 
@@ -147,6 +149,22 @@ export function analyzePathData(pathData = [], {
                     }
                 }
             }
+        }
+
+        // check extremes introduce by small arcs
+        else if(isArc && comN && ((comPrev.type==='C' || comPrev.type==='Q') || (comN.type==='C' || comN.type==='Q'))  ){
+            let distN = comN ? comN.dimA : 0
+            let isShort = com.dimA < (comPrev.dimA + distN) * 0.1;
+            let smallRadius = com.values[0] === com.values[1] && (com.values[0] < 1)
+
+            if(isShort && smallRadius){
+                let bb = getPolyBBox([comPrev.p0, comN.p])
+                if(p.x>bb.right || p.x<bb.x || p.y<bb.y || p.y>bb.bottom){
+                    hasExtremes = true;
+                    //renderPoint(markers, p)
+                }
+            }
+
         }
 
         if (hasExtremes) com.extreme = true

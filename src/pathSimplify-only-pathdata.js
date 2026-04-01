@@ -13,10 +13,11 @@ import { pathDataToD } from './svgii/pathData_stringify';
 import { detectAccuracy } from './svgii/rounding';
 import { refineAdjacentExtremes } from './svgii/pathData_simplify_refineExtremes';
 import { refineRoundedCorners } from './svgii/pathData_simplify_refineCorners';
-import { refineRoundSegments } from './svgii/pathData_refine_round';
+//import { refineRoundSegments } from './svgii/pathData_refine_round';
 import { refineClosingCommand } from './svgii/pathData_remove_short';
 import { pathDataRevertCubicToQuadratic } from './pathData_simplify_revertToquadratics';
 import { pathDataLineToCubic } from './svgii/pathData_line_to_cubic';
+import { refineRoundSegments } from './svgii/pathData_simplify_refine_round';
 
 //import { installDOMPolyfills } from './dom-polyfill';
 
@@ -97,7 +98,11 @@ export function simplifyPathData(input = '', {
     let yArr = []
 
     // mode:0 – single path
-    let inputType = detectInputType(input)
+    //let inputType = detectInputType(input)
+    let inputDetection = detectInputType(input);
+    let {inputType, log} = inputDetection
+
+
     if (inputType === 'pathDataString') {
         d = input
     } else if (inputType === 'polyString') {

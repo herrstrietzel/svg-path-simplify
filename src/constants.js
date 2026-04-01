@@ -7,10 +7,14 @@ export const rad2Deg = 180/Math.PI
 export const deg2rad = Math.PI/180
 export const root2 = 1.4142135623730951
 export const svgNs = 'http://www.w3.org/2000/svg'
+export const dummySVG = `<svg id="svgInvalid" xmlns="${svgNs}" viewBox="0 0 1 1"><path d="M0 0 h0" /></svg>`
+
 
 // 1/2.54
 export const inch2cm =  0.39370078;
 
 // 1/72
 export const inch2pt =  0.01388889;
+
+
 

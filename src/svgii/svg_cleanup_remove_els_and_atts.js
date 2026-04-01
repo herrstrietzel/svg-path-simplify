@@ -51,10 +51,15 @@ export function removeSvgEls(svg, {
 */
 
 export function removeSvgAtts(svg, remove = []) {
+  removeAtts(svg, remove)
+}
+
+export function removeAtts(el, remove = []) {
   remove.forEach(att => {
-    svg.removeAttribute(att);
+    el.removeAttribute(att);
   })
 }
+
 
 export function removeSvgChildAtts(svg, remove = []) {
   if (remove.length) {

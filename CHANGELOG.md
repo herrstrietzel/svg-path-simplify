@@ -1,4 +1,15 @@
 # Changelog
+
+## [0.4.4] - 2026-04-01
+### Fixed
+- shape attribute retrieval in node.js
+### Added  
+- convert relative dash lengths relying on `pathLength` attribute
+- quantized rounding allowing for half decimal steps
+- improved arc segment detection and simplification
+- security warnings/sanitization e.g for billion laugh exploits
+- webapp: recommendations for additional optimizations
+
 ## [0.4.3] - 2026-03-26
 ### Added  
 - presets: apply options from existing presets (allows custom overriding) 

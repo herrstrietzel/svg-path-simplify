@@ -6,7 +6,6 @@ export function pathDataRevertCubicToQuadratic(pathData, tolerance=1) {
         let com = pathData[c]
         let { type, values, p0, cp1 = null, cp2 = null, p = null } = com;
         if (type === 'C') {
-            //console.log(com);
             let comQ = revertCubicQuadratic(p0, cp1, cp2, p, tolerance)
             if (comQ.type === 'Q') {
                 comQ.extreme = com.extreme

@@ -9,13 +9,11 @@ export async function processFileStack(fileStack, settings, useWorker = false, W
 
     // process svgs
     if (useWorker) {
-        console.log('many use worker', totalO)
+        //console.log('multiple files - use worker', totalO)
         fileStack = await simplifyStackWorker(fileStack, settings, WorkerUrl);
     } else {
         fileStack = simplifyStack(fileStack, settings);
     }
-
-    //return
 
     // create zips
     let urlDownload = await generateSVGZip(fileStack);
@@ -27,17 +25,25 @@ export async function processFileStack(fileStack, settings, useWorker = false, W
 
     // update preview images
     let previews = getSVGPreviews(fileStack)
-    //console.log('fileStack', fileStack);
 
     // render previews
     svgWrapMulti.innerHTML = previews;
 
     // update report
     let { totalS } = fileStack[0];
+    let comCount = 0;
+    let comSaved = 0;
+    fileStack.forEach(file=>{
+        let {original, saved} = file.simplified.report
+        comSaved+=saved
+        comCount +=original
+    })
 
     totalS = +(totalS / 1024).toFixed(3)
     let perc = +(100 / totalO * totalS).toFixed(3)
-    pReport.innerHTML = `${perc}&thinsp;% – ${totalS}&thinsp;KB`
+    pReport.innerHTML = `${perc}&thinsp;% – ${totalS}&thinsp;KB
+    <br>removed: ${comSaved} <br>
+    `
 
     document.body.classList.remove('processing')
 
@@ -58,11 +64,12 @@ export function simplifyStack(fileStack = [], settings) {
         let simplifiedObj = { svg }
         let error = false;
 
+        
         try {
             simplifiedObj = svgPathSimplify(svg, settings)
-
+            //console.log('simplifiedObj:', simplifiedObj);
         } catch {
-            console.warn('couldn not be processed');
+            console.warn(`${item.name} couldn not be processed`);
             error = false;
         }
 

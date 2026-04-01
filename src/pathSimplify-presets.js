@@ -30,6 +30,7 @@ export let settingsDefaults = {
     allowAriaAtts: true,
     //pathlength conversion
     convertPathLength: false,
+    toAbsoluteUnits: false,
 
     // custom removal
     removeElements: [],
@@ -61,6 +62,7 @@ export let settingsDefaults = {
     revertToQuadratics: true,
     refineExtremes: false,
     simplifyCorners: false,
+    simplifyQuadraticCorners: false,
     keepExtremes: true,
     keepCorners: true,
     keepInflections: false,
@@ -121,7 +123,7 @@ for (let prop in settingsDefaults) {
     let isArray = Array.isArray(val)
 
     if (isBoolean) val = false
-    else if (!isArray && isNum) val = val===1 ? 1 : (prop==='decimals'? -1 : 0);
+    else if (!isArray && isNum) val = val === 1 ? 1 : (prop === 'decimals' ? -1 : 0);
     else if (isArray) val = []
     settingsNull[prop] = val;
 }
@@ -153,10 +155,14 @@ export const presetSettings = {
         ...settingsDefaults,
         ...{
             keepSmaller: false,
+            convertPathLength:true,
             toRelative: true,
             toMixed: true,
             toShorthands: true,
             //fixHref: true,
+            allowMeta:true,
+            allowDataAtts:true,
+            allowAriaAtts:true,
             legacyHref: true,
             addViewBox: true,
             addDimensions: true,
@@ -224,19 +230,24 @@ export const presetSettings = {
     high: {
         ...settingsDefaults,
         ...{
-            tolerance: 1.2,
+            tolerance: 1.1,
             toMixed: true,
             refineExtremes: true,
             simplifyCorners: true,
+            simplifyQuadraticCorners: true,
+            removeOrphanSubpaths: true,
             simplifyRound: true,
             removeClassNames: true,
             cubicToArc: true,
+            minifyD: 0,
             removeComments: true,
             removeHidden: true,
-            removeOffCanvas: true,
             addViewBox: true,
             removeDimensions: true,
-            minifyD: 0
+            removeOffCanvas: true,
+
+            /*
+            */
         }
     }
 

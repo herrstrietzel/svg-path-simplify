@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 10lh;
+        }
+    </style>
+</head>
+
+<body>
+
+    <textarea id="input"></textarea>
+    <button type="button" id="btnClip">Read clipboard</button>
+
+
+    <script>
+
+        console.clear()
+
+        btnClip.addEventListener('click', async (e) => {
+
+            const items = await navigator.clipboard.read();
+
+            for (const item of items) {
+                for (const type of item.types) {
+
+                    console.log(type, item);
+
+                    if (type === "text/html") {
+                        const blob = await item.getType(type);
+                        const text = await blob.text();
+                        console.log("SVG:", text);
+                    }
+
+
+                    if (type === "image/svg+xml") {
+                        const blob = await item.getType(type);
+                        const text = await blob.text();
+                        console.log("SVG:", text);
+                    }
+
+                    if (type === "image/png") {
+                        const blob = await item.getType(type);
+                        const url = URL.createObjectURL(blob);
+                        console.log("PNG fallback:", url);
+                    }
+                }
+            }
+
+
+        })
+    </script>
+
+</body>
+
+</html>

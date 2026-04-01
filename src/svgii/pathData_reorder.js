@@ -14,7 +14,6 @@ export function pathDataToTopLeft(pathData) {
     let len = pathData.length;
     let isClosed = pathData[len - 1].type.toLowerCase() === 'z'
 
-    //return pathData;
 
     // we can't change starting point for non closed paths
     if (!isClosed) {
@@ -30,7 +29,7 @@ export function pathDataToTopLeft(pathData) {
         let { type, values } = com;
         let valsLen = values.length
         if (valsLen) {
-            let p = { type: type, x: values[valsLen-2], y: values[valsLen-1], index: 0}
+            let p = { type: type, x: values[valsLen - 2], y: values[valsLen - 1], index: 0 }
             p.index = i
             indices.push(p)
         }
@@ -38,16 +37,124 @@ export function pathDataToTopLeft(pathData) {
 
     // reorder  to top left most
     //|| a.x - b.x
-    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x-b.x );
+    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x - b.x);
     newIndex = indices[0].index
 
-    return  newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;
+    return newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;
+}
+
+
+export function optimizeClosePath(pathData, { removeFinalLineto = true, autoClose = true } = {}) {
+
+    let pathDataN = pathData;
+    let l = pathData.length;
+    let M = { x: +pathData[0].values[0].toFixed(8), y: +pathData[0].values[1].toFixed(8) }
+    let isClosed = pathData[l - 1].type.toLowerCase() === 'z'
+    //let linetos = pathData.filter(com => com.type === 'L')
+    //let hasLinetos = linetos.length;
+    let hasLinetos = false
+
+
+    // check if path is closed by explicit lineto
+    let idxPenultimate = isClosed ? l - 2 : l - 1
+    let penultimateCom = pathData[idxPenultimate];
+    let penultimateType = penultimateCom.type;
+    let penultimateComCoords = penultimateCom.values.slice(-2).map(val => +val.toFixed(8))
+
+    // last L command ends at M 
+    let hasClosingCommand = penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
+    let lastIsLine = penultimateType === 'L'
+    //console.log(pathData);
+
+    // create index
+    let indices = [];
+    for (let i = 0; i < l; i++) {
+        let com = pathData[i];
+        let { type, values, p0, p } = com;
+
+        if(type==='L') hasLinetos = true;
+
+        // exclude Z
+        if (values.length) {
+            let valsL = values.slice(-2)
+
+            let x = Math.min(p0.x, p.x)
+            let y = Math.min(p0.y, p.y)
+
+            let prevCom = pathData[i - 1] ? pathData[i - 1] : pathData[idxPenultimate]
+            let prevType = prevCom.type
+            //let p = { type: type, x: valsL[0], y: valsL[1], dist: 0, index: 0, prevType }
+            let item = { type: type, x, y, index: 0, prevType }
+            item.index = i
+            indices.push(item)
+        }
+
+    }
+
+    let xMin = Infinity;
+    let yMin = Infinity;
+    let idx_top = null;
+    let len = indices.length
+
+
+    for (let i = 0; i < len; i++) {
+        let com = indices[i];
+        let { type, index, x, y, prevType } = com;
+
+        if (hasLinetos && prevType === 'L') {
+            if (x < xMin && y < yMin) {
+                idx_top = index-1;
+            }
+
+            if (y < yMin) {
+                yMin = y
+            }
+
+            if (x < xMin) {
+                xMin = x
+            }
+        }
+    }
+
+
+    // shift to better starting point
+    if (idx_top) {
+        pathDataN = shiftSvgStartingPoint(pathDataN, idx_top)
+
+        // update penultimate - reorder might have added new close paths
+        l = pathDataN.length
+        M = { x: +pathDataN[0].values[0].toFixed(8), y: +pathDataN[0].values[1].toFixed(8) }
+
+        idxPenultimate = isClosed ? l - 2 : l - 1
+        penultimateCom = pathDataN[idxPenultimate];
+        penultimateType = penultimateCom.type;
+        penultimateComCoords = penultimateCom.values.slice(-2).map(val => +val.toFixed(8))
+        lastIsLine = penultimateType ==='L'
+
+        // last L command ends at M 
+        hasClosingCommand = penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
+
+    }
+
+
+    // remove unnecessary closing lineto
+    if (removeFinalLineto && hasClosingCommand && lastIsLine) {
+        pathDataN.splice(l - 2, 1)
+    }
+
+    // add close path
+    if (autoClose && !isClosed && hasClosingCommand) {
+        pathDataN.push({ type: 'Z', values: [] })
+    }
+
+    return pathDataN
+
 }
 
 
 
 
-export function optimizeClosePath(pathData, {removeFinalLineto = true, autoClose = true}={}) {
+export function optimizeClosePath__(pathData, { removeFinalLineto = true, autoClose = true } = {}) {
 
     let pathDataNew = [];
     let l = pathData.length;
@@ -58,17 +165,16 @@ export function optimizeClosePath(pathData, {removeFinalLineto = true, autoClose
 
 
     // check if order is ideal
-    let idxPenultimate = isClosed ? l-2 : l-1
-
+    let idxPenultimate = isClosed ? l - 2 : l - 1
     let penultimateCom = pathData[idxPenultimate];
     let penultimateType = penultimateCom.type;
     let penultimateComCoords = penultimateCom.values.slice(-2).map(val => +val.toFixed(8))
 
     // last L command ends at M 
-    let isClosingCommand = penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
+    let hasClosingCommand = penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
 
     // add closepath Z to enable order optimizations
-    if(!isClosed && autoClose && isClosingCommand){
+    if (!isClosed && autoClose && hasClosingCommand) {
 
         /*
         // adjust final coords
@@ -77,14 +183,14 @@ export function optimizeClosePath(pathData, {removeFinalLineto = true, autoClose
         pathData[idxPenultimate].values[valsLastLen-2] = M.x
         pathData[idxPenultimate].values[valsLastLen-1] = M.y
         */
-        
-        pathData.push({type:'Z', values:[]})
+
+        pathData.push({ type: 'Z', values: [] })
         isClosed = true;
         l++
     }
 
     // if last segment is not closing or a lineto
-    let skipReorder = pathData[1].type !== 'L' && (!isClosingCommand || penultimateCom.type === 'L')
+    let skipReorder = pathData[1].type !== 'L' && (!hasClosingCommand || penultimateCom.type === 'L')
     skipReorder = false
 
 
@@ -143,13 +249,13 @@ export function optimizeClosePath(pathData, {removeFinalLineto = true, autoClose
     // remove last lineto
     penultimateCom = pathData[l - 2];
     penultimateType = penultimateCom.type;
-    penultimateComCoords = penultimateCom.values.slice(-2).map(val=>+val.toFixed(8))
+    penultimateComCoords = penultimateCom.values.slice(-2).map(val => +val.toFixed(8))
 
-    isClosingCommand = penultimateType === 'L' && penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
+    hasClosingCommand = penultimateType === 'L' && penultimateComCoords[0] === M.x && penultimateComCoords[1] === M.y
 
-    //console.log('penultimateCom', isClosingCommand, penultimateCom.values, M);
+    //console.log('penultimateCom', hasClosingCommand, penultimateCom.values, M);
 
-    if (removeFinalLineto && isClosingCommand) {
+    if (removeFinalLineto && hasClosingCommand) {
         pathData.splice(l - 2, 1)
     }
 

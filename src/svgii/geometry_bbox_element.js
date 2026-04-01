@@ -12,7 +12,7 @@ export function getElBBox(el){
 
     switch(type){
         case 'path':
-            let pathData = parsePathDataNormalized(atts.d)
+            let pathData = parsePathDataNormalized(el.getAttribute('d'))
             bb=getPolyBBox(getPathDataPoly(pathData))
 
         break;

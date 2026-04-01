@@ -15,6 +15,7 @@ if (!globalThis.document) {
 
 // install globals BEFORE anything else loads
 if (!globalThis.DOMParser) {
+  //console.log('polyfill parser');
   globalThis.DOMParser = linkedom.DOMParser;
 }
 

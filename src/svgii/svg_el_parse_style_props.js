@@ -18,8 +18,8 @@ export function parseStylesProperties(el, {
     autoRoundValues = false,
     minifyRgbColors = false,
     removeInvalid = true,
-    allowDataAtts=true,
-    allowAriaAtts=true,
+    allowDataAtts = true,
+    allowAriaAtts = true,
     removeDefaults = true,
     cleanUpStrokes = true,
     normalizeTransforms = true,
@@ -94,7 +94,7 @@ export function parseStylesProperties(el, {
      */
 
     if (removeInvalid || removeDefaults || removeNameSpaced) {
-        let propsFilteredObj = filterSvgElProps(nodeName, props, {allowDataAtts, allowAriaAtts, removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false })
+        let propsFilteredObj = filterSvgElProps(nodeName, props, { allowDataAtts, allowAriaAtts, removeIds, removeClassNames, removeDefaults, removeNameSpaced, exclude, cleanUpStrokes, include: [...transformsStandalone, ...include], cleanUpStrokes: false })
         props = propsFilteredObj.propsFiltered
         remove.push(...propsFilteredObj.remove)
         //console.log(propsFilteredObj.remove, allowDataAtts, allowAriaAtts);
@@ -196,10 +196,11 @@ export function parseStylesProperties(el, {
 
         if (prop !== 'transforms') {
 
-            if (cleanUpStrokes && (prop === 'stroke-dasharray' || prop === 'stroke-dashoffset')) {
+            //cleanUpStrokes &&
+            if ((prop === 'stroke-dasharray' || prop === 'stroke-dashoffset')) {
                 normalizedDiagonal = true
                 for (let i = 0; i < values.length; i++) {
-                    let val = normalizeUnits(values[i].value, { unit: values[i].unit, width, height, normalizedDiagonal, fontSize })
+                    let val = normalizeUnits(values[i].value, { unit: values[i].unit, width, height, normalizedDiagonal, fontSize, autoRoundValues })
                     valsNew.push(val)
                 }
             }
@@ -244,15 +245,12 @@ export function parseStylesProperties(el, {
                         if (prop === 'scale' && unit === '%') {
                             valAbs = valAbs * 0.01;
                         } else {
-                            if (prop === 'r') normalizedDiagonal = true;
+                            if (prop === 'r' && width!==height)  normalizedDiagonal = true;
                             valAbs = normalizeUnits(val.value, { unit, width, height, isHorizontal, isVertical, normalizedDiagonal, fontSize })
 
                             if (autoRoundValues && isNumeric) {
                                 valAbs = autoRound(valAbs)
-                                //valAbs = roundTo(valAbs, 3)
                             }
-
-                            //console.log('norm', prop, valAbs, 'val', val, unit, isHorizontal, isVertical, width, height, 'isNumeric', isNumeric);
                         }
                     }
                     valsNew.push(valAbs)
@@ -466,6 +464,7 @@ export function filterSvgElProps(elNodename = '', props = {}, {
     removeIds = false,
     removeClassNames = false,
     exclude = [],
+    inheritedProps = null,
 } = {}) {
     let propsFiltered = {}
     let remove = [];
@@ -473,6 +472,7 @@ export function filterSvgElProps(elNodename = '', props = {}, {
     if (!removeIds) include.push('id')
     if (!removeClassNames) include.push('class')
     //console.log('???include', 'removeIds', removeIds, include);
+
 
     // allow defaults for nested
     //removeDefaults = false;
@@ -490,6 +490,7 @@ export function filterSvgElProps(elNodename = '', props = {}, {
             (attLookup.atts[prop] ? attLookup.atts[prop].includes(elNodename) : false) :
             false;
 
+
         // remove null transforms
         if (prop === 'transform' && value === 'matrix(1 0 0 1 0 0)') isValid = false;
 
@@ -498,7 +499,7 @@ export function filterSvgElProps(elNodename = '', props = {}, {
         let isMeta = prop === 'title'
         let isAria = prop.startsWith('aria-')
 
-        if( (allowDataAtts && isDataAtt) || (allowAriaAtts && isAria) || (allowMeta && isMeta ) ) continue
+        if ((allowDataAtts && isDataAtt) || (allowAriaAtts && isAria) || (allowMeta && isMeta)) continue
 
         // filter out defaults
         let isDefault = removeDefaults ?
@@ -509,6 +510,8 @@ export function filterSvgElProps(elNodename = '', props = {}, {
 
         if (isDefault || isDataAtt || isMeta || isAria || isFutileStroke) isValid = false
         if (include.includes(prop)) isValid = true;
+        if (exclude.includes(prop)) isValid = false
+
 
         if (isValid) {
             propsFiltered[prop] = props[prop]

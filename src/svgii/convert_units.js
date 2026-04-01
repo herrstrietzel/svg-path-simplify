@@ -94,7 +94,7 @@ export function normalizeUnits(value = null, {
                 scale = height / 100;
             }
             else {
-                scale = normalizedDiagonal ? scaleRoot / 100 : 1;
+                scale = normalizedDiagonal ? scaleRoot / 100 :  width / 100;
             }
             break;
 

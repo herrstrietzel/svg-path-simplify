@@ -8,6 +8,42 @@ import { getDistAv, getDistManhattan } from "./geometry";
 
 
 
+/**
+ * round path data
+ * either by explicit decimal value or
+ * based on suggested accuracy in path data
+ */
+export function roundPathData(pathData, decimalsGlobal = -1) {
+
+    if (decimalsGlobal < 0) return pathData;
+
+    let len = pathData.length;
+    let decimals = decimalsGlobal
+    let decimalsArc = decimals < 3 ? decimals+2 : decimals
+    //decimalsArc = decimals
+    //console.log(decimalsArc);
+
+    for (let c = 0; c < len; c++) {
+        let com = pathData[c];
+        let { type, values } = com
+        let valLen = values.length;
+        if (!valLen) continue
+
+        let isArc = type.toLowerCase() === 'a'
+
+        for (let v = 0; v < valLen; v++) {
+            // allow higher accuracy for arc radii (... it's always arcs)
+            pathData[c].values[v] = isArc && v < 2 ? roundTo(values[v], decimalsArc) : roundTo(values[v], decimals);
+        }
+    };
+
+    //console.log(pathData);
+    return pathData;
+}
+
+
+
+
 export function detectAccuracyPoly(pts) {
 
     let minDim = Infinity
@@ -20,7 +56,7 @@ export function detectAccuracyPoly(pts) {
         let { p0 = null, p = null, dimA = 0 } = pt;
 
         // use existing averave dimension value or calculate
-        if ( p && p0) {
+        if (p && p0) {
             dimA = dimA ? dimA : getDistManhattan(p0, p);
 
             if (dimA) dims.push(dimA);
@@ -84,11 +120,37 @@ export function detectAccuracy(pathData) {
 
 }
 
-
-
-
+/**
+ * rounding helper
+ * allows for quantized rounding
+ * e.g 0.5 decimals s
+ */
 export function roundTo(num = 0, decimals = 3) {
-    if(decimals<=-1) return num;
+    if (decimals < 0) return num;
+    // Normal integer rounding
+    if (!decimals) return Math.round(num);
+
+    // stepped rounding
+    let intPart = Math.floor(decimals);
+    //let fracPart = decimals.toString().split('.');
+    //fracPart = fracPart[1] ? +fracPart[1] : 0
+
+    if (intPart !== decimals) {
+        let f = +(decimals - intPart).toFixed(2)
+        f = f > 0.5 ? (Math.floor((f) / 0.5) * 0.5) : f;
+        //console.log('fracPart', f);
+        let step = 10 ** -intPart * f;
+        return +(Math.round(num / step) * step).toFixed(8);
+    }
+
+    let factor = 10 ** decimals;
+    return Math.round(num * factor) / factor;
+}
+
+
+
+export function roundTo__(num = 0, decimals = 3) {
+    if (decimals <= -1) return num;
     if (!decimals) return Math.round(num);
     let factor = 10 ** decimals;
     return Math.round(num * factor) / factor;
@@ -99,85 +161,24 @@ export function roundTo(num = 0, decimals = 3) {
  * floating point accuracy 
  * based on numeric value
  */
-export function autoRound(val, integerThresh = 50){
-  let decimals=8;  
-  
-  if(val>integerThresh*2){
-    decimals=0
-  }
-  else if(val>integerThresh){
-    decimals=1
-  }else{
-     decimals=Math.ceil(500/val).toString().length
-     //console.log('decimals small', val, decimals);
-  }
-      
-  //console.log(val, decimals);
-  let factor = 10 ** decimals;
-  return Math.round(val * factor) / factor;
+export function autoRound(val, integerThresh = 50) {
+    let decimals = 8;
+
+    if (val > integerThresh * 2) {
+        decimals = 0
+    }
+    else if (val > integerThresh) {
+        decimals = 1
+    } else {
+        decimals = Math.ceil(500 / val).toString().length
+        //console.log('decimals small', val, decimals);
+    }
+
+    //console.log(val, decimals);
+    let factor = 10 ** decimals;
+    return Math.round(val * factor) / factor;
 }
 
 
 
 
-/**
- * round path data
- * either by explicit decimal value or
- * based on suggested accuracy in path data
- */
-export function roundPathData(pathData, decimalsGlobal = -1) {
-
-    if (decimalsGlobal < 0) return pathData;
-
-    let len = pathData.length;
-    //let decimals = pathData[0].decimals ? pathData[0].decimals+1 : decimalsGlobal
-    let decimals = decimalsGlobal
-    //decimals = decimalsGlobal;
-    //console.log('decimals subpath', decimals, pathData[0].decimals, 'decimalsGlobal', decimalsGlobal);
-
-    for (let c = 0; c < len; c++) {
-        let com = pathData[c];
-        let {values} = com
-        //let values = pathData[c].values
-        let valLen = values.length;
-        if (!valLen) continue
-
-        for (let v = 0; v < valLen; v++) {
-            pathData[c].values[v] = roundTo(values[v], decimals);
-        }
-    };
-
-    //console.log(pathData);
-    return pathData;
-}
-
-
-export function roundPathData_(pathData, decimals = -1) {
-
-    if (decimals < 0) return pathData;
-
-    let len = pathData.length;
-    let c = 0;
-    while (c < len) {
-
-        //let com = pathData[c];
-        let values = pathData[c].values
-        let valLen = values.length;
-
-        // Z commands have no values
-        if (!valLen) {
-            c++; continue
-        }
-
-        let v = 0;
-        while (v < valLen) {
-            pathData[c].values[v] = roundTo(values[v], decimals);
-            v++
-        }
-        c++
-
-    };
-
-    //console.log(pathData);
-    return pathData;
-}

@@ -1,4 +1,125 @@
 
+export function generateFileRecommendation(markup = '', settings = {}) {
+
+    let svg = new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement;
+
+    let els = [svg, ...svg.querySelectorAll('*')];
+    let attsSVG = new Set([])
+    let attsEl = new Set([])
+    let attsAll = new Set([])
+    let elTypes = new Set([])
+
+    els.forEach(el => {
+        let type = el.nodeName.toLowerCase()
+        elTypes.add(type)
+        let atts = [...el.attributes].map(att => att.name);
+        atts.forEach(att => {
+            if (type === 'svg') {
+                attsSVG.add(att)
+
+            } else {
+                attsEl.add(att)
+            }
+            attsAll.add(att)
+        })
+    })
+
+
+    let hasPoly = elTypes.has('polygon') || elTypes.has('polyline')
+    let hasGroups = elTypes.has('g')
+    let hasLines = elTypes.has('line')
+    let hasClass = attsAll.has('class')
+    let hasIds = attsAll.has('id')
+    let svgHasDimensions = attsSVG.has('width') || attsSVG.has('height')
+    let svgNoViewBox = !attsSVG.has('viewBox')
+    let hasTransforms = attsAll.has('transform')
+
+    let notices = { hasPoly, hasLines, hasClass, hasIds, svgHasDimensions, svgNoViewBox, hasTransforms, hasGroups }
+    //console.log(notices, settings);
+
+    let ulTips = '';
+    let items = []
+
+    for (let key in notices) {
+        let value = notices[key];
+        //let prop = recommendations[key] ? recommendations[key]['prop'] : null;
+        let prop = recommendations[key] !== undefined ? recommendations[key]['prop'] : null;
+        //console.log('prop', prop, key);
+
+        let settingsVal = settings[prop] !== undefined ? settings[prop] : false
+        let recommend = value && !settingsVal
+        //recommend = value
+        //console.log('key:', key, 'value:', value, 'prop', prop, 'settingsVal', settingsVal);
+
+        if (recommend && recommendations[key]) {
+            let info = `${recommendations[key]['info']}`;
+            let btn = ` via <strong class="--btn-default --btn-settings" data-type="button" data-btn-setting="${prop}">${prop}</strong> option.`
+            items.push(info + btn)
+        }
+    }
+
+    if (items.length) {
+        ulTips = `<ul class="ul-bll li-bll ul-report">${items.map(li => { return `<li class="li-report">${li}</li>` }).join('\n')}</ul>`
+    }
+
+    //console.log(items);
+    //console.log(ulTips);
+
+    return ulTips
+
+
+    /*
+    console.log(attsAll, attsSVG, attsEl, elTypes);
+    console.log(hasPoly, hasClass, hasIds, hasLines, 'svgHasDimensions', svgHasDimensions);
+    */
+
+
+
+}
+
+//convertShapes[]
+//<button type="button" data-btn-setting="shapesToPaths">shapesToPaths</button>
+const recommendations = {
+
+    'hasGroups': {
+        prop: 'unGroup',
+        info: `<code>g</code> groups han help to structure your elements. However, applications tend to add to much nesting`
+    },
+
+    'hasTransforms': {
+        prop: 'convertTransforms',
+        info: `Many <code>transform</code> can make your SVG unreadable. You may get smaller file size when converting transforms for hard coded`
+    },
+
+
+    'hasPoly': {
+        prop: 'shapesToPaths',
+        info: `<code>polygon</code> and <code>polyline</code> tend to be more verbose than path elements. Consider to convert them to paths`
+    },
+    'hasLines': {
+        prop: 'shapesToPaths',
+        info: `<code>line</code> tend to be more verbose than path elements. Consider to convert them to paths`
+    },
+    'hasClass': {
+        prop: 'removeClassNames',
+        info: `Many applications add arbitrary <code>class</code> attributes. You may try to remove them if they are not required`
+    },
+    'hasIds': {
+        prop: 'removeIds',
+        info: `Many applications add arbitrary <code>id</code> attributes. You may try to remove them if they are not required`
+    },
+    'svgNoViewBox': {
+        prop: 'addViewBox',
+        info: `For responsive design it is recommended to add a <code>viewBox</code>`
+    },
+
+    'svgHasDimensions': {
+        prop: 'removeDimensions',
+        info: `If your SVGs are embedded in a grid layout you may remove <code>width</code> and <code>hight</code>`
+    }
+
+}
+
 
 // avoid conflicts with symbol ids in UI
 export function prefixIds(svg, { prefix = '__' } = {}) {
@@ -248,7 +369,7 @@ export function updateConfig(settings = {}) {
     for (let prop in settings) {
         if (!excludeProps.includes(prop)) {
             let value = settings[prop];
-            if (!omitDefaults || ( defaults[prop]!==undefined && value !== defaults[prop]) ) {
+            if (!omitDefaults || (defaults[prop] !== undefined && value !== defaults[prop])) {
                 //console.log('add', prop, value, defaults[prop], 'defaults', defaults);
                 configs[prop] = settings[prop]
             }

@@ -321,6 +321,7 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
             let t1 = 1 - t;
 
             // cubic beziers
+            /*
             if (isCubic) {
                 pt = {
                     x:
@@ -336,11 +337,30 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
                 };
 
             }
+            */
+
+            if (isCubic) {
+                pt = {
+                    x:
+                        t1 * t1 * t1 * p0.x +
+                        3 * t1 * t1 * t * cp1.x +
+                        3 * t1 * t * t * cp2.x +
+                        t * t * t * p.x,
+                    y:
+                        t1 * t1 * t1 * p0.y +
+                        3 * t1 * t1 * t * cp1.y +
+                        3 * t1 * t * t * cp2.y +
+                        t * t * t * p.y,
+                };
+
+            }
+
+
             // quadratic beziers
             else {
                 pt = {
-                    x: t1 * t1 * p0.x + 2 * t1 * t * cp1.x + t ** 2 * p.x,
-                    y: t1 * t1 * p0.y + 2 * t1 * t * cp1.y + t ** 2 * p.y,
+                    x: t1 * t1 * p0.x + 2 * t1 * t * cp1.x + t * t * p.x,
+                    y: t1 * t1 * p0.y + 2 * t1 * t * cp1.y + t * t * p.y,
                 };
             }
 
@@ -963,6 +983,124 @@ export function getBezierExtremeT(pts, { addExtremes = true, addSemiExtremes = f
  * https://stackoverflow.com/questions/87734/#75031511
  * See also: https://github.com/foo123/Geometrize
  */
+
+export function getArcExtemesParam({
+    cx=0, cy=0, rx=0, ry=0,
+    p=null,
+    p0=null,
+    endAngle=0,
+    deltaAngle=0,
+
+
+}={}) {
+    // compute point on ellipse from angle around ellipse (theta)
+    const arc = (theta, cx, cy, rx, ry, alpha) => {
+        // theta is angle in radians around arc
+        // alpha is angle of rotation of ellipse in radians
+        var cos = Math.cos(alpha),
+            sin = Math.sin(alpha),
+            x = rx * Math.cos(theta),
+            y = ry * Math.sin(theta);
+
+        return {
+            x: cx + cos * x - sin * y,
+            y: cy + sin * x + cos * y
+        };
+    }
+
+    //parametrize arcto data
+    //let arcData = svgArcToCenterParam(p0.x, p0.y, values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
+    //let { rx, ry, cx, cy, endAngle, deltaAngle } = arcData;
+
+    // arc rotation
+    let deg = values[2];
+
+    // final on path point
+    //let p = { x: values[5], y: values[6] }
+
+    // collect extreme points – add end point
+    let extremes = [p]
+
+    // rotation to radians
+    let alpha = deg * Math.PI / 180;
+    let tan = Math.tan(alpha),
+        p1, p2, p3, p4, theta;
+
+    /**
+    * find min/max from zeroes of directional derivative along x and y
+    * along x axis
+    */
+    theta = Math.atan2(-ry * tan, rx);
+
+    let angle1 = theta;
+    let angle2 = theta + Math.PI;
+    let angle3 = Math.atan2(ry, rx * tan);
+    let angle4 = angle3 + Math.PI;
+
+
+    // inner bounding box
+    let xArr = [p0.x, p.x]
+    let yArr = [p0.y, p.y]
+    let xMin = Math.min(...xArr)
+    let xMax = Math.max(...xArr)
+    let yMin = Math.min(...yArr)
+    let yMax = Math.max(...yArr)
+
+
+    // on path point close after start
+    let angleAfterStart = endAngle - deltaAngle * 0.001
+    let pP2 = arc(angleAfterStart, cx, cy, rx, ry, alpha);
+
+    // on path point close before end
+    let angleBeforeEnd = endAngle - deltaAngle * 0.999
+    let pP3 = arc(angleBeforeEnd, cx, cy, rx, ry, alpha);
+
+
+    /**
+     * expected extremes
+     * if leaving inner bounding box
+     * (between segment start and end point)
+     * otherwise exclude elliptic extreme points
+    */
+
+    // right
+    if (pP2.x > xMax || pP3.x > xMax) {
+        // get point for this theta
+        p1 = arc(angle1, cx, cy, rx, ry, alpha);
+        extremes.push(p1)
+    }
+
+    // left
+    if (pP2.x < xMin || pP3.x < xMin) {
+        // get anti-symmetric point
+        p2 = arc(angle2, cx, cy, rx, ry, alpha);
+        extremes.push(p2)
+    }
+
+    // top
+    if (pP2.y < yMin || pP3.y < yMin) {
+        // get anti-symmetric point
+        p4 = arc(angle4, cx, cy, rx, ry, alpha);
+        extremes.push(p4)
+    }
+
+    // bottom
+    if (pP2.y > yMax || pP3.y > yMax) {
+        // get point for this theta
+        p3 = arc(angle3, cx, cy, rx, ry, alpha);
+        extremes.push(p3)
+    }
+
+    return extremes;
+}
+
+
+
+
+
+
+
+
 export function getArcExtemes(p0, values) {
     // compute point on ellipse from angle around ellipse (theta)
     const arc = (theta, cx, cy, rx, ry, alpha) => {

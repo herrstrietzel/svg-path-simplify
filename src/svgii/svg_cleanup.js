@@ -17,7 +17,7 @@ import { qrDecomposeMatrix } from "./transform_qr_decompose";
 import { svgNs } from "../constants";
 import { toCamelCase, toShortStr } from "../string_helpers";
 import { getElementLength } from "./svg_getElementLength";
-import { removeHiddenSvgEls, removeSvgAtts, removeSvgChildAtts, removeSvgEls } from "./svg_cleanup_remove_els_and_atts";
+import { removeAtts, removeHiddenSvgEls, removeSvgAtts, removeSvgChildAtts, removeSvgEls } from "./svg_cleanup_remove_els_and_atts";
 import { cleanupSVGAttributes, removeElAtts } from "./svg_cleanup_general_svg_atts";
 import { convertPathLengthAtt } from "./svg_cleanup_convertPathLength";
 import { removeGroupProps, ungroupElements } from "./svg_cleanup_ungroup";
@@ -54,7 +54,10 @@ export function cleanUpSVG(svgMarkup, {
   cleanupSVGAtts = true,
   removeNameSpaced = true,
   removeNameSpacedAtts = true,
+
+  // unit conversions
   convertPathLength = false,
+  toAbsoluteUnits = false,
 
   // meta
   allowMeta = false,
@@ -82,10 +85,10 @@ export function cleanUpSVG(svgMarkup, {
 
 
   // resolve dependencies
-  if (unGroup || convertTransforms || minifyRgbColors || attributesToGroup) 
-  stylesToAttributes = true;
+  if (unGroup || convertTransforms || minifyRgbColors || attributesToGroup)
+    stylesToAttributes = true;
 
-  if(stylesToAttributes) cleanUpStrokes = true;
+  if (stylesToAttributes) cleanUpStrokes = true;
 
   // replace namespaced refs 
   if (fixHref) svgMarkup = svgMarkup.replaceAll("xlink:href=", "href=");
@@ -136,7 +139,7 @@ export function cleanUpSVG(svgMarkup, {
     removeClassNames,
     minifyRgbColors,
     stylesheetProps: {},
-    exclude:[]
+    exclude: []
   }
 
   // root svg inline style properties
@@ -275,9 +278,16 @@ export function cleanUpSVG(svgMarkup, {
     if (stylePropsSVG['class']) delete stylePropsSVG['class']
     if (stylePropsSVG['id']) delete stylePropsSVG['id']
 
+    // add svg props
+    inheritedProps = {
+      ...stylePropsSVG,
+      ...inheritedProps,
+    };
+
+    //console.log('inheritedProps', inheritedProps);
+
     // merge with svg props
     styleProps = {
-      ...stylePropsSVG,
       ...inheritedProps,
       ...styleProps
     }
@@ -287,7 +297,6 @@ export function cleanUpSVG(svgMarkup, {
     addTransFormProps(styleProps, transFormInherited);
     //console.log('transFormInherited', transFormInherited);
     //console.log('styleProps', styleProps);
-
     remove = [...new Set([...remove, ...styleProps.remove])];
 
 
@@ -325,6 +334,46 @@ export function cleanUpSVG(svgMarkup, {
     // general cleanup
     if (cleanupSVGAtts) cleanupSVGAttributes(svg, { removeIds, removeClassNames, removeDimensions, stylesToAttributes, allowMeta, allowAriaAtts, allowDataAtts });
 
+    // all relative units to absolute
+    if (toAbsoluteUnits) {
+      normalizeTransforms = true;
+      //stylesToAttributes = true
+      //console.log(name, styleProps);
+
+      /**
+       * apply consolidated 
+       * element attributes
+       * remove non-supported element props
+       */
+      stylePropsFiltered = filterSvgElProps(name, styleProps,
+        { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds, inheritedProps });
+
+
+      for (let prop in stylePropsFiltered.propsFiltered) {
+        let values = styleProps[prop]
+        let val = values.length ? values.join(' ') : values[0]
+        el.setAttribute(prop, val)
+      }
+
+      //console.log('inheritedProps', inheritedProps);
+      //console.log('current props', stylePropsFiltered.propsFiltered);
+
+      let removeAttsEl = [...new Set([...remove, ...stylePropsFiltered.remove])];
+
+      // check if same value is in inherited 
+      for (let prop in stylePropsFiltered.propsFiltered) {
+        let valInh = inheritedProps[prop] || [];
+        let val = stylePropsFiltered.propsFiltered[prop] || [];
+        if (valInh.join() === val.join()) {
+          removeAttsEl.push(prop)
+        }
+      }
+
+      // remove obsolete/inherited
+      removeAtts(el, removeAttsEl)
+
+    }
+
 
 
     if (stylesToAttributes) {
@@ -345,12 +394,9 @@ export function cleanUpSVG(svgMarkup, {
        * remove non-supported element props
        */
       stylePropsFiltered = filterSvgElProps(name, styleProps,
-        { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds });
+        { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds, inheritedProps });
 
-      //remove = [...remove, ...stylePropsFiltered.remove];
       remove = [...new Set([...remove, ...stylePropsFiltered.remove])];
-      //console.log('el remove', name, remove);
-      //console.log('!!stylePropsFiltered', name, stylePropsFiltered);
 
       for (let prop in stylePropsFiltered.propsFiltered) {
         let values = styleProps[prop]
@@ -363,14 +409,14 @@ export function cleanUpSVG(svgMarkup, {
        * remove obsolete 
        * attributes
        */
-      //removeSvgChildAtts(svg, remove)
+      removeAtts(el, remove)
 
+      /*
       for (let i = 0; i < remove.length; i++) {
         let att = remove[i];
-        //if (att === 'style') continue
-        //console.log('--remove att', remove, att, name);
         el.removeAttribute(att)
       }
+      */
 
 
     } // endof style processing
@@ -460,15 +506,15 @@ export function cleanUpSVG(svgMarkup, {
         let values = stylePropsFiltered[prop]
         let val = values.length ? values.join(' ') : values[0]
 
-        if(prop!=='class' && prop!=='id'){
+        if (prop !== 'class' && prop !== 'id') {
 
           let propShort = toShortStr(prop)
           let valShort = toShortStr(val)
           let propStr = `${propShort}-${valShort}`;
-  
+
           // store in node property
           if (!el.styleSet) el.styleSet = new Set()
-          if(propStr) el.styleSet.add(propStr)
+          if (propStr) el.styleSet.add(propStr)
         }
       }
 
@@ -524,7 +570,7 @@ export function cleanUpSVG(svgMarkup, {
 
 
 function removeEmptyClassAtts(svg) {
-  let emptyClassEls = svg.querySelectorAll('[class=""');
+  let emptyClassEls = svg.querySelectorAll('[class=""]');
   emptyClassEls.forEach(el => {
     el.removeAttribute('class')
   })
@@ -538,7 +584,7 @@ function sharedAttributesToGroup(svg) {
 
   let els = svg.querySelectorAll(renderedEls.join(', '))
   let len = els.length;
-  if(len===1) return;
+  if (len === 1) return;
 
   let el0 = els[0] || null
   let stylePrev = el0.styleSet !== undefined ? [...el0.styleSet].join('_') : ''
@@ -623,7 +669,7 @@ function sharedAttributesToGroup(svg) {
 
 
       // create new group
-      if (!groupEl || groups.length>1) {
+      if (!groupEl || groups.length > 1) {
         //console.log('new group');
         groupEl = document.createElementNS(svgNs, 'g')
         child0.parentNode.insertBefore(groupEl, child0)
@@ -719,7 +765,9 @@ function removeOffCanvasEls(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
   bb0.bottom = y + height
 
   els.forEach(el => {
+    //console.log(el);
     let bb = getElBBox(el)
+    //console.log('!!bb', bb);
     let outside = bb.right < bb0.x || bb.bottom < bb0.y || bb.x > bb0.right || bb.y > bb.bottom
     if (outside) el.remove();
   })

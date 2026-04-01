@@ -44,11 +44,19 @@ export{getElementTransform as getElementTransform};
 import {getViewBox} from './svg_getViewbox.js';
 export{getViewBox as getViewBox};
 
+import { validateSVG } from './svgii/svg_validate.js';
+export { validateSVG as validateSVG};
+import { detectInputType } from './detect_input.js';
+export { detectInputType as detectInputType};
+
+
 
 // IIFE 
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
     window.getElementTransform = getElementTransform;
+    window.validateSVG = validateSVG;
+    window.detectInputType = detectInputType;
     //window.simplifyPolySchneider = simplifyPolySchneider;
     //window.getPathDataFromEl = getPathDataFromEl;
     //window.parsePathDataString = parsePathDataString;

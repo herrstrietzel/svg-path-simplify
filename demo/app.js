@@ -3,9 +3,10 @@
 //import { minify } from 'terser';
 import { presetSettings, settingsDefaults } from '../src/pathSimplify-presets.js';
 import { renderSvgExcludeFields } from './app_remove_input.js';
-import { checkSVGFilesize, loadSVGFiles, getSVGPreviews, hasTextSelection, isInFormField, validateInput, isBody, updateConfig, svg2Symbol, symbol2Svg, togglePreview, showMarkersInPreview, adjustViewBox, serializeSVGPretty, minifySVGMarkup, prefixIds } from './app_helpers.js';
+import { checkSVGFilesize, loadSVGFiles, getSVGPreviews, hasTextSelection, isInFormField, validateInput, isBody, updateConfig, svg2Symbol, symbol2Svg, togglePreview, showMarkersInPreview, adjustViewBox, serializeSVGPretty, minifySVGMarkup, prefixIds, generateFileRecommendation } from './app_helpers.js';
 //import { presetSettings } from './app_presets.js';
 import { processFileStack } from './app_process.js';
+import { dummySVG } from '../src/constants.js';
 
 let settings = {}
 let inputDecimals = document.querySelector('[name=decimals]')
@@ -382,7 +383,6 @@ function updateSVG(settings = {}, processed = false) {
 
     //console.log('updateSVG', settings.toRelative );
 
-
     // keep multi file mode
     if (fileStack.length) {
         processFileStack(fileStack, settings, useWorker, WorkerUrl)
@@ -413,18 +413,14 @@ function updateSVG(settings = {}, processed = false) {
     if (!dInput && !samples) return
 
 
-    let exclude = ['defaults', 'storageName', 'showNav', 'getObject', 'dOutput', 'showMarkers'];
-
-
-    // remove defaults from query
-    let settingsShare = {};
 
     // add sample
+    let settingsShare = {};
     if (settings['samples']) settingsShare['samples'] = settings['samples'];
-
     let settingsFiltered = updateConfig(settings)
 
-
+    // remove defaults from query
+    let exclude = ['defaults', 'storageName', 'showNav', 'getObject', 'dOutput', 'showMarkers'];
     for (let prop in settingsFiltered) {
         let value = settingsFiltered[prop];
         if (defaults[prop] === value || exclude.includes(prop)) {
@@ -462,16 +458,92 @@ function updateSVG(settings = {}, processed = false) {
 
     if (fileStack.length === 1) processed = true;
 
+    /**
+     * validate
+     * prevent malicious files
+     */
+    //let inputData = detectInputType(dInput)
+    //console.log('inputData', inputData);
+
+    //let validation = validateSVG(dInput);
+    let validation = detectInputType(dInput);
+    let { isValid, fileReport = null } = validation;
+    //console.log('!!!validation app', validation, fileReport);
+
+    // generate report
+    let fileInfoCnt = ''
+    if (fileReport) {
+
+        let ulReport = []
+        if (!isValid) {
+            if (fileReport['nonsensePaths']) ulReport.push('Has nonsense/invisible path elements')
+            if (fileReport['isBillionLaugh']) ulReport.push('Might contain a <strong>Billion laugh exploit</strong> (heavily nested use elements)')
+            if (fileReport['hasScripts']) ulReport.push('Contains <strong>script</strong> elements – better use components for SVG interactivity')
+            if (fileReport['hasEntity']) ulReport.push('Contains <strong>XML Entity definitions</strong> – not necessarily harmful but also used in exploits.')
+
+        } else {
+            ulReport = []
+            fileInfoCnt = ''
+
+            // show recommendations
+            if (isValid && validation.inputType === 'svgMarkup') {
+                let tips = generateFileRecommendation(dInput, settings)
+                fileInfoCnt = tips;
+            }
+
+
+        }
+
+        ulReport.forEach(li => {
+            fileInfoCnt += `<li class="li-report">${li}</li>`
+        })
+
+        if (ulReport.length) {
+            //console.log(ulReport);
+            fileInfoCnt = `<ul class="ul-bll li-bll ul-report">${fileInfoCnt}</ul>`
+        }
+
+    }
+
+    btnFileInfo.addEventListener('click', e => {
+
+        let validClass = isValid ? 'valid' : 'invalid';
+        let reportHeaderText = validation.isValid ? 'File is OK!' : 'File not valid – may contain malicious code!';
+        let reportHeaderEl = `<p class="fnt-wgt-700 fileReportHeader ${validClass}">${reportHeaderText}</p>`;
+
+
+        // compile new report
+        fileInfoReport.innerHTML = reportHeaderEl + fileInfoCnt;
+
+    })
+
+
+    if (!isValid) {
+
+        btnFileInfo.click();
+
+        // replace with dummy svg
+        //console.log('use dummy');
+        dInput = dummySVG;
+        settings.dInput = dInput
+        return false
+    }
+
+    //let {inputType, log} = validation;
+
+
+
     let t0 = performance.now();
     let pathDataOpt = processed ? fileStack[0].simplified : svgPathSimplify(dInput, settings)
     let t1 = performance.now() - t0;
-    console.log('pathDataOpt', pathDataOpt, 'timing', t1);
+    console.log('Optimized:', pathDataOpt, t1);
 
 
-    let { d, svg, polys, report, inputType, dOriginal = '' } = pathDataOpt;
+    let { d = '', svg = '', polys = [], report = {}, inputType, dOriginal = '' } = pathDataOpt;
 
     // single path or svg
     let mode = inputType === "svgMarkup" || inputType === "symbol" || inputType === "splitPath" ? 1 : 0;
+
 
     if (polys.length) {
         document.body.classList.add('poly')
@@ -504,12 +576,11 @@ function updateSVG(settings = {}, processed = false) {
     }
 
 
-
     let svgSize = !mode ? +(d.length / 1024).toFixed(3) : report.svgSizeOpt;
-    let reportRemoved = !mode ? `<br>${report.new}/${report.original} – removed: ${report.saved} <br>` : ''
+    //let reportRemoved = !mode ? `<br>${report.new}/${report.original} – removed: ${report.saved} <br>` : ''
+    let reportRemoved = `<br>${report.new}/${report.original} – removed: ${report.saved} <br>`;
     let reportCompression = `${report.compression}&thinsp;%`
 
-    //let reportText = !mode ? `${report.new}/${report.original} – removed: ${report.saved} compressed: ${report.compression}%` : `${report.svgSizeOpt}/${report.svgSize} KB – compressed: ${report.compression}%`
 
     let reportText = `${reportCompression} – ${svgSize}&thinsp;KB
     ${reportRemoved}
@@ -533,9 +604,8 @@ function updateSVG(settings = {}, processed = false) {
 
     let scale = settings.scale;
 
-    if (!mode) {
+    if (!mode && inputType !== 'invalid') {
         svgEl.classList.remove('dsp-non')
-
 
         if (inputType === 'polyString') dInput = 'M' + dInput;
         if (inputType === 'polyArray') dInput = dOriginal;
@@ -564,9 +634,13 @@ function updateSVG(settings = {}, processed = false) {
         if (inputType === 'symbol') svgO = symbol2Svg(svgO)
 
         // show original in image to prevent style bleeding
-        let previewImg = document.createElement('img')
-        previewImg.src = `data:image/svg+xml,${encodeURIComponent(svgO)}`
         let svgDomCopy = new DOMParser().parseFromString(svgO, 'image/svg+xml').querySelector('svg');
+        let previewImg = document.createElement('img')
+
+        // add mandatory namespace for image
+        svgDomCopy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+        svgO = new XMLSerializer().serializeToString(svgDomCopy)
+        previewImg.src = `data:image/svg+xml,${encodeURIComponent(svgO)}`
 
         // optimized svg
         let svg_prev = prefixIds(svg);

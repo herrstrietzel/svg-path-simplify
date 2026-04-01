@@ -54,33 +54,25 @@ export function fixPathDataDirections(pathDataArr = [], toClockwise = false) {
 
 
     // reverse paths
-    for (let i = 0; i < l; i++) {
+    for (let i = 0; l && i < l; i++) {
 
         let poly = polys[i]
         let { cw, includedIn, includes } = poly
 
-        // outer path direction to counter clockwise
-        if (!includedIn.length && cw && !toClockwise
-            || !includedIn.length && !cw && toClockwise
-        ) {
-            //console.log('reverse outer');
-
-            pathDataArr[i].pathData = reversePathData(pathDataArr[i].pathData);
-            polys[i].cw = polys[i].cw ? false : true
-            cw = polys[i].cw
-
-        }
+        let len = includes.length;
+        //console.log('try reverse', includes);
 
         // reverse inner sub paths
-        for (let j = 0; j < includes.length; j++) {
+        for (let j = 0; len && j < len; j++) {
             let ind = includes[j];
             let child = polys[ind];
 
-            if (child.cw === cw) {
-                //console.log('reverse', child.cw, cw);
-                pathDataArr[ind].pathData = reversePathData(pathDataArr[ind].pathData);
-                polys[ind].cw = polys[ind].cw ? false : true
-            }
+            // nothing to do
+            if (child.cw !== cw) continue
+
+            pathDataArr[ind].pathData = reversePathData(pathDataArr[ind].pathData);
+            polys[ind].cw = polys[ind].cw ? false : true
+
         }
     }
 

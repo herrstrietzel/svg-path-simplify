@@ -370,4 +370,5 @@ You can also post in the [discussions](https://github.com/herrstrietzel/svg-path
 * obviously, [Dmitry Baranovskiy](https://github.com/dmitrybaranovskiy) – a lot of these helper functions originate either from Raphaël or snap.svg – or are at least heavily inspired by some helpers from these libraries
 * [Andrea Giammarchi a.k.a WebReflection](https://github.com/WebReflection) for [linkedom](https://github.com/WebReflection/linkedom) which helped to make this lib run also in node or a web worker
 * [Photopea](https://github.com/photopea) for the fast [UZIP](https://github.com/photopea/UZIP.js) which is deployed in the webapp for batch file downloads.
+* [mdpjs](https://github.com/UmemotoCtrl/mdpjs) for the great JS markdown parser (used in the web app)
 

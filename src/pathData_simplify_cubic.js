@@ -143,10 +143,10 @@ export function combineCubicPairs(com1, com2, {
     let comS = getExtrapolatedCommand(com1, com2, t)
 
     // test new point-at-t against original mid segment starting point
-    let pt = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t)
+    let ptI = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t)
 
 
-    let dist0 = getDistManhattan(com1.p, pt)
+    let dist0 = getDistManhattan(com1.p, ptI)
     let dist1 = 0, dist2 = 0;
     let close = dist0 < maxDist;
     let success = false;
@@ -162,31 +162,41 @@ export function combineCubicPairs(com1, com2, {
          * to prevent distortions
          */
 
-        // 2nd segment mid
-        let pt_2 = pointAtT([com2.p0, com2.cp1, com2.cp2, com2.p], 0.5)
+        // 1st segment mid
+        let ptM_seg1 = pointAtT([com1.p0, com1.cp1, com1.cp2, com1.p], 0.5)
 
-        // simplified path
-        let t3 = (1 + t) * 0.5;
-        let ptS_2 = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t3)
-        dist1 = getDistManhattan(pt_2, ptS_2)
+        let t2 = t * 0.5;
+        // combined interpolated mid point
+        let ptI_seg1 = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t2)
+        dist1 = getDistManhattan(ptM_seg1, ptI_seg1)
+
 
         error += dist1;
 
         if (dist1 < maxDist) {
 
-            //renderPoint(markers, pt_2, 'magenta')
-            //renderPoint(markers, ptS_2, 'green', '0.5%')
+            // 2nd segment mid
+            let ptM_seg2 = pointAtT([com2.p0, com2.cp1, com2.cp2, com2.p], 0.5)
 
-            // 1st segment mid
-            let pt_1 = pointAtT([com1.p0, com1.cp1, com1.cp2, com1.p], 0.5)
-
-            let t2 = t * 0.5;
-            let ptS_1 = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t2)
-            dist2 = getDistManhattan(pt_1, ptS_1)
+            // simplified path
+            let t3 = (1 + t) * 0.5;
+            let ptI_seg2 = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t3)
+            dist2 = getDistManhattan(ptM_seg2, ptI_seg2)
 
             error += dist2;
 
             if (error < maxDist) success = true;
+
+
+            /*
+            renderPoint(markers, ptM_seg1, 'cyan')
+            renderPoint(markers, pt, 'orange', '1.5%', '1')
+            renderPoint(markers, ptM_seg2, 'orange')
+
+            renderPoint(markers, com1.p, 'green')
+            //renderPoint(markers, com2.p, 'green')
+            renderPoint(markers, ptI_seg1, 'purple')
+            */
 
         }
 

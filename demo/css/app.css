@@ -289,7 +289,7 @@ header.header-left {
     pointer-events: none;
 }
 
-.lnk-github{
+.lnk-github {
     pointer-events: all;
 }
 
@@ -610,6 +610,15 @@ canvas {
         stroke-width: calc(var(--strokeWidthPrev, 0.2%) / var(--zoomScale));
     }
 
+}
+
+
+
+.svgWrapO img {
+    max-height: 90vh;
+    width: 100%;
+    object-fit: contain;
+    object-position: 0;
 }
 
 .svgWrap {
@@ -1224,6 +1233,35 @@ label:has([data-type="checkbox-btn"]) {
 .enhancedInputsDynamic {
     margin-top: 0.5rem;
 }
+
+.svgWrap>svg {
+    outline: 1px solid #ccc;
+    padding: 0 !important;
+}
+
+.fileReportHeader {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--color-focus);
+
+    &.invalid {
+        color: red;
+
+    }
+}
+
+
+.fileInfo {
+    max-width: 90%;
+}
+
+@media (min-width:1024px) {
+
+    .fileInfo {
+        max-width: 640px;
+    }
+}
+
 
 /*
 #previewWrp{

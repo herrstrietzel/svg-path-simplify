@@ -1,14 +1,22 @@
+import { dummySVG, svgNs } from "./constants";
+import { validateSVG } from "./svgii/svg_validate";
+
 export function detectInputType(input) {
     let type = 'string';
-    /*
-    if (input instanceof HTMLImageElement) return "img";
-    if (input instanceof SVGElement) return "svg";
-    if (input instanceof HTMLCanvasElement) return "canvas";
-    if (input instanceof File) return "file";
-    if (input instanceof ArrayBuffer) return "buffer";
-    if (input instanceof Blob) return "blob";
-    */
+    let log = '';
+    let isValid = true;
+
+    let result = {
+        inputType:'',
+        isValid:true,
+        fileReport:{},
+    }
+
+
     if (Array.isArray(input)) {
+
+        result.inputType = "array";
+
 
         // nested array
         if (Array.isArray(input[0])) {
@@ -16,33 +24,34 @@ export function detectInputType(input) {
 
             if (input[0].length === 2) {
                 //console.log('is single poly value array')
-                return 'polyArray'
+                result.inputType = 'polyArray'
             }
 
             else if (Array.isArray(input[0][0]) && input[0][0].length === 2) {
                 //console.log('is complex poly point value array', input[0][0])
-                return 'polyComplexArray'
+                result.inputType = 'polyComplexArray'
             }
             else if (input[0][0].x !== undefined && input[0][0].y !== undefined) {
                 //console.log('is nested point object array')
-                return 'polyComplexObjectArray'
+                result.inputType = 'polyComplexObjectArray'
             }
+            //return result
         }
 
         // is point array
         else if (input[0].x !== undefined && input[0].y !== undefined) {
             //console.log('is nested point object array')
-            return 'polyObjectArray'
+            result.inputType = 'polyObjectArray'
         }
 
         // path data array
         else if (input[0]?.type && input[0]?.values
         ) {
-            return "pathData"
-
+            result.inputType = "pathData"
         }
-        //console.log(input[0], typeof input[0]);
-        return "array";
+
+
+        return result;
     }
 
     if (typeof input === "string") {
@@ -55,39 +64,48 @@ export function detectInputType(input) {
         //console.log('isNumberJson', isJson);
 
         if (isSVG) {
-            type = 'svgMarkup'
+            let validate = validateSVG(input);
+            ({isValid, log} = validate) ;
+            if(!isValid){
+                //input = dummySVG
+                result.inputType = 'invalid'
+                result.isValid=false,
+                //result.log = JSON.stringify(log, null, ' ')
+                result.log = log
+            }else{
+                result.inputType = 'svgMarkup'
+            }
+
+            result.fileReport = validate.fileReport
+
         }
 
         else if (isJson) {
-            type = 'json'
+            result.inputType = 'json'
         }
 
         else if (isSymbol) {
-            type = 'symbol'
+            result.inputType = 'symbol'
         }
         else if (isPathData) {
-            type = 'pathDataString'
+            result.inputType = 'pathDataString'
         }
         else if (isPolyString) {
-            type = 'polyString'
+            result.inputType = 'polyString'
         }
 
         else {
             let url = /^(file:|https?:\/\/|\/|\.\/|\.\.\/)/.test(input);
             let dataUrl = input.startsWith('data:image');
-            type = url || dataUrl ? "url" : "string";
+            result.inputType = url || dataUrl ? "url" : "string";
         }
 
-
-        return type
+        return result
     }
 
-    type = typeof input
-    let constructor = input.constructor.name
+    result.inputType = (input.constructor.name || typeof input ).toLowerCase()
 
-
-
-    return (constructor || type).toLowerCase();
+    return result;
 }
 
 

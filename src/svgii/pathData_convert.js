@@ -17,54 +17,10 @@ import { pathDataToD } from './pathData_stringify';
 import { roundPathData } from './rounding';
 import { renderPoint } from './visualize';
 
-
-export function parsePathDataNormalized(d,
-    {
-        // necessary for most calculations
-        toAbsolute = true,
-        toLonghands = true,
-
-        // not necessary unless you need cubics only
-        quadraticToCubic = false,
-
-        // mostly a fallback if arc calculations fail      
-        arcToCubic = false,
-        // arc to cubic precision - adds more segments for better precision     
-        arcAccuracy = 4,
-    } = {}
-) {
-
-    // is already array
-    let isArray = Array.isArray(d);
-
-    // normalize native pathData to regular array
-    let hasConstructor = isArray && typeof d[0] === 'object' && typeof d[0].constructor === 'function'
-    /*
-    if (hasConstructor) {
-        d = d.map(com => { return { type: com.type, values: com.values } })
-        console.log('hasConstructor', hasConstructor, (typeof d[0].constructor), d);
-    }
-    */
-
-    let pathDataObj = isArray ? d : parsePathDataString(d);
-
-    let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
-    let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
-
-    //console.log('???quadraticToCubic', quadraticToCubic);
-
-    // normalize
-    pathData = normalizePathData(pathData,
-        {
-            toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy,
-            hasRelatives, hasShorthands, hasQuadratics, hasArcs
-        },
-    )
-
-    return pathData;
-}
-
-
+/**
+ * wrapper function for 
+ * all path data conversion
+ */
 export function convertPathData(pathData, {
     toShorthands = true,
     toLonghands = false,
@@ -126,23 +82,25 @@ export function convertPathData(pathData, {
     //console.log(toShorthands, toRelative, decimals);
     if (hasQuadratics && quadraticToCubic) pathData = pathDataQuadraticToCubic(pathData);
 
-    if(toMixed) toRelative = true
+    if (toMixed) toRelative = true
 
     // pre round - before relative conversion to minimize distortions
     if (decimals > -1 && toRelative) pathData = roundPathData(pathData, decimals);
 
     // clone absolute pathdata
-    if(toMixed){
+    if (toMixed) {
         pathDataAbs = JSON.parse(JSON.stringify(pathData))
     }
 
     if (toRelative) pathData = pathDataToRelative(pathData);
+
+    // final rounding
     if (decimals > -1) pathData = roundPathData(pathData, decimals);
 
 
     // choose most compact commands: relative or absolute
-    if(toMixed){
-        for(let i=0; i<pathData.length; i++){
+    if (toMixed) {
+        for (let i = 0; i < pathData.length; i++) {
             let com = pathData[i]
             let comA = pathDataAbs[i]
             // compare Lengths
@@ -152,7 +110,7 @@ export function convertPathData(pathData, {
             let lenR = comStr.length;
             let lenA = comStrA.length;
 
-            if(lenA<lenR){
+            if (lenA < lenR) {
                 //console.log('absolute is shorter', comStrA, comStr);
                 pathData[i] = pathDataAbs[i]
             }
@@ -162,6 +120,56 @@ export function convertPathData(pathData, {
     return pathData
 }
 
+
+
+
+export function parsePathDataNormalized(d,
+    {
+        // necessary for most calculations
+        toAbsolute = true,
+        toLonghands = true,
+
+        // not necessary unless you need cubics only
+        quadraticToCubic = false,
+
+        // mostly a fallback if arc calculations fail      
+        arcToCubic = false,
+        // arc to cubic precision - adds more segments for better precision     
+        arcAccuracy = 4,
+    } = {}
+) {
+
+    // is already array
+    let isArray = Array.isArray(d);
+
+    // normalize native pathData to regular array
+    let hasConstructor = isArray && typeof d[0] === 'object' && typeof d[0].constructor === 'function'
+    /*
+    if (hasConstructor) {
+        d = d.map(com => { return { type: com.type, values: com.values } })
+        console.log('hasConstructor', hasConstructor, (typeof d[0].constructor), d);
+    }
+    */
+
+    let pathDataObj = isArray ? d : parsePathDataString(d);
+
+    let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
+    let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
+
+    //console.log('???quadraticToCubic', quadraticToCubic);
+
+    // normalize
+    pathData = normalizePathData(pathData,
+        {
+            toAbsolute, toLonghands, quadraticToCubic, arcToCubic, arcAccuracy,
+            hasRelatives, hasShorthands, hasQuadratics, hasArcs
+        },
+    )
+
+    return pathData;
+}
+
+
 /**
  * 
  * @param {*} pathData 
@@ -170,50 +178,100 @@ export function convertPathData(pathData, {
 
 export function optimizeArcPathData(pathData = []) {
 
-    let remove =[]
+    //return pathData
 
-    pathData.forEach((com, i) => {
+    let remove = []
+    let l = pathData.length;
+    let pathDataN = [];
+
+    for (let i = 0; i < l; i++) {
+        let com = pathData[i];
         let { type, values } = com;
-        if (type === 'A') {
-            let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
-            let comPrev = pathData[i - 1]
-            let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
-            let M = { x: x0, y: y0 };
-            let p = { x, y };
-            //largeArc=true
-            //let pMid = {x: Math.abs(x-x0), y:Math.abs(y-y0)}
 
-            if(rx===0 || ry===0){
-                pathData[i]= null
-                remove.push(i)
-                //console.log('!!!');
-            }
-
-            // rx and ry are large enough
-            if (rx >= 1 && (x === x0 || y === y0)) {
-                let diff = Math.abs(rx - ry) / rx;
-
-                // rx~==ry 
-                if (diff < 0.01) {
-
-                    // test radius against mid point
-                    let pMid = interpolate(M, p, 0.5)                    
-                    let distM = getDistance(pMid, M)
-                    let rDiff = Math.abs(distM - rx) / rx
-
-                    // half distance between mid and start point should be ~ equal
-                    if(rDiff<0.01){
-                        pathData[i].values[0] = 1;
-                        pathData[i].values[1] = 1;
-                        pathData[i].values[2] = 0;
-                    }
-                }
-            }
+        if (type !== 'A') {
+            pathDataN.push(com)
+            continue
         }
-    })
 
-    if(remove.length) pathData = pathData.filter(Boolean)
-    return pathData;
+
+        let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
+        let comPrev = pathData[i - 1]
+        let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
+        let M = { x: x0, y: y0 };
+        let p = { x, y };
+        //largeArc=true
+        //let pMid = {x: Math.abs(x-x0), y:Math.abs(y-y0)}
+
+        if (rx === 0 || ry === 0) {
+            pathData[i] = null
+            remove.push(i)
+        }
+
+        // test for elliptic
+        let rat = rx / ry
+        let error = rx !== ry ? Math.abs(1 - rat) : 0
+
+        if (error > 0.01) {
+            //console.log('is elliptic');
+            pathDataN.push(com)
+            continue
+
+        }
+
+        // xAxis rotation is futile for circular arcs - reset
+        com.values[2] = 0
+
+        /**
+         * test semi circles
+         * rx and ry are large enough
+         */
+
+
+        // 1. horizontal or vertical
+        let thresh = getDistManhattan(M, p) * 0.001;
+        let diffX = Math.abs(x - x0)
+        let diffY = Math.abs(y - y0)
+
+        let isHorizontal = diffY < thresh
+        let isVertical = diffX < thresh
+
+
+        // minify rx and ry
+        if (isHorizontal || isVertical) {
+
+            // check if semi circle
+            let needsTrueR = isHorizontal ? rx*1.9 > diffX : ry*1.9 > diffY;
+
+            // is semicircle we can simplify rx
+            if (!needsTrueR) {
+                //console.log('needsTrueR', needsTrueR, diffX, rx, diffY, ry);
+                rx = rx >= 1 ? 1 : (rx > 0.5 ? 0.5 : rx);
+            }
+
+            com.values[0] = rx
+            com.values[1] = rx
+            pathDataN.push(com)
+            continue
+
+
+        }
+
+        // 2. get true radius - if rx ~= diameter/distance  we have a semicircle
+        let r = getDistance(M, p) * 0.5
+        error = rx / r
+        //console.log('rx', rx, r, error);
+
+        if (error < 0.5) {
+            rx = r >= 1 ? 1 : (r > 0.5 ? 0.5 : r);
+        }
+
+        com.values[0] = rx;
+        com.values[1] = rx;
+        pathDataN.push(com)
+
+    }
+
+    return pathDataN;
 }
 
 
@@ -281,6 +339,48 @@ export function normalizePathData(pathData = [],
 }
 */
 
+export function convertSmallArcsToLinetos(pathData) {
+
+    let l = pathData.length;
+
+    // add fist command
+    let pathDataN = [pathData[0]]
+
+    for (let i = 1; i < l; i++) {
+        let com = pathData[i];
+        let comPrev = pathData[i - 1];
+        let comN = pathData[i + 1] || null;
+
+        if (!comN) {
+            pathDataN.push(com);
+            break
+        }
+
+        let { type, values, extreme = false, p0, p, dimA = 0 } = com;
+        // for short segment detection
+        let dimAN = comN.dimA;
+        let dimA0 = comPrev.dimA + dimA + dimAN;
+        let thresh = 0.05
+        let isShort = dimA < dimA0 * thresh;
+        //let isShortN = dimAN < dimA0 * thresh;
+
+        if (type === 'A' && isShort && values[0] < 1 && values[1] < 1) {
+
+            //renderPoint(markers, p0, 'green', '0.1%')
+            //renderPoint(markers, p, 'magenta', '0.1%')
+            com.type = 'L';
+            com.values = [p.x, p.y];
+        }
+
+        pathDataN.push(com)
+
+    }
+
+
+    return pathDataN;
+
+
+}
 
 
 
