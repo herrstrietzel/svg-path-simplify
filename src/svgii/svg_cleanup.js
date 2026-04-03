@@ -238,11 +238,16 @@ export function cleanUpSVG(svgMarkup, {
 
 
     // convert pathLength before transforming
-    if (convertPathLength) {
+    if(convertTransforms || attributesToGroup) convertPathLength=true;
+
+    if (convertPathLength ) {
+      //console.log('convertPathLength', convertPathLength, name);
       styleProps = convertPathLengthAtt(el, { styleProps });
       remove = [...new Set([...remove, ...styleProps.remove])];
+
     }
 
+    //console.log(styleProps);
 
     // get parent styles
     let { parentStyleProps = [] } = el;
@@ -442,7 +447,7 @@ export function cleanUpSVG(svgMarkup, {
 
       // scale props like stroke width or dash-array before conversion
       if (matrix && transComponents) {
-        ['stroke-width', 'stroke-dasharray'].forEach(att => {
+        ['stroke-width', 'stroke-dasharray', 'stroke-dashoffset'].forEach(att => {
           let attVal = el.getAttribute(att)
           let vals = attVal ? attVal.split(' ').filter(Boolean).map(Number).map(val => val * transComponents.scaleX) : []
           if (vals.length) el.setAttribute(att, vals.join(' '))
@@ -767,7 +772,7 @@ function removeOffCanvasEls(svg, { x = 0, y = 0, width = 0, height = 0 } = {}) {
   els.forEach(el => {
     //console.log(el);
     let bb = getElBBox(el)
-    //console.log('!!bb', bb);
+    //console.log('!!bb', bb, el);
     let outside = bb.right < bb0.x || bb.bottom < bb0.y || bb.x > bb0.right || bb.y > bb.bottom
     if (outside) el.remove();
   })

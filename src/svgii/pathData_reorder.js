@@ -29,7 +29,8 @@ export function pathDataToTopLeft(pathData) {
         let { type, values } = com;
         let valsLen = values.length
         if (valsLen) {
-            let p = { type: type, x: values[valsLen - 2], y: values[valsLen - 1], index: 0 }
+            // we need rounding otherwise sorting may crash due to e notation
+            let p = { type: type, x: +values[valsLen - 2].toFixed(8), y: +values[valsLen - 1].toFixed(8), index: 0 }
             p.index = i
             indices.push(p)
         }
@@ -37,7 +38,7 @@ export function pathDataToTopLeft(pathData) {
 
     // reorder  to top left most
     //|| a.x - b.x
-    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x - b.x);
+    indices = indices.sort((a, b) => a.y - b.y || a.x - b.x);
     newIndex = indices[0].index
 
     return newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;

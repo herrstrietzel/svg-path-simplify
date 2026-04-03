@@ -76,7 +76,7 @@ export function scaleProps(styleProps = {}, { props = [], scale = 1 } = {}, roun
     let prop = props[i];
 
     if (styleProps[prop] !== undefined) {
-      styleProps[prop] = styleProps[prop].map(val => round ? roundTo(val * scale, 2) : val * scale)
+      styleProps[prop] = styleProps[prop].map(val => round ? roundTo(val * scale, 3) : val * scale)
     }
   }
   return styleProps

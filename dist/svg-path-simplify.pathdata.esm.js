@@ -1657,7 +1657,7 @@ function roundPathData(pathData, decimalsGlobal = -1) {
 
     let len = pathData.length;
     let decimals = decimalsGlobal;
-    let decimalsArc = decimals < 3 ? decimals+2 : decimals;
+    let decimalsArc = decimals < 3 ? decimals + 2 : decimals;
 
     for (let c = 0; c < len; c++) {
         let com = pathData[c];
@@ -1689,23 +1689,47 @@ function detectAccuracy(pathData) {
 
             dimA = dimA ? dimA : getDistManhattan(p0, p);
 
-            if (dimA) dims.push(dimA);
+            if (dimA) dims.push(+dimA.toFixed(8));
 
         }
 
     }
 
-    let dim_min = dims.sort();
+   dims = dims.sort();
+   let len = dims.length;
+   let dim_mid = dims[Math.floor(len*0.5)];
 
-    let sliceIdx = Math.ceil(dim_min.length / 6);
+   // smallest 25% of values
+   let idx_q = Math.ceil(len*0.25);
+   let dims_min = dims.slice(0, idx_q);
+
+   // average smallest values with mid value
+   let dim_min = ((dims_min.reduce((a, b) => a + b, 0) / idx_q)  + dim_mid) * 0.5;
+
+   let threshold = 75;
+   let decimalsAuto = dim_min > threshold * 1.5 ? 0 : Math.floor(threshold / dim_min).toString().length;
+
+   // clamp
+   return Math.min(Math.max(0, decimalsAuto), 8)
+
+    /*
+    let dim_min = dims.sort()
+
+    let dim_mid = dim_min[Math.floor(dim_min.length*0.5)]
+
+    let sliceIdx = Math.ceil(dim_min.length / 4);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
 
-    let threshold = 75;
-    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
+    // average with mid value
+    minVal = (minVal+dim_mid)*0.5
+
+    let threshold = 75
+    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length
 
     // clamp
     return Math.min(Math.max(0, decimalsAuto), 8)
+    */
 
 }
 
@@ -2462,7 +2486,7 @@ function simplifyPathDataCubic(pathData, {
                     error += com.error;
 
                     // find next candidates
-                    for (let n = i + 1; error < tolerance && n < l; n++) {
+                    for (let n = i + offset; error < tolerance && n < l; n++) {
                         let comN = pathData[n];
 
                         if (comN.type !== 'C' ||
@@ -2472,6 +2496,7 @@ function simplifyPathDataCubic(pathData, {
                                 (keepExtremes && com.extreme)
                             )
                         ) {
+
                             break
                         }
 
@@ -2479,6 +2504,7 @@ function simplifyPathDataCubic(pathData, {
 
                         // failure - could not be combined - exit loop
                         if (combined.length > 1) {
+
                             break
                         }
 
@@ -2492,6 +2518,7 @@ function simplifyPathDataCubic(pathData, {
 
                         // return combined
                         com = combined[0];
+
                     }
 
                     pathDataN.push(com);
@@ -2605,10 +2632,18 @@ function combineCubicPairs(com1, com2, {
 
         comS.dimA = getDistManhattan(comS.p0, comS.p);
         comS.type = 'C';
+
         comS.extreme = com2.extreme;
         comS.directionChange = com2.directionChange;
-
         comS.corner = com2.corner;
+
+        if (comS.extreme || comS.corner) ;
+
+        /*
+        comS.extreme = com1.extreme;
+        comS.directionChange = com1.directionChange;
+        comS.corner = com1.corner;
+        */
 
         comS.values = [comS.cp1.x, comS.cp1.y, comS.cp2.x, comS.cp2.y, comS.p.x, comS.p.y];
 
@@ -4519,7 +4554,8 @@ function pathDataToTopLeft(pathData) {
         let { type, values } = com;
         let valsLen = values.length;
         if (valsLen) {
-            let p = { type: type, x: values[valsLen - 2], y: values[valsLen - 1], index: 0 };
+            // we need rounding otherwise sorting may crash due to e notation
+            let p = { type: type, x: +values[valsLen - 2].toFixed(8), y: +values[valsLen - 1].toFixed(8), index: 0 };
             p.index = i;
             indices.push(p);
         }
@@ -4527,7 +4563,7 @@ function pathDataToTopLeft(pathData) {
 
     // reorder  to top left most
 
-    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x - b.x);
+    indices = indices.sort((a, b) => a.y - b.y || a.x - b.x);
     newIndex = indices[0].index;
 
     return newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;

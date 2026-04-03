@@ -16,7 +16,10 @@ export function convertPathLengthAtt(el, {
                 props: styleProps
             })
 
+
             let scale = elLength / pathLength
+            //console.log('elLength', elLength, scale);
+
             styleProps = scaleProps(styleProps, { props: ['stroke-dasharray', 'stroke-dashoffset'], scale })
 
             // set absolute
@@ -33,6 +36,8 @@ export function convertPathLengthAtt(el, {
 
     }
 
+    //console.log('pathLength', pathLength);
+    //console.log('styleProps', styleProps );
     return styleProps;
 
 

@@ -1852,7 +1852,7 @@ function roundPathData(pathData, decimalsGlobal = -1) {
 
     let len = pathData.length;
     let decimals = decimalsGlobal;
-    let decimalsArc = decimals < 3 ? decimals+2 : decimals;
+    let decimalsArc = decimals < 3 ? decimals + 2 : decimals;
 
     for (let c = 0; c < len; c++) {
         let com = pathData[c];
@@ -1912,23 +1912,47 @@ function detectAccuracy(pathData) {
 
             dimA = dimA ? dimA : getDistManhattan(p0, p);
 
-            if (dimA) dims.push(dimA);
+            if (dimA) dims.push(+dimA.toFixed(8));
 
         }
 
     }
 
-    let dim_min = dims.sort();
+   dims = dims.sort();
+   let len = dims.length;
+   let dim_mid = dims[Math.floor(len*0.5)];
 
-    let sliceIdx = Math.ceil(dim_min.length / 6);
+   // smallest 25% of values
+   let idx_q = Math.ceil(len*0.25);
+   let dims_min = dims.slice(0, idx_q);
+
+   // average smallest values with mid value
+   let dim_min = ((dims_min.reduce((a, b) => a + b, 0) / idx_q)  + dim_mid) * 0.5;
+
+   let threshold = 75;
+   let decimalsAuto = dim_min > threshold * 1.5 ? 0 : Math.floor(threshold / dim_min).toString().length;
+
+   // clamp
+   return Math.min(Math.max(0, decimalsAuto), 8)
+
+    /*
+    let dim_min = dims.sort()
+
+    let dim_mid = dim_min[Math.floor(dim_min.length*0.5)]
+
+    let sliceIdx = Math.ceil(dim_min.length / 4);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
 
-    let threshold = 75;
-    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length;
+    // average with mid value
+    minVal = (minVal+dim_mid)*0.5
+
+    let threshold = 75
+    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length
 
     // clamp
     return Math.min(Math.max(0, decimalsAuto), 8)
+    */
 
 }
 
@@ -2494,7 +2518,7 @@ function getElementAtts(el, {x=0, y=0, width=0, height=0}={}){
     attributes.forEach(att=>{
 
         let value = normalizeUnits(el.getAttribute(att), {x, y, width, height});   
-        atts[att.name] = value;
+        atts[att] = value;
     });
 
     return atts
@@ -3239,7 +3263,7 @@ function simplifyPathDataCubic(pathData, {
                     error += com.error;
 
                     // find next candidates
-                    for (let n = i + 1; error < tolerance && n < l; n++) {
+                    for (let n = i + offset; error < tolerance && n < l; n++) {
                         let comN = pathData[n];
 
                         if (comN.type !== 'C' ||
@@ -3249,6 +3273,7 @@ function simplifyPathDataCubic(pathData, {
                                 (keepExtremes && com.extreme)
                             )
                         ) {
+
                             break
                         }
 
@@ -3256,6 +3281,7 @@ function simplifyPathDataCubic(pathData, {
 
                         // failure - could not be combined - exit loop
                         if (combined.length > 1) {
+
                             break
                         }
 
@@ -3269,6 +3295,7 @@ function simplifyPathDataCubic(pathData, {
 
                         // return combined
                         com = combined[0];
+
                     }
 
                     pathDataN.push(com);
@@ -3382,10 +3409,18 @@ function combineCubicPairs(com1, com2, {
 
         comS.dimA = getDistManhattan(comS.p0, comS.p);
         comS.type = 'C';
+
         comS.extreme = com2.extreme;
         comS.directionChange = com2.directionChange;
-
         comS.corner = com2.corner;
+
+        if (comS.extreme || comS.corner) ;
+
+        /*
+        comS.extreme = com1.extreme;
+        comS.directionChange = com1.directionChange;
+        comS.corner = com1.corner;
+        */
 
         comS.values = [comS.cp1.x, comS.cp1.y, comS.cp2.x, comS.cp2.y, comS.p.x, comS.p.y];
 
@@ -6555,7 +6590,8 @@ function pathDataToTopLeft(pathData) {
         let { type, values } = com;
         let valsLen = values.length;
         if (valsLen) {
-            let p = { type: type, x: values[valsLen - 2], y: values[valsLen - 1], index: 0 };
+            // we need rounding otherwise sorting may crash due to e notation
+            let p = { type: type, x: +values[valsLen - 2].toFixed(8), y: +values[valsLen - 1].toFixed(8), index: 0 };
             p.index = i;
             indices.push(p);
         }
@@ -6563,7 +6599,7 @@ function pathDataToTopLeft(pathData) {
 
     // reorder  to top left most
 
-    indices = indices.sort((a, b) => +a.y.toFixed(8) - +b.y.toFixed(8) || a.x - b.x);
+    indices = indices.sort((a, b) => a.y - b.y || a.x - b.x);
     newIndex = indices[0].index;
 
     return newIndex ? shiftSvgStartingPoint(pathData, newIndex) : pathData;
@@ -7099,7 +7135,7 @@ function normalizePoly(pts, {
 } = {}) {
 
     // is stringified flat point attribute
-    if(typeof pts === 'string' && !isNaN(pts[0])){
+    if (typeof pts === 'string' && !isNaN(pts[0])) {
         pts = toPointArray(pts.split(/,| /).filter(Boolean).map(Number));
         return pts
     }
@@ -7109,8 +7145,9 @@ function normalizePoly(pts, {
     return poly
 }
 
-function polyArrayToObject(pts) {
+function polyArrayToObject(pts = []) {
 
+    if (!pts.length) return [];
     // is point object array
     if (pts[0].x !== undefined && pts[0].y !== undefined) return pts
 
@@ -7128,7 +7165,7 @@ function polyArrayToObject(pts) {
         return poly
     }
 
-    else if(pts.length>3){
+    else if (pts.length > 3) {
         pts = toPointArray(pts);
         return pts
     }
@@ -7157,13 +7194,13 @@ function polyPtsToArray(pts) {
 function toPointArray(pts) {
     let ptArr = [];
 
-    if(pts[0].length===2){
-        for (let i = 0, l = pts.length; i < l; i ++) {
+    if (pts[0].length === 2) {
+        for (let i = 0, l = pts.length; i < l; i++) {
             let pt = pts[i];
-            ptArr.push({ x: pt[0], y:pt[1] });
+            ptArr.push({ x: pt[0], y: pt[1] });
         }
 
-    }else {
+    } else {
         for (let i = 1, l = pts.length; i < l; i += 2) {
             ptArr.push({ x: pts[i - 1], y: pts[i] });
         }
@@ -8005,7 +8042,6 @@ function getLength(pts, {
 
 // LG weight/abscissae generator
 function getLegendreGaussValues(n, x1 = -1, x2 = 1) {
-    console.log('add new LG', n);
 
     let waArr = [];
     let z1, z, xm, xl, pp, p3, p2, p1;
@@ -8482,7 +8518,7 @@ function scaleProps(styleProps = {}, { props = [], scale = 1 } = {}, round = tru
     let prop = props[i];
 
     if (styleProps[prop] !== undefined) {
-      styleProps[prop] = styleProps[prop].map(val => round ? roundTo(val * scale, 2) : val * scale);
+      styleProps[prop] = styleProps[prop].map(val => round ? roundTo(val * scale, 3) : val * scale);
     }
   }
   return styleProps
@@ -8503,6 +8539,7 @@ function convertPathLengthAtt(el, {
             });
 
             let scale = elLength / pathLength;
+
             styleProps = scaleProps(styleProps, { props: ['stroke-dasharray', 'stroke-dashoffset'], scale });
 
             // set absolute
@@ -9031,9 +9068,13 @@ function cleanUpSVG(svgMarkup, {
     let stylePropsFiltered = {};
 
     // convert pathLength before transforming
-    if (convertPathLength) {
+    if(convertTransforms || attributesToGroup) convertPathLength=true;
+
+    if (convertPathLength ) {
+
       styleProps = convertPathLengthAtt(el, { styleProps });
       remove = [...new Set([...remove, ...styleProps.remove])];
+
     }
 
     // get parent styles
@@ -9211,7 +9252,7 @@ function cleanUpSVG(svgMarkup, {
 
       // scale props like stroke width or dash-array before conversion
       if (matrix && transComponents) {
-        ['stroke-width', 'stroke-dasharray'].forEach(att => {
+        ['stroke-width', 'stroke-dasharray', 'stroke-dashoffset'].forEach(att => {
           let attVal = el.getAttribute(att);
           let vals = attVal ? attVal.split(' ').filter(Boolean).map(Number).map(val => val * transComponents.scaleX) : [];
           if (vals.length) el.setAttribute(att, vals.join(' '));
@@ -12342,7 +12383,6 @@ const presetSettings = {
             addViewBox: true,
             removeDimensions: true,
             removeOffCanvas: true,
-
             /*
             */
         }
@@ -12529,11 +12569,11 @@ function svgPathSimplify(input = '', settings = {}) {
             original: 0,
             new: 0,
             saved: 0,
-            svgSize:0,
-            svgSizeOpt:0,
-            compression:0,
-            decimals:0,
-            invalid:true
+            svgSize: 0,
+            svgSizeOpt: 0,
+            compression: 0,
+            decimals: 0,
+            invalid: true
         };
 
         return { svg: dummySVG, d: '', polys: [], report, pathDataPlusArr: [], pathDataPlusArr_global: [], inputType: 'invalid', dOriginal: '' };
@@ -12702,6 +12742,12 @@ function svgPathSimplify(input = '', settings = {}) {
         let path = paths[i];
         let { d, el } = path;
         let isPoly = false;
+
+        // disable reordering for elements with stroke dash-array
+        if (el && (el.hasAttribute('stroke-dasharray') || el.hasAttribute('stroke-dashoffset'))) {
+            optimizeOrder = false;
+
+        }
 
         // if polygon we already heave absolute coordinates
 

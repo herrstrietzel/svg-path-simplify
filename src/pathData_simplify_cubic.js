@@ -56,7 +56,7 @@ export function simplifyPathDataCubic(pathData, {
                     error += com.error;
 
                     // find next candidates
-                    for (let n = i + 1; error < tolerance && n < l; n++) {
+                    for (let n = i + offset; error < tolerance && n < l; n++) {
                         let comN = pathData[n]
 
                         if (comN.type !== 'C' ||
@@ -66,6 +66,7 @@ export function simplifyPathDataCubic(pathData, {
                                 (keepExtremes && com.extreme)
                             )
                         ) {
+
                             break
                         }
 
@@ -73,6 +74,7 @@ export function simplifyPathDataCubic(pathData, {
 
                         // failure - could not be combined - exit loop
                         if (combined.length > 1) {
+                            //renderPoint(markers, com.p, 'orange', '1%', '0.5')
                             break
                         }
 
@@ -86,6 +88,7 @@ export function simplifyPathDataCubic(pathData, {
 
                         // return combined
                         com = combined[0]
+
                     }
 
                     //console.log('tests', log, offset);
@@ -213,10 +216,25 @@ export function combineCubicPairs(com1, com2, {
 
         comS.dimA = getDistManhattan(comS.p0, comS.p);
         comS.type = 'C';
+
         comS.extreme = com2.extreme;
         comS.directionChange = com2.directionChange;
-        //comS.directionChange = com1.directionChange ? true : (com2.directionChange);
         comS.corner = com2.corner;
+
+
+        if (comS.extreme || comS.corner) {
+            //renderPoint(markers, comS.p)
+        }
+
+        /*
+        comS.extreme = com1.extreme;
+        comS.directionChange = com1.directionChange;
+        comS.corner = com1.corner;
+        */
+
+
+
+        //comS.directionChange = com1.directionChange ? true : (com2.directionChange);
 
         comS.values = [comS.cp1.x, comS.cp1.y, comS.cp2.x, comS.cp2.y, comS.p.x, comS.p.y]
 

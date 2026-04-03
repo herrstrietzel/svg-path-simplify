@@ -5,7 +5,7 @@ export function normalizePoly(pts, {
 } = {}) {
 
     // is stringified flat point attribute
-    if(typeof pts === 'string' && !isNaN(pts[0])){
+    if (typeof pts === 'string' && !isNaN(pts[0])) {
         pts = toPointArray(pts.split(/,| /).filter(Boolean).map(Number));
         return pts
     }
@@ -16,8 +16,9 @@ export function normalizePoly(pts, {
 }
 
 
-export function polyArrayToObject(pts) {
-
+export function polyArrayToObject(pts = []) {
+    //console.log(pts);
+    if (!pts.length) return [];
     // is point object array
     if (pts[0].x !== undefined && pts[0].y !== undefined) return pts
 
@@ -35,7 +36,7 @@ export function polyArrayToObject(pts) {
         return poly
     }
 
-    else if(pts.length>3){
+    else if (pts.length > 3) {
         pts = toPointArray(pts)
         return pts
     }
@@ -65,13 +66,13 @@ export function polyPtsToArray(pts) {
 export function toPointArray(pts) {
     let ptArr = [];
 
-    if(pts[0].length===2){
-        for (let i = 0, l = pts.length; i < l; i ++) {
+    if (pts[0].length === 2) {
+        for (let i = 0, l = pts.length; i < l; i++) {
             let pt = pts[i]
-            ptArr.push({ x: pt[0], y:pt[1] });
+            ptArr.push({ x: pt[0], y: pt[1] });
         }
 
-    }else{
+    } else {
         for (let i = 1, l = pts.length; i < l; i += 2) {
             ptArr.push({ x: pts[i - 1], y: pts[i] });
         }

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.5] - 2026-04-02
+### Fixed
+- stroke-dash conversion must disable reordering of commands
+- stroke-dashoffset missing in attribute scaling
+- removeOffCanvas - fixed bbox calculation
+- rounding bug in command reordering
+### Added  
+- better auto accuracy approximation
+
+
 ## [0.4.4] - 2026-04-01
 ### Fixed
 - shape attribute retrieval in node.js

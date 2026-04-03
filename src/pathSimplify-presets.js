@@ -245,7 +245,6 @@ export const presetSettings = {
             addViewBox: true,
             removeDimensions: true,
             removeOffCanvas: true,
-
             /*
             */
         }

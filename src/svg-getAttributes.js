@@ -8,7 +8,7 @@ export function getElementAtts(el, {x=0, y=0, width=0, height=0}={}){
     attributes.forEach(att=>{
         //let value = normalizeUnits(att.nodeValue, {x, y, width, height});   
         let value = normalizeUnits(el.getAttribute(att), {x, y, width, height});   
-        atts[att.name] = value
+        atts[att] = value
     })
 
     return atts

@@ -19,7 +19,7 @@ export function roundPathData(pathData, decimalsGlobal = -1) {
 
     let len = pathData.length;
     let decimals = decimalsGlobal
-    let decimalsArc = decimals < 3 ? decimals+2 : decimals
+    let decimalsArc = decimals < 3 ? decimals + 2 : decimals
     //decimalsArc = decimals
     //console.log(decimalsArc);
 
@@ -98,25 +98,56 @@ export function detectAccuracy(pathData) {
             //let dimA = +getDistAv(p0, p).toFixed(8)
             //console.log('dimA', dimA, com.dimA, type);
 
-            if (dimA) dims.push(dimA);
+            if (dimA) dims.push(+dimA.toFixed(8));
+            //if (dimA) dims.push(dimA);
             if (dimA && dimA < minDim) minDim = dimA;
             //if (dimA && dimA > maxDim) maxDim = dimA;
         }
 
     }
 
+
+   dims = dims.sort()
+   let len = dims.length;
+   let dim_mid = dims[Math.floor(len*0.5)]
+
+   // smallest 25% of values
+   let idx_q = Math.ceil(len*0.25);
+   let dims_min = dims.slice(0, idx_q);
+
+   // average smallest values with mid value
+   let dim_min = ((dims_min.reduce((a, b) => a + b, 0) / idx_q)  + dim_mid) * 0.5;
+
+
+   let threshold = 75
+   let decimalsAuto = dim_min > threshold * 1.5 ? 0 : Math.floor(threshold / dim_min).toString().length
+
+   // clamp
+   return Math.min(Math.max(0, decimalsAuto), 8)
+
+
+
+    /*
     let dim_min = dims.sort()
     //console.log('dim_min', dim_min);
 
-    let sliceIdx = Math.ceil(dim_min.length / 6);
+    let dim_mid = dim_min[Math.floor(dim_min.length*0.5)]
+
+    let sliceIdx = Math.ceil(dim_min.length / 4);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
+
+    // average with mid value
+    minVal = (minVal+dim_mid)*0.5
+    //console.log('minVal', minVal, dim_mid);
+
 
     let threshold = 75
     let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length
 
     // clamp
     return Math.min(Math.max(0, decimalsAuto), 8)
+    */
 
 }
 

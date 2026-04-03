@@ -91,11 +91,11 @@ export function svgPathSimplify(input = '', settings = {}) {
             original: 0,
             new: 0,
             saved: 0,
-            svgSize:0,
-            svgSizeOpt:0,
-            compression:0,
-            decimals:0,
-            invalid:true
+            svgSize: 0,
+            svgSizeOpt: 0,
+            compression: 0,
+            decimals: 0,
+            invalid: true
         }
 
         return { svg: dummySVG, d: '', polys: [], report, pathDataPlusArr: [], pathDataPlusArr_global: [], inputType: 'invalid', dOriginal: '' };
@@ -296,6 +296,12 @@ export function svgPathSimplify(input = '', settings = {}) {
         let { d, el } = path;
         let dN = ''
         let isPoly = false;
+
+        // disable reordering for elements with stroke dash-array
+        if (el && (el.hasAttribute('stroke-dasharray') || el.hasAttribute('stroke-dashoffset'))) {
+            optimizeOrder = false;
+            //optimizeClosePath=false;
+        }
 
         // if polygon we already heave absolute coordinates
         //let isPolyPath = !mode && isPoly && Array.isArray(d)

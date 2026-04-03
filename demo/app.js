@@ -795,3 +795,27 @@ function updateSVG(settings = {}, processed = false) {
 
 
 
+//dropzone
+window.addEventListener("dragover", (e) => {
+    document.body.classList.add('drag')
+    e.preventDefault();
+});
+
+window.addEventListener("dragleave", (e) => {
+    // If leaving the window (not just moving between children)
+    if (e.clientX === 0 && e.clientY === 0) {
+        document.body.classList.remove('drag');
+    }
+});
+
+window.addEventListener("drop", (e) => {
+    document.body.classList.remove('drag')
+    if ([...e.dataTransfer.items].some((item) => item.kind === "file")) {
+        e.preventDefault();
+
+        inputFile.files = e.dataTransfer.files;
+        inputFile.dispatchEvent(new Event('input'))
+        console.log(e.dataTransfer.files);
+
+    }
+});

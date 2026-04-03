@@ -66,6 +66,7 @@
     --scalePreview: 1;
     --strokeWidthPrev: 0.2%;
     --color-focus-dark: var(--color-text);
+    --color-focus-trans: hsla(170, 70%, 25%, 0.8);
     --color-border: hsl(55, 3%, 45%);
     --color-text: hsl(55, 10%, 20%);
 
@@ -1268,3 +1269,30 @@ label:has([data-type="checkbox-btn"]) {
     display:none
 }
 */
+
+/* drop zone */
+
+
+body:before{
+  content:'Drop files';
+  font-size:10vmin;
+  text-align:center;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  position:fixed;
+  width:100%;
+  inset:0;
+  z-index:9999;
+  background-color:var(--color-focus-trans);
+  opacity:0;
+  visibility:hidden;
+  transition: 0.2s opacity;
+
+}
+
+.drag:before{
+  opacity:1;
+  visibility:visible;
+}

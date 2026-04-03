@@ -111,7 +111,7 @@ export function getLength(pts, {
 
 // LG weight/abscissae generator
 export function getLegendreGaussValues(n, x1 = -1, x2 = 1) {
-    console.log('add new LG', n);
+    //console.log('add new LG', n);
 
     let waArr = []
     let z1, z, xm, xl, pp, p3, p2, p1;
