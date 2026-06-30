@@ -17,9 +17,6 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
 ![simplification](./demo/img/splash.png)    
 *Fira Sans (based on truetype/glyph quadratic commands) converted to cubic Béziers. Left:Original; Right:optimized*
 
-Check the [webapp](https://herrstrietzel.github.io/svg-path-simplify/) to test all SVG simplification options.  
-
-
 ## Features 
 ### Path simplification
 * reduces the number of SVG commands (both Béziers and lines) by converting/combining adjacent:  
@@ -105,6 +102,12 @@ Cleanup for:
 
 
 ## Usage 
+
+### Web app
+You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
+
+![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)    
+
 
 ### Browser 
 
@@ -302,10 +305,6 @@ let pathDataOpt = simplifyPathData(pathDataString);
 
 
 ## Demos
-### Web app
-You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
-
-![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)    
 
 #### Features
 * test all provided simplification option - export settings as JS object
