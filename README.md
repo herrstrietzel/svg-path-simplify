@@ -103,8 +103,11 @@ Cleanup for:
 
 ## Usage 
 
-### Web app
-You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
+### Web app/GUI
+Simplifying/optimizing SVG graphics »blind-folded« can often lead to undesired results (e.g distortions). 
+You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) – obviously inspired by Jake Archibald's [SVGO GUI](https://jakearchibald.github.io/svgomg/). 
+
+If you need to deploy this lib for you application – scroll down to the script usage sections and checking the demo folder for minimal setup examples. 
 
 [![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)](https://herrstrietzel.github.io/svg-path-simplify/)      
 
