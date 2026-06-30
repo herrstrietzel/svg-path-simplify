@@ -432,7 +432,9 @@ export function svgPathSimplify(input = '', settings = {}) {
         //let isPolyPath = !mode && isPoly && Array.isArray(d)
         //let pathData = !isPolyPath ? parsePathDataNormalized(d, { quadraticToCubic, arcToCubic }) : d;
         let pathData = parsePathDataNormalized(d, { quadraticToCubic, arcToCubic });
-        //console.log('!!!pathData', pathData, arcToCubic);
+        console.log('!!!pathData', pathData, arcToCubic);
+
+
         //console.log(isPoly);
 
         // get polygon bbox

@@ -4318,6 +4318,11 @@ function optimizeArcPathData(pathData = []) {
 
         let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
         let comPrev = pathData[i - 1];
+
+        // force absolute
+        rx = Math.abs(rx);
+        ry = Math.abs(ry);
+
         let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
         let M = { x: x0, y: y0 };
         let p = { x, y };
@@ -13083,6 +13088,7 @@ function svgPathSimplify(input = '', settings = {}) {
         // if polygon we already heave absolute coordinates
 
         let pathData = parsePathDataNormalized(d, { quadraticToCubic, arcToCubic });
+        console.log('!!!pathData', pathData, arcToCubic);
 
         // get polygon bbox
         let bb_poly = smoothPoly || toPolygon ? getPolyBBox(getPathDataVertices(pathData)) : null;

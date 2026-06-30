@@ -158,6 +158,8 @@ export function parsePathDataNormalized(d,
 
     let pathDataObj = isArray ? d : parsePathDataString(d);
 
+    //console.log('???', JSON.parse(JSON.stringify(pathDataObj)));
+
     let { hasRelatives = true, hasShorthands = true, hasQuadratics = true, hasArcs = true } = pathDataObj;
     let pathData = hasConstructor ? pathDataObj : pathDataObj.pathData;
 
@@ -241,6 +243,11 @@ export function optimizeArcPathData(pathData = []) {
 
         let [rx, ry, largeArc, x, y] = [values[0], values[1], values[3], values[5], values[6]];
         let comPrev = pathData[i - 1]
+
+        // force absolute
+        rx = Math.abs(rx);
+        ry = Math.abs(ry);
+
         let [x0, y0] = [comPrev.values[comPrev.values.length - 2], comPrev.values[comPrev.values.length - 1]];
         let M = { x: x0, y: y0 };
         let p = { x, y };

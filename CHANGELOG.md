@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.7] - 2026-06-30
+### Fixed
+- arc parsing for negative radii – force positive values
+
+
 ## [0.4.6] - 2026-04-03
 ### Fixed
 - better cubic to arc radii simplification
