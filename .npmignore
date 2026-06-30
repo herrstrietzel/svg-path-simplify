@@ -1,4 +1,5 @@
 demo/
+v/
 rollup.config.js
 node_modules/
 gitnore/
