@@ -106,7 +106,7 @@ Cleanup for:
 ### Web app
 You can easily test this library via the [**webapp**](https://herrstrietzel.github.io/svg-path-simplify/) or by checking the demo folder. 
 
-![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)    
+[![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)](https://herrstrietzel.github.io/svg-path-simplify/)      
 
 #### Features
 * test all provided simplification option - export settings as JS object
