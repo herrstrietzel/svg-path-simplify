@@ -108,6 +108,16 @@ You can easily test this library via the [**webapp**](https://herrstrietzel.gith
 
 ![svg-path-simplify web app](./demo/img/svg-path-simplify-webapp.png)    
 
+#### Features
+* test all provided simplification option - export settings as JS object
+* preview different settings 
+* accepts SVG files
+* path data strings
+* supports multi file batch processing
+* open results in codepen or svg-path-editor
+* download self contained SVG
+
+
 
 ### Browser 
 
@@ -305,16 +315,6 @@ let pathDataOpt = simplifyPathData(pathDataString);
 
 
 ## Demos
-
-#### Features
-* test all provided simplification option - export settings as JS object
-* preview different settings 
-* accepts SVG files
-* path data strings
-* supports multi file batch processing
-* open results in codepen or svg-path-editor
-* download self contained SVG
-
 
 ### Demo files
 * [simple setup IIFE](./demo/simple-iife.html)
