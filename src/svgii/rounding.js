@@ -19,7 +19,7 @@ export function roundPathData(pathData, decimalsGlobal = -1) {
 
     let len = pathData.length;
     let decimals = decimalsGlobal
-    let decimalsArc = decimals < 3 ? decimals + 2 : decimals
+    let decimalsArc = decimals < 3 ? decimals + 1 : decimals
     //decimalsArc = decimals
     //console.log(decimalsArc);
 
@@ -64,7 +64,7 @@ export function detectAccuracyPoly(pts) {
         }
     }
 
-    let dim_min = dims.sort()
+    let dim_min = dims.sort((a,b)=>a-b)
     let sliceIdx = Math.ceil(dim_min.length / 8);
     dim_min = dim_min.slice(0, sliceIdx);
     let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
@@ -90,65 +90,55 @@ export function detectAccuracy(pathData) {
         let com = pathData[i];
         let { type, values, p0 = null, p = null, dimA = 0 } = com;
 
-        // use existing averave dimension value or calculate
+        // use existing average dimension value or calculate
         if (values.length && p && p0) {
-            //console.log(com);
             dimA = dimA ? dimA : getDistManhattan(p0, p);
 
-            //let dimA = +getDistAv(p0, p).toFixed(8)
-            //console.log('dimA', dimA, com.dimA, type);
+            //who would have thought we need an exception for arcs?
+            if (type === 'A') dimA *= 0.5
 
             if (dimA) dims.push(+dimA.toFixed(8));
-            //if (dimA) dims.push(dimA);
             if (dimA && dimA < minDim) minDim = dimA;
-            //if (dimA && dimA > maxDim) maxDim = dimA;
         }
 
     }
 
 
-   dims = dims.sort()
-   let len = dims.length;
-   let dim_mid = dims[Math.floor(len*0.5)]
+    dims = dims.sort((a,b)=>a-b)
+    let len = dims.length;
+    let dim_mid = dims[Math.floor(len * 0.5)]
 
-   // smallest 25% of values
-   let idx_q = Math.ceil(len*0.25);
-   let dims_min = dims.slice(0, idx_q);
+    // smallest 25% of values
+    let idx_q = Math.ceil(len * 0.25);
+    let dims_min = dims.slice(0, idx_q);
 
-   // average smallest values with mid value
-   let dim_min = ((dims_min.reduce((a, b) => a + b, 0) / idx_q)  + dim_mid) * 0.5;
-
-
-   let threshold = 75
-   let decimalsAuto = dim_min > threshold * 1.5 ? 0 : Math.floor(threshold / dim_min).toString().length
-
-   // clamp
-   return Math.min(Math.max(0, decimalsAuto), 8)
-
-
-
-    /*
-    let dim_min = dims.sort()
-    //console.log('dim_min', dim_min);
-
-    let dim_mid = dim_min[Math.floor(dim_min.length*0.5)]
-
-    let sliceIdx = Math.ceil(dim_min.length / 4);
-    dim_min = dim_min.slice(0, sliceIdx);
-    let minVal = dim_min.reduce((a, b) => a + b, 0) / sliceIdx;
-
-    // average with mid value
-    minVal = (minVal+dim_mid)*0.5
-    //console.log('minVal', minVal, dim_mid);
+    // average smallest values with mid value
+    let dim_min = ((dims_min.reduce((a, b) => a + b, 0) / idx_q) + dim_mid) * 0.5;
 
 
     let threshold = 75
-    let decimalsAuto = minVal > threshold * 1.5 ? 0 : Math.floor(threshold / minVal).toString().length
+    let decimalsAuto = dim_min > threshold * 1.5 ? 0 : Math.floor(threshold / dim_min).toString().length
 
     // clamp
     return Math.min(Math.max(0, decimalsAuto), 8)
-    */
 
+}
+
+
+
+export function roundPoly(poly = [], decimals = 3) {
+    if (!poly.length || decimals < 0) return poly;
+    poly = poly.map(pt => roundPoint(pt, decimals));
+    return poly
+}
+
+
+export function roundPoint(pt = {}, decimals = 3) {
+    if (pt.x === undefined || pt.y === undefined || decimals < 0) return pt;
+    pt.x=roundTo(pt.x, decimals)
+    pt.y=roundTo(pt.y, decimals)
+    return pt
+    //return { x: roundTo(pt.x, decimals), y: roundTo(pt.y, decimals) }
 }
 
 /**

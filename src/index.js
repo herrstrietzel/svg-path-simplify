@@ -1,7 +1,7 @@
 // just for visual debugging
 import { renderPoint } from './svgii/visualize';
 
-import {svgPathSimplify} from './pathSimplify-main';
+import {SlickVG, svgPathSimplify} from './pathSimplify-main';
 //import { parsePathDataNormalized } from './svgii/pathData_parse';
 //import {getViewBox} from './svg_getViewbox';
 
@@ -49,11 +49,13 @@ export { validateSVG as validateSVG};
 import { detectInputType } from './detect_input.js';
 export { detectInputType as detectInputType};
 
+export {SlickVG as SlickVG}
 
 
 // IIFE 
 if (typeof window !== 'undefined') {
     window.svgPathSimplify = svgPathSimplify;
+    window.SlickVG = SlickVG;
     window.getElementTransform = getElementTransform;
     window.validateSVG = validateSVG;
     window.detectInputType = detectInputType;

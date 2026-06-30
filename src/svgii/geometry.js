@@ -17,14 +17,26 @@ export const {
 
 // get angle helper
 export function getAngle(p1, p2, normalize = false) {
-    let angle = atan2(p2.y - p1.y, p2.x - p1.x);
+    let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    // normalize negative angles
+    if (normalize && angle < 0) angle += Math.PI * 2
+    return angle
+}
+
+export function getAngleFromDelta(dx, dy, normalize = false) {
+    let angle = Math.atan2(dy, dx);
     // normalize negative angles
     if (normalize && angle < 0) angle += Math.PI * 2
     return angle
 }
 
 
-
+export function getPerpendicularPoint(A, B, C) {
+    let dx = C.x - A.x;
+    let dy = C.y - A.y;
+    let t = ((B.x - A.x) * dx + (B.y - A.y) * dy) / (dx * dx + dy * dy);
+    return { x: A.x + dx * t, y: A.y + dy * t };
+}
 
 
 
@@ -117,6 +129,60 @@ export function getDeltaAngle(centerPoint, startPoint, endPoint, largeArc = fals
 
 
 
+  /**
+   * Returns an array of intersection points.
+   * 0 points: No intersection
+   * 1 point: Line is tangent
+   * 2 points: Line is a secant
+   */
+  export function lineCircleIntersection(p1 = {x: 0,y: 0}, p2 = {x: 0,y: 0}, centroid = {x: 0,y: 0}, r = 1, exact = true, ignoreStartAndEnd=true
+  ) {
+    let error = 1e-8;
+    r *= 1 + error
+    let [x1, y1] = [p1.x, p1.y];
+    let [x2, y2] = [p2.x, p2.y];
+    let [cx, cy] = [centroid.x, centroid.y];
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let a = dx * dx + dy * dy;
+    let b = 2 * (dx * (x1 - cx) + dy * (y1 - cy));
+    let c = (x1 - cx) * (x1 - cx) + (y1 - cy) * (y1 - cy) - r * r;
+    let discriminant = b * b - 4 * a * c;
+    let intersections = [];
+    // No intersection
+    if (discriminant < 0) {
+      return [];
+    } else {
+      
+      let t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+      let t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+      // Sort t values to maintain drawing direction order
+      let tValues = [t1, t2].sort((a, b) => a - b);
+      
+      let tMin = ignoreStartAndEnd ? 0.01 : 0;
+      let tMax = ignoreStartAndEnd ? 0.99 : 1;
+
+      tValues.forEach(t => {
+        //let onSegment = !exact ? true : t >= 0 && t <= 1;
+        let onSegment = !exact ? true : t > tMin && t < tMax;
+        if (onSegment) {
+          let pt = {
+            x: x1 + t * dx,
+            y: y1 + t * dy,
+            t: t
+          }
+          
+          intersections.push(pt);
+        }
+      });
+    }
+    /*
+    intersections.forEach(pt => {
+      renderPoint(svg, pt, 'green', '1.5%')
+    })
+     */
+    return intersections;
+  }
 
 
 
@@ -164,10 +230,14 @@ export function checkLineIntersection(p1 = null, p2 = null, p3 = null, p4 = null
     a = numerator1 / denominator;
     b = numerator2 / denominator;
 
+    //console.log('denominator', denominator, a, b);
+
     // if we cast these lines infinitely in both directions, they intersect here:
     intersectionPoint = {
         x: p1.x + (a * (p2.x - p1.x)),
-        y: p1.y + (a * (p2.y - p1.y))
+        y: p1.y + (a * (p2.y - p1.y)),
+        t1: a,
+        t2: b
     }
 
     let intersection = false;
@@ -277,13 +347,13 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
             if (t === 0 && !shortCp1) {
                 pt.x = p0.x;
                 pt.y = p0.y;
-                pt.angle = getAngle(p0, cp1)
+                if (getTangent) pt.angle = getAngle(p0, cp1);
             }
 
             else if (t === 1 && !shortCp2) {
                 pt.x = p.x;
                 pt.y = p.y;
-                pt.angle = getAngle(cp2, p)
+                if (getTangent) pt.angle = getAngle(cp2, p);
             }
 
             else {
@@ -300,18 +370,39 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
                     pt = interpolate(m3, m4, t);
 
                     // add angles
-                    pt.angle = getAngle(m3, m4)
+                    if (getTangent) pt.angle = getAngle(m3, m4);
+
+                    /*
+                    renderPoint(markers, m0, 'cyan')
+                    renderPoint(markers, m3, 'magenta')
+                    renderPoint(markers, pt, 'green')
+                    renderPoint(markers, m4, 'cyan')
+                    renderPoint(markers, m2, 'magenta')
+                    */
+
 
                     // add control points
-                    if (getCpts) pt.cpts = [m1, m2, m3, m4];
+                    if (getCpts) {
+                        pt.cpts = [m1, m2, m3, m4];
+                        pt.segments = [
+                            { p0, cp1: m0, cp2: m3, p: pt },
+                            { p0: pt, cp1: m4, cp2: m2, p }
+                        ]
+                    }
                 } else {
                     m1 = interpolate(p0, cp1, t);
                     m2 = interpolate(cp1, p, t);
                     pt = interpolate(m1, m2, t);
-                    pt.angle = getAngle(m1, m2);
+                    if (getTangent) pt.angle = getAngle(m1, m2);
 
                     // add control points
-                    if (getCpts) pt.cpts = [m1, m2];
+                    if (getCpts) {
+                        pt.cpts = [m1, m2];
+                        pt.segments = [
+                            { p0, cp1: m1, p: pt },
+                            { p0: p, cp1: m2, p }
+                        ]
+                    }
                 }
             }
 
@@ -401,7 +492,7 @@ export function pointAtT(pts, t = 0.5, getTangent = false, getCpts = false, retu
  * get vertices from path command final on-path points
  */
 
-export function getPathDataVertices(pathData=[], includeCpts = false, decimals = -1) {
+export function getPathDataVertices(pathData = [], includeCpts = false, decimals = -1) {
     let polyPoints = [];
     //console.log(pathData);
 
@@ -459,6 +550,8 @@ export function getPathDataVertices(pathData) {
 export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2, normalize = true
 ) {
 
+    //console.log('params', [x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2]);
+
     // helper for angle calculation
     const getAngle = (cx, cy, x, y, normalize = true) => {
         let angle = Math.atan2(y - cy, x - cx);
@@ -494,7 +587,8 @@ export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, swe
 
     if (rx == 0 || ry == 0) {
         // invalid arguments
-        throw Error("rx and ry can not be 0");
+        console.warn("rx and ry can not be 0");
+        return arcData
     }
 
 
@@ -508,10 +602,10 @@ export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, swe
     let s_phi = !phi ? 0 : Math.sin(phi);
     let c_phi = !phi ? 1 : Math.cos(phi);
 
-    let hd_x = (x1 - x2) / 2;
-    let hd_y = (y1 - y2) / 2;
-    let hs_x = (x1 + x2) / 2;
-    let hs_y = (y1 + y2) / 2;
+    let hd_x = (x1 - x2) * 0.5;
+    let hd_y = (y1 - y2) * 0.5;
+    let hs_x = (x1 + x2) * 0.5;
+    let hs_y = (y1 + y2) * 0.5;
 
     // F6.5.1
     let x1_ = !phi ? hd_x : c_phi * hd_x + s_phi * hd_y;
@@ -533,10 +627,11 @@ export function svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, swe
     let rxry = rx * ry;
     let rxy1_ = rx * y1_;
     let ryx1_ = ry * x1_;
-    let sum_of_sq = rxy1_ ** 2 + ryx1_ ** 2; // sum of square
+    let sum_of_sq = rxy1_ * rxy1_ + ryx1_ * ryx1_; // sum of square
     if (!sum_of_sq) {
-        //console.log('error:', rx, ry, rxy1_, ryx1_);
-        throw Error("start point can not be same as end point");
+        console.warn("start point can not be same as end point");
+        return arcData
+
     }
     let coe = Math.sqrt(Math.abs((rxry * rxry - sum_of_sq) / sum_of_sq));
     if (largeArc === sweep) {
@@ -973,7 +1068,11 @@ export function getSemiExtremesT(p0, cp1, cp2, p, angleRad = Math.PI / 2) {
 
 export function getBezierExtremeT(pts, { addExtremes = true, addSemiExtremes = false } = {}) {
     let tArr = pts.length === 4 ? cubicBezierExtremeT(pts[0], pts[1], pts[2], pts[3], { addExtremes, addSemiExtremes }) : quadraticBezierExtremeT(pts[0], pts[1], pts[2], { addExtremes, addSemiExtremes });
-    return tArr;
+    if (tArr.length) {
+        tArr = tArr.map(t => +t.toFixed(9)).sort();
+    }
+
+    return tArr
 }
 
 
@@ -985,14 +1084,14 @@ export function getBezierExtremeT(pts, { addExtremes = true, addSemiExtremes = f
  */
 
 export function getArcExtemesParam({
-    cx=0, cy=0, rx=0, ry=0,
-    p=null,
-    p0=null,
-    endAngle=0,
-    deltaAngle=0,
+    cx = 0, cy = 0, rx = 0, ry = 0,
+    p = null,
+    p0 = null,
+    endAngle = 0,
+    deltaAngle = 0,
 
 
-}={}) {
+} = {}) {
     // compute point on ellipse from angle around ellipse (theta)
     const arc = (theta, cx, cy, rx, ry, alpha) => {
         // theta is angle in radians around arc
@@ -1602,15 +1701,18 @@ export function intersectLines(p1, p2, p3, p4) {
  * pythagorean theorem
  */
 export function getDistance(p1, p2, isArray = false) {
-    //if(Array.isArray(p1)) isArray = true;
 
-    //console.log(p1, p2);
     let dx = isArray ? p2[0] - p1[0] : (p2.x - p1.x);
     let dy = isArray ? p2[1] - p1[1] : (p2.y - p1.y);
 
-    //console.log('dx', dx, dy, p1, p2);
+    /*
+    let sqrt2 = 1.4142135623730951 
+    return dx===dy ? Math.abs(dx) * sqrt2 : Math.sqrt(dx * dx + dy * dy);
+    */
+
     return Math.sqrt(dx * dx + dy * dy);
 }
+
 
 // just an alias
 export function lineLength(p1, p2) {
@@ -1632,6 +1734,7 @@ export function getSquareDistance(p1, p2) {
  * sloppy but fast
  */
 export function getDistManhattan(pt1, pt2) {
+    //console.log(pt1, pt2);
     let dx = Math.abs(pt2.x - pt1.x);
     let dy = Math.abs(pt2.y - pt1.y);
     return dx + dy;

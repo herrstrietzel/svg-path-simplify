@@ -94,6 +94,7 @@ export let settingsDefaults = {
     // polygon
     toPolygon: false,
     smoothPoly: false,
+    isClosed:true,
     polyFormat: 'object',
     precisionPoly: 1,
     simplifyRD: 0,

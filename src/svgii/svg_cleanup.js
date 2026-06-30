@@ -22,7 +22,7 @@ import { cleanupSVGAttributes, removeElAtts } from "./svg_cleanup_general_svg_at
 import { convertPathLengthAtt } from "./svg_cleanup_convertPathLength";
 import { removeGroupProps, ungroupElements } from "./svg_cleanup_ungroup";
 import { parseSvgCss } from "../css_parse";
-import { setNormalizedTransformsToEl } from "./svg_cleanup_normalize_transforms";
+import { scaleProps, setNormalizedTransformsToEl } from "./svg_cleanup_normalize_transforms";
 
 
 export function cleanUpSVG(svgMarkup, {
@@ -212,6 +212,40 @@ export function cleanUpSVG(svgMarkup, {
   })
 
 
+/**
+     * remove els and attributes
+     */
+
+    // remove meta
+    if (!allowMeta) removeElements.push('meta', 'metadata', 'desc', 'title')
+
+    if (removeClassNames) {
+      removeSVGAttributes.push('class');
+      removeElAttributes.push('class');
+    }
+
+    if (removeIds) {
+      removeSVGAttributes.push('id')
+      removeElAttributes.push('id')
+    }
+
+
+    // remove hidden elements
+    removeHiddenSvgEls(svg)
+
+    // remove SVG elements
+    removeSvgEls(svg, { removeElements, removeNameSpaced });
+
+    // remove SVG attributes
+    removeSvgAtts(svg, removeSVGAttributes);
+
+    // remove SVG child element attributes
+    removeSvgChildAtts(svg, removeElAttributes);
+
+
+    // general cleanup
+    if (cleanupSVGAtts) cleanupSVGAttributes(svg, { removeIds, removeClassNames, removeDimensions, stylesToAttributes, allowMeta, allowAriaAtts, allowDataAtts });
+
 
   // collect all elements' properties
   let svgElProps = []
@@ -234,26 +268,23 @@ export function cleanUpSVG(svgMarkup, {
      */
     let styleProps = parseStylesProperties(el, propOptions)
     let stylePropsFiltered = {}
-    //console.log('styleProps', name, styleProps);
 
+    // reset remove array
+    remove = [];
 
     // convert pathLength before transforming
-    if(convertTransforms || attributesToGroup) convertPathLength=true;
+    if (convertTransforms || attributesToGroup) convertPathLength = true;
 
-    if (convertPathLength ) {
-      //console.log('convertPathLength', convertPathLength, name);
+    if (convertPathLength) {
       styleProps = convertPathLengthAtt(el, { styleProps });
       remove = [...new Set([...remove, ...styleProps.remove])];
-
     }
 
-    //console.log(styleProps);
 
     // get parent styles
     let { parentStyleProps = [] } = el;
     let inheritedProps = {}
     let transFormInherited = []
-
 
 
     /** 
@@ -288,7 +319,6 @@ export function cleanUpSVG(svgMarkup, {
       ...stylePropsSVG,
       ...inheritedProps,
     };
-
     //console.log('inheritedProps', inheritedProps);
 
     // merge with svg props
@@ -304,46 +334,11 @@ export function cleanUpSVG(svgMarkup, {
     //console.log('styleProps', styleProps);
     remove = [...new Set([...remove, ...styleProps.remove])];
 
-
-    /**
-     * remove els and attributes
-     */
-
-    // remove meta
-    if (!allowMeta) removeElements.push('meta', 'metadata', 'desc', 'title')
-
-    if (removeClassNames) {
-      removeSVGAttributes.push('class');
-      removeElAttributes.push('class');
-    }
-
-    if (removeIds) {
-      removeSVGAttributes.push('id')
-      removeElAttributes.push('id')
-    }
-
-
-    // remove hidden elements
-    removeHiddenSvgEls(svg)
-
-    // remove SVG elements
-    removeSvgEls(svg, { removeElements, removeNameSpaced });
-
-    // remove SVG attributes
-    removeSvgAtts(svg, removeSVGAttributes);
-
-    // remove SVG child element attributes
-    removeSvgChildAtts(svg, removeElAttributes);
-
-
-    // general cleanup
-    if (cleanupSVGAtts) cleanupSVGAttributes(svg, { removeIds, removeClassNames, removeDimensions, stylesToAttributes, allowMeta, allowAriaAtts, allowDataAtts });
+    
 
     // all relative units to absolute
     if (toAbsoluteUnits) {
       normalizeTransforms = true;
-      //stylesToAttributes = true
-      //console.log(name, styleProps);
 
       /**
        * apply consolidated 
@@ -381,6 +376,7 @@ export function cleanUpSVG(svgMarkup, {
 
 
 
+
     if (stylesToAttributes) {
 
       /**
@@ -390,7 +386,6 @@ export function cleanUpSVG(svgMarkup, {
         styleProps = setNormalizedTransformsToEl(el, { styleProps });
         //remove = styleProps.remove;
         remove = [...new Set([...remove, ...styleProps.remove])];
-
       }
 
       /**
@@ -400,6 +395,7 @@ export function cleanUpSVG(svgMarkup, {
        */
       stylePropsFiltered = filterSvgElProps(name, styleProps,
         { removeDefaults: true, cleanUpStrokes, allowMeta, allowAriaAtts, allowDataAtts, removeIds, inheritedProps });
+
 
       remove = [...new Set([...remove, ...stylePropsFiltered.remove])];
 
@@ -415,14 +411,6 @@ export function cleanUpSVG(svgMarkup, {
        * attributes
        */
       removeAtts(el, remove)
-
-      /*
-      for (let i = 0; i < remove.length; i++) {
-        let att = remove[i];
-        el.removeAttribute(att)
-      }
-      */
-
 
     } // endof style processing
 

@@ -21,7 +21,7 @@ export function analyzePathData(pathData = [], {
     detectDirection = true,
     detectSemiExtremes = false,
     debug = false,
-    addSquareLength = true,
+    addSquareLength = false,
     addArea = true,
 
 } = {}) {
@@ -87,7 +87,8 @@ export function analyzePathData(pathData = [], {
         // check flatness of command
         let toleranceFlat = 0.01;
         let thresholdLength = dimA * 0.1
-        let threshold = thresholdLength * 0.01
+        //let threshold = thresholdLength * 0.01
+        let threshold = dimA * 0.005
         let areaThresh = squareDist * toleranceFlat;
         let isFlat = Math.abs(cptArea) < areaThresh;
 
@@ -105,7 +106,7 @@ export function analyzePathData(pathData = [], {
         let hasExtremes = false;
 
         //!isFlat &&
-        if (isBezier) {
+        if (detectExtremes && isBezier) {
 
 
             let dx = type === 'C' ? Math.abs(com.cp2.x - com.p.x) : Math.abs(com.cp1.x - com.p.x)
@@ -115,7 +116,6 @@ export function analyzePathData(pathData = [], {
             //let vertical = (dx === 0 || dx<=threshold ) && dy > 0
             let horizontal = (dy === 0 || dy <= threshold) && dx > 0
             let vertical = (dx === 0 || dx <= threshold) && dy > 0
-
 
             if (horizontal || vertical) {
                 hasExtremes = true;
@@ -152,7 +152,7 @@ export function analyzePathData(pathData = [], {
         }
 
         // check extremes introduce by small arcs
-        else if(isArc && comN && ((comPrev.type==='C' || comPrev.type==='Q') || (comN.type==='C' || comN.type==='Q'))  ){
+        else if(detectExtremes && isArc && comN && ((comPrev.type==='C' || comPrev.type==='Q') || (comN.type==='C' || comN.type==='Q'))  ){
             let distN = comN ? comN.dimA : 0
             let isShort = com.dimA < (comPrev.dimA + distN) * 0.1;
             let smallRadius = com.values[0] === com.values[1] && (com.values[0] < 1)
@@ -170,29 +170,7 @@ export function analyzePathData(pathData = [], {
         if (hasExtremes) com.extreme = true
 
         // Corners and semi extremes 
-        if (isBezier && isBezierN) {
-
-            // semi extremes
-            if (detectSemiExtremes && !com.extreme) {
-
-                let dx1 = Math.abs(p.x - cp2.x)
-                let dy1 = Math.abs(p.y - cp2.y)
-                let hasSemiExtreme = false;
-
-                // exclude extremes or small deltas
-                if (dx1 && dy1 && dx1 > thresholdLength || dy1 > thresholdLength) {
-                    let ang1 = getAngle(cp2, p)
-                    let ang2 = getAngle(p, comN.cp1)
-
-                    let ang3 = Math.abs(ang1 + ang2) / 2
-                    hasSemiExtreme = isMultipleOf45(ang3)
-                }
-
-                if (hasSemiExtreme) {
-                    com.semiExtreme = true;
-                }
-            }
-
+        if (detectCorners && isBezier && isBezierN) {
 
             /**
              * Detect direction change points

@@ -27,7 +27,9 @@ export function getPolyChunks(pts,
 
         // start new chunk
         // keepInflections && p1.isDirChange
-        if ((keepExtremes && p1.isExtreme || keepCorners && p1.isCorner )) {
+        if ((keepExtremes && p1.isExtreme || keepCorners && p1.isCorner ||
+             (keepInflections && p1.isDirChange && !p1.isExtreme && !p1.isCorner ) 
+            )) {
             idx++
             chunks.push([])
         }

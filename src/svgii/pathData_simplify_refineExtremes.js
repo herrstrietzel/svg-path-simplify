@@ -1,5 +1,5 @@
 import { findSplitT, getExtrapolatedCommand } from "../pathData_simplify_cubic";
-import { getCombinedByDominant } from "../pathData_simplify_cubic_extrapolate";
+import { getCombinedByDominant, getCombinedByDominant_back } from "../pathData_simplify_cubic_extrapolate";
 import { bezierhasExtreme, checkLineIntersection, getDistAv, getDistManhattan, getSquareDistance, interpolate } from "./geometry";
 import { getPathArea, getPolygonArea } from "./geometry_area";
 import { getPathDataBBox } from "./geometry_bbox";
@@ -58,9 +58,7 @@ export function refineAdjacentExtremes(pathData, {
                 if (comEx.length === 1) {
 
                     comEx = comEx[0]
-
                     pathData[i + 1] = null;
-
                     pathData[i + 2].values = [comEx.cp1.x, comEx.cp1.y, comEx.cp2.x, comEx.cp2.y, comEx.p.x, comEx.p.y]
                     pathData[i + 2].cp1 = comEx.cp1
                     pathData[i + 2].cp2 = comEx.cp2

@@ -2,12 +2,34 @@ import { getSquareDistance, reducePoints } from "./svgii/geometry";
 import { getPolygonArea } from "./svgii/geometry_area";
 import { getPolyBBox } from "./svgii/geometry_bbox";
 
-export function simplifyRC(pts, quality = 1, shiftStart = true) {
 
-    if (pts.length < 4) return pts;
+export function removeCoincidingVertices(pts = []) {
+    let l = pts.length;
+    if (!l) return pts;
+
+    let ptsN = [pts[0]];
+    let pt1, pt2;
+
+    for (let i = 1; i < l; i++) {
+        pt1 = pts[i - 1];
+        pt2 = pts[i];
+
+        /**
+         * 1. Skip zero-length segments
+         */
+        if (pt1.x === pt2.x && pt1.y === pt2.y) {
+            continue;
+        }
+        ptsN.push(pt2)
+    }
+    return ptsN
+
+}
+
+export function simplifyRC(pts = [], quality = 1, shiftStart = true) {
 
     let l = pts.length;
-
+    if (l < 4) return pts;
 
     // starting point
     let M = pts[0];
@@ -72,7 +94,7 @@ export function simplifyRC(pts, quality = 1, shiftStart = true) {
         let thresh = getSquareDistance(pt0, pt2) * 0.005;
 
         // flat
-        if ( area <= thresh && i<l-1) {
+        if (area <= thresh && i < l - 1) {
             //console.log(area, thresh, pt0, pt1, pt2, i);
             pt0 = pt1;
             continue
@@ -93,10 +115,10 @@ export function simplifyRC(pts, quality = 1, shiftStart = true) {
     }
 
     // 1st and last are colinear
-    let area0 = getPolygonArea([ptsSmp[1], M, ptsSmp[ptsSmp.length-1]], true)
-    let thresh0 = getSquareDistance (ptsSmp[1], ptsSmp[ptsSmp.length-1]) * 0.005
+    let area0 = getPolygonArea([ptsSmp[1], M, ptsSmp[ptsSmp.length - 1]], true)
+    let thresh0 = getSquareDistance(ptsSmp[1], ptsSmp[ptsSmp.length - 1]) * 0.005
     // remove first point
-    if(area0 < thresh0) ptsSmp.shift()
+    if (area0 < thresh0) ptsSmp.shift()
 
     return ptsSmp;
 }

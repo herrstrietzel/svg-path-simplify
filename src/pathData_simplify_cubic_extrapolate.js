@@ -1,9 +1,146 @@
-import { checkLineIntersection, getAngle, getDistAv, getSquareDistance, interpolate, pointAtT, rotatePoint } from "./svgii/geometry";
+import { checkLineIntersection, getAngle, getDistance, getDistAv, getDistManhattan, getSquareDistance, interpolate, pointAtT, rotatePoint } from "./svgii/geometry";
 import { getPathArea } from "./svgii/geometry_area";
 import { pathDataToD } from "./svgii/pathData_stringify";
 import { renderPath, renderPoint } from "./svgii/visualize";
 
+
+
+
+
 export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, debug = false) {
+
+    // if combining fails return original commands
+    let commands = [com1, com2]
+
+    // detect dominant 
+    let dist1 = getDistManhattan(com1.p0, com1.p)
+    let dist2 = getDistManhattan(com2.p0, com2.p)
+    let thresh = (dist1 + dist2) * 0.5 * 0.075 * tolerance
+
+    // take longer command
+    let reverse = dist1 < dist2;
+    //let reverse = dist1 > dist2;
+
+    // backup original commands
+    let com1_o = JSON.parse(JSON.stringify(com1))
+    let com2_o = JSON.parse(JSON.stringify(com2))
+
+    // intersection of control tangents
+    let ptI = checkLineIntersection(com1_o.p0, com1_o.cp1, com2_o.p, com2_o.cp2, false, true)
+
+    // no intersection - we can't combine
+    if (!ptI) {
+        return commands
+    }
+
+    if (reverse) {
+        let com2_R = {
+            p0: { x: com1.p.x, y: com1.p.y },
+            cp1: { x: com1.cp2.x, y: com1.cp2.y },
+            cp2: { x: com1.cp1.x, y: com1.cp1.y },
+            p: { x: com1.p0.x, y: com1.p0.y },
+        }
+
+        let com1_R = {
+            p0: { x: com2.p.x, y: com2.p.y },
+            cp1: { x: com2.cp2.x, y: com2.cp2.y },
+            cp2: { x: com2.cp1.x, y: com2.cp1.y },
+            p: { x: com2.p0.x, y: com2.p0.y },
+        }
+
+        com1 = com1_R;
+        com2 = com2_R;
+    }
+
+
+    // etsimate t for extrapolation
+    let PtI = checkLineIntersection(com1.cp2, com1.p, com2.p, com2.cp2, false, true)
+    let cp1_I = interpolate(com1.p, PtI, 0.666)
+
+    //renderPoint(markers, cp1_I)
+    //renderPoint(markers, com1.p0, 'green', '2%')
+
+    let dist1_2 = getDistManhattan(com1.cp2, com1.p)
+    let dist2_2 = getDistManhattan(com1.cp2, cp1_I)
+    let t = dist2_2 / dist1_2
+
+    // extrapolate
+    let segs = pointAtT([com1.p0, com1.cp1, com1.cp2, com1.p], t, false, true).segments
+
+    //console.log(segs);
+    let seg = segs[0]
+
+
+    // if it worked - points should be nearby
+    let dist = getDistManhattan(seg.p, com2.p)
+
+    // if close enough adjust
+    if (dist < thresh) {
+        let angle = getAngle(seg.p, seg.cp2)
+        let angle2 = getAngle(com2.p, com2.cp2)
+        //let angleDiff = Math.abs(angle2 - angle)
+        let angleDiff = (angle2 - angle)
+
+        //let angleRat = angle / angle2;
+        //angleRat = (1-angleDiff) / angle2;
+
+        // adjust cp angle
+        seg.cp2 = rotatePoint(seg.cp2, seg.p.x, seg.p.y, angleDiff)
+        let dist1 = getDistManhattan(seg.p, seg.cp2)
+
+        // copy original final point coordinates
+        seg.p = com2.p
+
+        // after rotation
+        let dist2 = getDistManhattan(seg.p, seg.cp2)
+        let scale = dist2 / dist1
+
+        // adjust tangent length
+        seg.cp2 = interpolate(seg.p, seg.cp2, scale)
+
+        // reverse back
+        if (reverse) {
+            seg = {
+                p0: seg.p,
+                p: seg.p0,
+                cp1: seg.cp2,
+                cp2: seg.cp1,
+            }
+        }
+
+        commands = [
+            {
+                type: 'C',
+                values: [seg.cp1.x, seg.cp1.y, seg.cp2.x, seg.cp2.y, seg.p.x, seg.p.y],
+                p0: seg.p0,
+                cp1: seg.cp1,
+                cp2: seg.cp2,
+                p: seg.p,
+                extreme: com2_o.extreme,
+                corner: com2_o.corner,
+                directionChange: com2_o.directionChange,
+                dimA: getDistManhattan(seg.p0, seg.p),
+                error: dist
+
+            }
+        ];
+
+    }
+
+    //console.log('commands', reverse, commands);
+    return commands
+
+}
+
+
+
+
+
+
+
+export function getCombinedByDominant_back(com1, com2, maxDist = 0, tolerance = 1, debug = false) {
+
+    //console.log('getCombinedByDominant');
 
     // cubic Bézier derivative
     const cubicDerivative = (p0, p1, p2, p3, t) => {
@@ -25,8 +162,8 @@ export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, de
     let commands = [com1, com2]
 
     // detect dominant 
-    let dist1 = getDistAv(com1.p0, com1.p)
-    let dist2 = getDistAv(com2.p0, com2.p)
+    let dist1 = getDistManhattan(com1.p0, com1.p)
+    let dist2 = getDistManhattan(com2.p0, com2.p)
 
     let reverse = dist1 > dist2;
 
@@ -91,9 +228,11 @@ export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, de
     let dP = cubicDerivative(com2.p0, com2.cp1, com2.cp2, com2.p, t0);
     let r = sub(P, com1.p0);
 
-    //let t0_2 = t0 - dot(r, dP) / dot(dP, dP);
 
+    //let t0_2 = t0 - dot(r, dP) / dot(dP, dP);
     t0 -= dot(r, dP) / dot(dP, dP);
+
+    //console.log(t0, t2);
 
     // construct merged cubic over [t0, 1]
     let Q0 = pointAtT([com2.p0, com2.cp1, com2.cp2, com2.p], t0);
@@ -145,8 +284,8 @@ export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, de
 
     //let tscale =(1 + t0)
     //console.log('tscale', tscale);
-    let cp1_2 = interpolate(result.p0, ptI_1, 1.333  )
-    let cp2_2 = interpolate(result.p, ptI_2, 1.333  )
+    let cp1_2 = interpolate(result.p0, ptI_1, 1.333)
+    let cp2_2 = interpolate(result.p, ptI_2, 1.333)
 
     // test self intersections and exit 
     let cp_intersection = checkLineIntersection(com1_o.p0, cp1_2, com2_o.p, cp2_2, true)
@@ -203,7 +342,7 @@ export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, de
         //console.log('distS', distS, maxDist );
 
         // not close enough - exit
-        if (distSplit > maxDist * tolerance ) {
+        if (distSplit > maxDist * tolerance) {
             //renderPoint(markers, ptSplit, 'cyan', '1%')
             //renderPoint(markers, com1.p, 'red', '0.5%')
             return commands;
@@ -241,7 +380,7 @@ export function getCombinedByDominant(com1, com2, maxDist = 0, tolerance = 1, de
         if (areaDiff < 0.05 * tolerance) {
             commands = [result];
             //console.log('areaDiff', areaDiff);
-        } 
+        }
     }
 
 

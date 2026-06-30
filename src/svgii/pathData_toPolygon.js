@@ -4,8 +4,8 @@ import { simplifyPolyRD } from "../simplify_poly_radial_distance";
 import { getDistAv, getDistManhattan, getSquareDistance, getTatAngles, interpolate, pointAtT } from "./geometry";
 import { getBezierArea, getPolygonArea } from "./geometry_area";
 import { getPolyBBox } from "./geometry_bbox";
-import { addDimensionData, analyzePathData } from "./pathData_analyze";
-import { arcToBezier } from "./pathData_convert";
+import { addDimensionData, analyzePathData, getPathDataVerbose } from "./pathData_analyze";
+import { arcToBezier, convertPathData, pathDataToVerbose } from "./pathData_convert";
 import { pathDataFromPoly } from "./pathData_fromPoly";
 import { addExtremePoints } from "./pathData_split";
 import { pathDataToD } from "./pathData_stringify";
@@ -23,14 +23,23 @@ import { renderPoint } from "./visualize";
  */
 export function pathDataToPolygonOpt(pathData, {
     precisionPoly = 1,
-    autoAccuracy=false,
-    polyFormat='points',
-    decimals=-1,
-    simplifyRD=1,
-simplifyRDP=1,
+    autoAccuracy = false,
+    polyFormat = 'object',
+    decimals = -1,
+    simplifyRD = 1,
+    simplifyRDP = 1,
 } = {}) {
 
     //console.log(pathData);
+
+    pathData = convertPathData(pathData, {toAbsolute:true, toLonghands:true,  arcToCubic:true});
+    pathData = addExtremePoints(pathData);
+
+    //let d2 = pathDataToD(pathData)
+    //console.log(d2);
+
+
+    pathData = getPathDataVerbose(pathData);
 
     let l = pathData.length;
     let M = { x: pathData[0].values[0], y: pathData[0].values[1] }
@@ -59,11 +68,10 @@ simplifyRDP=1,
         pts.push(p)
     }
 
-
     let pts2 = [pts[0]]
 
     // adjustments for very small or large paths
-    dims = dims.filter(Boolean).sort()
+    dims = dims.filter(Boolean).sort((a,b)=>a-b)
     let dimMax = dims[dims.length - 1]
 
     let scale = dimMax > 2 && dimMax < 25 ? 1 : (20 / dimMax);
@@ -104,39 +112,41 @@ simplifyRDP=1,
 
 
     // simplify polygon
-    if(simplifyRD>0){
-        pts2 = simplifyPolyRD(pts2, {quality:simplifyRD})
+    if (simplifyRD > 0) {
+        pts2 = simplifyPolyRD(pts2, { quality: simplifyRD })
     }
 
 
-    if(simplifyRDP>0){
-        pts2 = simplifyPolyRDP(pts2, {quality:simplifyRDP})
+    if (simplifyRDP > 0) {
+        pts2 = simplifyPolyRDP(pts2, { quality: simplifyRDP })
     }
 
 
 
-    pathDataPoly = pathDataFromPoly(pts2)
-    pathData = pathDataPoly
-    
-    if(autoAccuracy){
+
+    if (autoAccuracy) {
         decimals = detectAccuracyPoly(pts)
     }
 
-    let poly = decimals>-1 ? pts2.map(pt => { return { x: roundTo(pt.x, decimals), y: roundTo(pt.y, decimals) } }) : pts2.map(pt => { return { x: pt.x, y: pt.y } })
+    let poly = decimals > -1 ? pts2.map(pt => { return { x: roundTo(pt.x, decimals), y: roundTo(pt.y, decimals) } }) : pts2.map(pt => { return { x: pt.x, y: pt.y } })
 
-    if(polyFormat==='array'){
+    pathDataPoly = pathDataFromPoly(poly)
+    pathData = pathDataPoly
+
+
+
+    if (polyFormat === 'array') {
         poly = poly.map(pt => { return [pt.x, pt.y] })
     }
-    else if(polyFormat==='string'){
+    else if (polyFormat === 'string') {
         poly = poly.map(pt => { return [pt.x, pt.y].join(',') }).flat().join(' ')
     }
 
-    //console.log(pathData);
+    let d= pathDataToD(pathData)
 
-    return { pathData, poly }
+    return { pathData, poly, d }
 
 }
-
 
 
 

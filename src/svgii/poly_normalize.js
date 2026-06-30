@@ -4,13 +4,25 @@ export function normalizePoly(pts, {
     flatten = false
 } = {}) {
 
+
     // is stringified flat point attribute
     if (typeof pts === 'string' && !isNaN(pts[0])) {
         pts = toPointArray(pts.split(/,| /).filter(Boolean).map(Number));
         return pts
     }
 
+    if (pts.length && typeof pts[0] === 'string') {
+        pts = pts.map(pt => {
+            return toPointArray(pt.split(/,| /).filter(Boolean).map(Number))
+        });
+        pts = pts.flat(2)
+        //console.log(pts);
+    }
+
+
     if (flatten) pts = pts.flat(2);
+
+
     let poly = toArray ? polyPtsToArray(pts) : polyArrayToObject(pts)
     return poly
 }

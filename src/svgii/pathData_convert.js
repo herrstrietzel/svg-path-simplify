@@ -10,7 +10,7 @@ import { renderPoint, renderPath } from "./visualize";
 */
 
 
-import { checkLineIntersection, getAngle, getDeltaAngle, getDistance, getDistAv, getDistManhattan, getSquareDistance, interpolate, pointAtT, rotatePoint, toParametricAngle } from './geometry';
+import { checkLineIntersection, getAngle, getDeltaAngle, getDistance, getDistAv, getDistManhattan, getSquareDistance, interpolate, pointAtT, rotatePoint, svgArcToCenterParam, toParametricAngle } from './geometry';
 import { getPathArea, getPolygonArea, getRelativeAreaDiff } from './geometry_area';
 import { parsePathDataString } from './pathData_parse';
 import { pathDataToD } from './pathData_stringify';
@@ -70,7 +70,12 @@ export function convertPathData(pathData, {
 
 
     // minify semicircle radii
-    if (optimizeArcs) pathData = optimizeArcPathData(pathData);
+    if (optimizeArcs) {
+        pathData = optimizeArcPathData(pathData);
+    } else {
+        // get true absolute radii
+        pathData = pathDataToTrueArcValues(pathData);
+    }
 
 
     //if(decimals>-1 && decimals<2) pathData = roundPathData(pathData, decimals);
@@ -171,9 +176,49 @@ export function parsePathDataNormalized(d,
 
 
 /**
- * 
- * @param {*} pathData 
- * @returns 
+ * Converts minified arc
+ * values to true rx and ry values
+ */
+export function pathDataToTrueArcValues(pathData = []) {
+
+    //return pathData
+
+    let remove = []
+    let l = pathData.length;
+    let pathDataN = [pathData[0]];
+
+    for (let i = 1; i < l; i++) {
+        let com = pathData[i];
+        let comPrev = pathData[i-1];
+        let { type, values } = com;
+
+
+        if (type === 'A') {
+
+            // previous commands final on-path point
+            let [x1, y1] = comPrev.values.slice(-2)
+            let [rx, ry, xAxisRotation, largeArc, sweep, x2, y2] = values;
+            let arcData = svgArcToCenterParam(x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2)
+
+            // set true arc values
+            com.values[0] = arcData.rx
+            com.values[1] = arcData.ry
+            //pathDataN.push(com)
+        }
+
+        pathDataN.push(com)
+
+
+    }
+    return pathDataN;
+}
+
+
+/**
+ * Minify arc radii 
+ * for semi circles 
+ * returns smaller rx and ry 
+ * values 
  */
 
 export function optimizeArcPathData(pathData = []) {
@@ -240,7 +285,7 @@ export function optimizeArcPathData(pathData = []) {
         if (isHorizontal || isVertical) {
 
             // check if semi circle
-            let needsTrueR = isHorizontal ? rx*1.9 > diffX : ry*1.9 > diffY;
+            let needsTrueR = isHorizontal ? rx * 1.9 > diffX : ry * 1.9 > diffY;
 
             // is semicircle we can simplify rx
             if (!needsTrueR) {
@@ -1037,8 +1082,8 @@ export function arcToBezier(p0, values, splitSegments = 1) {
     let phi = rotation ? rotation * TAU / 360 : 0;
     let sinphi = phi ? Math.sin(phi) : 0
     let cosphi = phi ? Math.cos(phi) : 1
-    let pxp = cosphi * (p0.x - x) / 2 + sinphi * (p0.y - y) / 2
-    let pyp = -sinphi * (p0.x - x) / 2 + cosphi * (p0.y - y) / 2
+    let pxp = cosphi * (p0.x - x) *0.5 + sinphi * (p0.y - y) *0.5
+    let pyp = -sinphi * (p0.x - x) *0.5 + cosphi * (p0.y - y) *0.5
 
     if (pxp === 0 && pyp === 0) {
         return []
@@ -1074,8 +1119,8 @@ export function arcToBezier(p0, values, splitSegments = 1) {
 
     let centerxp = radicant ? radicant * rx / ry * pyp : 0
     let centeryp = radicant ? radicant * -ry / rx * pxp : 0
-    let centerx = cosphi * centerxp - sinphi * centeryp + (p0.x + x) / 2
-    let centery = sinphi * centerxp + cosphi * centeryp + (p0.y + y) / 2
+    let centerx = cosphi * centerxp - sinphi * centeryp + (p0.x + x) * 0.5
+    let centery = sinphi * centerxp + cosphi * centeryp + (p0.y + y) * 0.5
 
     let vx1 = (pxp - centerxp) / rx
     let vy1 = (pyp - centeryp) / ry
@@ -1097,18 +1142,20 @@ export function arcToBezier(p0, values, splitSegments = 1) {
         ang2 = vectorAngle(vx1, vy1, vx2, vy2)
 
     if (sweepFlag === 0 && ang2 > 0) {
-        ang2 -= Math.PI * 2
+        //ang2 -= Math.PI * 2
+        ang2 -= TAU
     }
     else if (sweepFlag === 1 && ang2 < 0) {
-        ang2 += Math.PI * 2
+        //ang2 += Math.PI * 2
+        ang2 += TAU
     }
 
 
     //ratio must be at least 1
-    let ratio = +(Math.abs(ang2) / (TAU / 4)).toFixed(0) || 1
+    let ratio = +(Math.abs(ang2) / (TAU * 0.25)).toFixed(0) || 1
 
 
-    // increase segments for more accureate length calculations
+    // increase segments for more accurate length calculations
     let segments = ratio * splitSegments;
     ang2 /= segments
     let pathDataArc = [];
@@ -1121,7 +1168,8 @@ export function arcToBezier(p0, values, splitSegments = 1) {
     const k = 0.551785
     let a = ang2 === angle90 ? k :
         (
-            ang2 === -angle90 ? -k : 4 / 3 * Math.tan(ang2 / 4)
+            //ang2 === -angle90 ? -k : 4 / 3 * Math.tan(ang2 / 4)
+            ang2 === -angle90 ? -k : 1.33333 * Math.tan(ang2 * 0.25)
         );
 
     let cos2 = ang2 ? Math.cos(ang2) : 1;

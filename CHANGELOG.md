@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.6] - 2026-04-03
+### Fixed
+- better cubic to arc radii simplification
+- autoAccuracy evaluation for arcs – it's always a pain-in-the-arc
+- SVG attribute removal/inheritance
+### Added  
+- prototype methods for svg, polygon or d retrieval
+- verbose and beautified pathdata output return true arc radii instead of minified
+
 ## [0.4.5] - 2026-04-02
 ### Fixed
 - stroke-dash conversion must disable reordering of commands

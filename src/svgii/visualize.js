@@ -233,6 +233,36 @@ export function renderPoint(
 }
 
 
+export function renderCircle(
+    svg,
+    coords,
+    stroke = "red",
+    r = "1%",
+    opacity = "1",
+    strokeWidth="1%",
+    title = '',
+    render = true,
+    id = "",
+    className = ""
+) {
+    if (Array.isArray(coords)) {
+        coords = {
+            x: coords[0],
+            y: coords[1]
+        };
+    }
+    let marker = `<circle class="${className}" opacity="${opacity}" id="${id}" cx="${coords.x}" cy="${coords.y}" r="${r}" stroke="${stroke}" stroke-width="${strokeWidth}">
+  <title>${title}</title></circle>`;
+
+    if (render) {
+        svg.insertAdjacentHTML("beforeend", marker);
+    } else {
+        return marker;
+    }
+}
+
+
+
 export function renderPath(svg, d = '', stroke = 'green', strokeWidth = '1%', opacity="1", render = true) {
 
     let path = `<path d="${d}" fill="none" stroke="${stroke}"  stroke-width="${strokeWidth}" stroke-opacity="${opacity}" /> `;
@@ -250,7 +280,7 @@ export function renderPath(svg, d = '', stroke = 'green', strokeWidth = '1%', op
 
 
 // debug helper: render lines
-export function renderPoly(svg, pts, stroke = "purple", strokeWidth = "1%",  fillOpacity="0.5", fill="none", polygon=true , render = true) {
+export function renderPoly(svg, pts, stroke = "purple", strokeWidth = "1%",  fillOpacity="0.5", fill="none", polygon=false , render = true) {
     pts = pts.map(pt => { return [pt.x, pt.y] }).flat().join(' ');
     
 
@@ -280,7 +310,7 @@ export function renderPerpendicularLine(pt, len = 10, angle) {
 }
 
 
-
+/*
 export function addMarkers() {
 
 
@@ -310,6 +340,7 @@ export function addMarkers() {
     document.body.insertAdjacentHTML('afterbegin', style + markerMarkup)
 
 }
+*/
 
 
 /**

@@ -1,5 +1,6 @@
-import { checkLineIntersection, getAngle, getDistManhattan, getDistance, rotatePoint } from "./svgii/geometry";
+import { checkLineIntersection, getAngle, getAngleFromDelta, getDistManhattan, getDistance, rotatePoint } from "./svgii/geometry";
 import { getPathArea, getPolygonArea, getRelativeAreaDiff } from "./svgii/geometry_area";
+import { renderPoint } from "./svgii/visualize";
 //import { cubicCommandToArc } from "./svgii/pathData_convert";
 
 export function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
@@ -14,7 +15,7 @@ export function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
             let comAN = cubicCommandToArc(comN.p0, comN.cp1, comN.cp2, comN.p, areaThreshold)
 
 
-            if (comA.isArc  && comAN.isArc) {
+            if (comA.isArc && comAN.isArc) {
 
                 let dist = getDistManhattan(p0, comN.p);
                 let maxDist = dist * 0.01;
@@ -30,8 +31,18 @@ export function pathDataCubicsToArc(pathData, { areaThreshold = 2.5 } = {}) {
                 let sweep = area < 0 ? 0 : 1;
 
                 if (vertical || horizontal) {
+
                     rx = Math.min(rx, comAN.rx)
                     ry = Math.min(ry, comAN.ry)
+
+                    let diffR = Math.abs(rx - ry) / rx;
+                    let isSemiCircle = diffR < 0.025
+                    //console.log('isSemiCircle', isSemiCircle, diffR);
+                    if (isSemiCircle) {
+                        rx = rx > 1 ? 1 : Math.min(rx, ry);
+                        ry = rx;
+                    }
+
                     pathData[c] = null;
                     pathData[c + 1].type = 'A';
                     pathData[c + 1].values = [rx, ry, 0, 0, sweep, comN.p.x, comN.p.y];
@@ -58,40 +69,74 @@ export function cubicCommandToArc(p0, cp1, cp2, p, tolerance = 7.5) {
     let arcSegArea = 0, isArc = false
 
     // check angles
-    let angle1 = getAngle(p0, cp1, true);
-    let angle2 = getAngle(p, cp2, true);
+    let dx1 = (cp1.x - p0.x)
+    let dy1 = (cp1.y - p0.y)
+    let dx2 = (cp2.x - p.x)
+    let dy2 = (cp2.y - p.y)
+
+
+    //let angle1 = getAngle(p0, cp1, true);
+    //let angle2 = getAngle(p, cp2, true);
+
+    let thresh = getDistManhattan(p0, p) * 0.001
+
+    let isVertical1 = dx1 < thresh
+    let isVertical2 = dx2 < thresh
+
+    let isHorizontal1 = dy1 < thresh
+    let isHorizontal2 = dy2 < thresh
+
+    let isRightAngle = (isVertical1 || isVertical2) && (isHorizontal1 || isHorizontal2);
+
+    /*
+    let angle1 = getAngleFromDelta(dx1, dy1, true);
+    let angle2 = getAngleFromDelta(dx2, dy2, true);
     let deltaAngle = Math.abs(angle1 - angle2) * 180 / Math.PI;
 
 
     let angleDiff = Math.abs((deltaAngle % 180) - 90);
     let isRightAngle = angleDiff < 3;
+    */
 
 
     let rx = 0
     let ry = 0
-    let ptC;
+    let ptC = p0;
+    let r1 = 0, r2 = 0
 
     if (isRightAngle) {
-        // point between cps
 
+        if (isHorizontal1 && isVertical2) {
+            ptC = { x: p0.x, y: p.y }
+            r1 = Math.abs(p.x-p0.x)
+            r2 = Math.abs(p.y-p0.y)
+        }
+        else if (isHorizontal2 && isVertical1) {
+            ptC = { x: p.x, y: p0.y }
+            r2 = Math.abs(p0.x-p.x)
+            r1 = Math.abs(p0.y-p.y)
+        }
 
-        // center point
-        let cp1_r = rotatePoint(cp1, p0.x, p0.y, (Math.PI * -0.5))
-        let cp2_r = rotatePoint(cp2, p.x, p.y, (Math.PI * 0.5))
+        /*
+        if (r1 && r2) {
+            //console.log('r right', r1, r2);
+        }
+        //renderPoint(markers, ptC, 'red', '1%', '0.5')
+        //let pI = checkLineIntersection(p0, cp1, p, cp2, false);
+        */
 
-        // assumed centroid
-        ptC = checkLineIntersection(p0, cp1_r, p, cp2_r, false)
-        //renderPoint(markers, ptC, 'red', '1%', '0.5' )
+        if (r1 && r2) {
 
-
-
-
-        let pI = checkLineIntersection(p0, cp1, p, cp2, false);
-
-        if (pI) {
-
+            /*
             let r1 = getDistance(p0, pI);
             let r2 = getDistance(p, pI);
+            */
+
+            //r1 = getDistance(p0, pI);
+            //let r12 = isHorizontal1 Math.abs(dx1);
+            //r2 = getDistance(p, pI);
+            //console.log('rEx', r1, r2);
+
 
             let rMax = +Math.max(r1, r2).toFixed(8);
             let rMin = +Math.min(r1, r2).toFixed(8);
@@ -109,7 +154,6 @@ export function cubicCommandToArc(p0, cp1, cp2, p, tolerance = 7.5) {
             let circular = (100 / rx * Math.abs(rx - ry)) < 5;
 
             if (circular) {
-                //rx = (rx+ry)/2
                 rx = rMax
                 ry = rx;
             }
@@ -136,7 +180,7 @@ export function cubicCommandToArc(p0, cp1, cp2, p, tolerance = 7.5) {
             arcSegArea = (Math.PI * (rx * ry)) / 4
 
             // subtract polygon between start, end and center point
-            arcSegArea -= Math.abs(getPolygonArea([p0, p, pI]))
+            arcSegArea -= Math.abs(getPolygonArea([p0, p, ptC]))
 
             let areaDiff = getRelativeAreaDiff(comArea, arcSegArea);
 

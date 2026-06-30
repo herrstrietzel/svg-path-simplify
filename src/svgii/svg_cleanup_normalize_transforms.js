@@ -56,7 +56,7 @@ export function setNormalizedTransformsToEl(el, {
     styleProps.remove.push('transform')
 
     // scale props like stroke width or dash-array
-    styleProps = scaleProps(styleProps, { props: ['stroke-width', 'stroke-dasharray'], scale: scaleX })
+    styleProps = scaleProps(styleProps, { props: ['stroke-width', 'stroke-dasharray', 'stroke-dashoffset'], scale: scaleX })
 
   } else {
     el.setAttribute('transform', transComponents.matrixAtt)

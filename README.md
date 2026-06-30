@@ -31,8 +31,16 @@ Unlike most existing approaches (e.g in graphic applications), it checks where s
   * cubics to quadratic Béziers  (only 1 control point)
   * cubic arc-like segments to `A` (elliptic arc) and `rx`, `ry` radii optimization for semi-circle segments
 
+### Multiple input formats
+For more convenience pretty much any vector input are supported:
+* stringified `d` path data for single paths
+* SVG2 pathData arrays (parsed via `getPathData()`)
+* XML markup for complete SVG files
+* polygon/polyline data provided as point object array, nested array or string
+
 ### Coordinate rounding
 * adaptive coordinate rounding: small or large details can be auto-detected to find a suitable floating point accuracy without guessing the decimal value (3 decimals may not be the silver bullet=)
+* quantized half-decimal rounding
 
 ### SVG optimization
 Cleanup for:  

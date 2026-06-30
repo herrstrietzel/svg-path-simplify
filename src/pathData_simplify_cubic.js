@@ -1,7 +1,8 @@
 import { getCombinedByDominant } from "./pathData_simplify_cubic_extrapolate";
-import { getDistance, getSquareDistance, checkLineIntersection, pointAtT, interpolate, getDistManhattan } from "./svgii/geometry";
+import { getDistance, getSquareDistance, checkLineIntersection, pointAtT, interpolate, getDistManhattan, getPerpendicularPoint } from "./svgii/geometry";
 import { getBezierArea, getPolygonArea } from "./svgii/geometry_area";
-import { renderPoint } from "./svgii/visualize";
+import { pathDataToD } from "./svgii/pathData_stringify";
+import { renderPath, renderPoint, renderPoly } from "./svgii/visualize";
 
 
 
@@ -43,9 +44,12 @@ export function simplifyPathDataCubic(pathData, {
 
             // try simplification
             else {
+
+
                 //renderPoint(markers, p, 'magenta', '1%')
                 let combined = combineCubicPairs(com, comN, { tolerance })
                 let error = 0;
+
 
                 // combining successful! try next segment
                 if (combined.length === 1) {
@@ -134,12 +138,13 @@ export function combineCubicPairs(com1, com2, {
     // quit if t is start
     if (!t) return commands;
 
+    // get averaged threshold
     let distAv1 = getDistManhattan(com1.p0, com1.p);
     let distAv2 = getDistManhattan(com2.p0, com2.p);
     let distMin = Math.max(0, Math.min(distAv1, distAv2))
 
-
-    let distScale = 0.08
+    //let distScale = 0.08
+    let distScale = 0.075
     let maxDist = distMin * distScale * tolerance
 
     // get hypothetical combined command
@@ -148,7 +153,6 @@ export function combineCubicPairs(com1, com2, {
     // test new point-at-t against original mid segment starting point
     let ptI = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t)
 
-
     let dist0 = getDistManhattan(com1.p, ptI)
     let dist1 = 0, dist2 = 0;
     let close = dist0 < maxDist;
@@ -156,7 +160,6 @@ export function combineCubicPairs(com1, com2, {
 
     // collect error data
     let error = dist0;
-
 
     if (close) {
 
@@ -173,7 +176,6 @@ export function combineCubicPairs(com1, com2, {
         let ptI_seg1 = pointAtT([comS.p0, comS.cp1, comS.cp2, comS.p], t2)
         dist1 = getDistManhattan(ptM_seg1, ptI_seg1)
 
-
         error += dist1;
 
         if (dist1 < maxDist) {
@@ -189,17 +191,6 @@ export function combineCubicPairs(com1, com2, {
             error += dist2;
 
             if (error < maxDist) success = true;
-
-
-            /*
-            renderPoint(markers, ptM_seg1, 'cyan')
-            renderPoint(markers, pt, 'orange', '1.5%', '1')
-            renderPoint(markers, ptM_seg2, 'orange')
-
-            renderPoint(markers, com1.p, 'green')
-            //renderPoint(markers, com2.p, 'green')
-            renderPoint(markers, ptI_seg1, 'purple')
-            */
 
         }
 
@@ -220,21 +211,6 @@ export function combineCubicPairs(com1, com2, {
         comS.extreme = com2.extreme;
         comS.directionChange = com2.directionChange;
         comS.corner = com2.corner;
-
-
-        if (comS.extreme || comS.corner) {
-            //renderPoint(markers, comS.p)
-        }
-
-        /*
-        comS.extreme = com1.extreme;
-        comS.directionChange = com1.directionChange;
-        comS.corner = com1.corner;
-        */
-
-
-
-        //comS.directionChange = com1.directionChange ? true : (com2.directionChange);
 
         comS.values = [comS.cp1.x, comS.cp1.y, comS.cp2.x, comS.cp2.y, comS.p.x, comS.p.y]
 
@@ -308,6 +284,7 @@ export function findSplitT(com1, com2) {
     // distances between 1st and 2nd segment cpt to mid point
     let l1 = getDistManhattan(com1.cp2, com1.p)
 
+
     // exit for zero length control point vectors
     if (l1 === 0) {
         //console.log('!quit1');
@@ -331,5 +308,8 @@ export function findSplitT(com1, com2) {
     }
     */
 
-    return l1 / l3
+    let t = l1 / l3;
+    //console.log('t', t);
+
+    return t;
 }

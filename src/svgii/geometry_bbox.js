@@ -218,7 +218,7 @@ export function getPathDataBBox(pathData) {
         }
     }
 
-    let bbox = { x: xMin, y: yMin, width: xMax - xMin, height: yMax - yMin }
+    let bbox = { x: xMin, y: yMin, right: xMax, width: xMax - xMin, bottom: yMax, height: yMax - yMin }
     return bbox
 }
 

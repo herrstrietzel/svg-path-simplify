@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3-beta (cedbd6c6ff, 2023-05-28)"
+   sodipodi:docname="drawing.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="0.73139029"
+     inkscape:cx="397.18876"
+     inkscape:cy="561.25984"
+     inkscape:window-width="1920"
+     inkscape:window-height="1017"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <pattern
+       id="EMFhbasepattern"
+       patternUnits="userSpaceOnUse"
+       width="6"
+       height="6"
+       x="0"
+       y="0" />
+    <pattern
+       id="EMFhbasepattern-6"
+       patternUnits="userSpaceOnUse"
+       width="6"
+       height="6"
+       x="0"
+       y="0" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       style="color:#000000;fill:#1a1a18;stroke-linecap:round;stroke-linejoin:round;-inkscape-stroke:none"
+       d="m 181.05469,143.74023 a 3.5277801,3.5277801 0 0 0 -2.17188,1.60547 l -2.91992,4.85157 -2.82227,-3.36133 a 3.5281328,3.5281328 0 0 0 -3.42187,-1.18555 l -4.23242,0.88281 a 3.5281328,3.5281328 0 0 0 -1.28906,0.55274 l -3.43946,2.38086 a 3.5281328,3.5281328 0 0 0 -0.92773,0.94531 l -2.29297,3.43945 a 3.5281328,3.5281328 0 0 0 -0.51758,1.23633 l -0.88281,4.23438 a 3.5281328,3.5281328 0 0 0 2.37109,4.07617 l 5.46094,1.76172 5.37109,1.75976 a 3.5281328,3.5281328 0 0 0 0.0664,0.0215 l 5.44336,1.66796 5.44336,1.75586 a 3.5277801,3.5277801 0 0 0 4.43945,-2.27343 3.5277801,3.5277801 0 0 0 -2.27344,-4.44141 l -5.46875,-1.76367 a 3.5281328,3.5281328 0 0 0 -0.0488,-0.0156 l -5.43555,-1.66601 -5.34766,-1.75196 a 3.5281328,3.5281328 0 0 0 -0.0156,-0.006 l -2.45117,-0.79102 0.0957,-0.46094 1.54101,-2.31054 2.29688,-1.58985 1.46875,-0.30664 4.64062,5.5293 a 3.5281328,3.5281328 0 0 0 5.72461,-0.44922 l 5.46875,-9.08399 a 3.5277801,3.5277801 0 0 0 -1.20312,-4.84179 3.5277801,3.5277801 0 0 0 -2.66992,-0.40235 z"
+       id="path1" />
+  </g>
+</svg>
